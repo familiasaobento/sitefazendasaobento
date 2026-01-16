@@ -8,6 +8,7 @@ interface Album {
     description: string;
     cover_image_path: string | null;
     created_at: string;
+    gallery?: { file_path: string }[];
 }
 
 interface GalleryItem {
@@ -64,11 +65,19 @@ export const GalleryPage: React.FC = () => {
             setLoading(true);
             const { data, error } = await supabase
                 .from('albums')
-                .select('*')
-                .order('created_at', { ascending: false });
+                .select('*, gallery(id, file_path)')
+                .order('created_at', { ascending: false })
+                .order('created_at', { foreignTable: 'gallery', ascending: true });
 
             if (error) throw error;
-            setAlbums(data || []);
+
+            // Post-process to keep only the first image for cover
+            const albumsWithCover = (data || []).map((album: any) => ({
+                ...album,
+                gallery: album.gallery?.slice(0, 1) || []
+            }));
+
+            setAlbums(albumsWithCover);
         } catch (err) {
             console.error('Erro ao buscar álbuns:', err);
         } finally {
@@ -217,7 +226,10 @@ export const GalleryPage: React.FC = () => {
                     <h2 className="text-3xl font-bold text-farm-900 font-serif">
                         {selectedAlbum ? (
                             <button
-                                onClick={() => setSelectedAlbum(null)}
+                                onClick={() => {
+                                    setSelectedAlbum(null);
+                                    fetchAlbums();
+                                }}
                                 className="hover:text-farm-600 transition-colors flex items-center gap-2"
                             >
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
@@ -343,9 +355,23 @@ export const GalleryPage: React.FC = () => {
                                 className="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100"
                             >
                                 <div className="aspect-[4/3] bg-farm-50 relative overflow-hidden">
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <svg className="w-12 h-12 text-farm-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                    </div>
+                                    {album.gallery && album.gallery.length > 0 ? (
+                                        <img
+                                            src={getPublicUrl(album.gallery[0].file_path)}
+                                            alt={album.title}
+                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                        />
+                                    ) : album.cover_image_path ? (
+                                        <img
+                                            src={getPublicUrl(album.cover_image_path)}
+                                            alt={album.title}
+                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                        />
+                                    ) : (
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <svg className="w-12 h-12 text-farm-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                        </div>
+                                    )}
                                     <div className="absolute inset-0 bg-farm-900/10 group-hover:bg-transparent transition-colors" />
                                 </div>
                                 <div className="p-4 relative">
