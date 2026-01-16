@@ -22,6 +22,7 @@ interface ProductReservation {
     pickup_date: string;
     total_price: number;
     status: string;
+    admin_notes: string | null;
     created_at: string;
     user_profiles?: { full_name: string };
     items?: { product: Product; quantity: number; unit_price: number }[];
@@ -41,11 +42,19 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
     const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [reservations, setReservations] = useState<ProductReservation[]>([]);
+    const [myReservations, setMyReservations] = useState<ProductReservation[]>([]);
+    const [fetchingMyReservations, setFetchingMyReservations] = useState(false);
+
+    // Rejection Modal state
+    const [showRejectionModal, setShowRejectionModal] = useState(false);
+    const [rejectionId, setRejectionId] = useState<number | null>(null);
+    const [rejectionReason, setRejectionReason] = useState('');
 
     const categories = ['Todos', 'Doces', 'Laticínios', 'Padaria', 'Hortifruti'];
 
     useEffect(() => {
         fetchProducts();
+        fetchMyReservations();
         if (isAdmin) {
             fetchReservations();
         }
@@ -90,15 +99,47 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
         }
     };
 
-    const handleUpdateStatus = async (id: number, newStatus: string) => {
+    const fetchMyReservations = async () => {
         try {
+            setFetchingMyReservations(true);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            const { data, error } = await supabase
+                .from('product_reservations')
+                .select(`
+                    *,
+                    items:product_reservation_items(
+                        quantity,
+                        unit_price,
+                        products:products!product_id(name)
+                    )
+                `)
+                .eq('user_id', user.id)
+                .order('pickup_date', { ascending: false });
+
+            if (error) throw error;
+            setMyReservations(data || []);
+        } catch (err) {
+            console.error('Error fetching my reservations:', err);
+        } finally {
+            setFetchingMyReservations(false);
+        }
+    };
+
+    const handleUpdateStatus = async (id: number, newStatus: string, adminNotes?: string) => {
+        try {
+            const updateData: any = { status: newStatus };
+            if (adminNotes !== undefined) updateData.admin_notes = adminNotes;
+
             const { error } = await supabase
                 .from('product_reservations')
-                .update({ status: newStatus })
+                .update(updateData)
                 .eq('id', id);
 
             if (error) throw error;
             fetchReservations();
+            fetchMyReservations();
         } catch (err: any) {
             alert('Erro ao atualizar status: ' + err.message);
         }
@@ -115,6 +156,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
 
             if (error) throw error;
             fetchReservations();
+            fetchMyReservations();
         } catch (err: any) {
             alert('Erro ao excluir reserva: ' + err.message);
         }
@@ -199,9 +241,11 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
 
             if (itemsError) throw itemsError;
 
-            setMessage({ type: 'success', text: 'Pedido de reserva realizado com sucesso! Você pode retirar os produtos na copa na data selecionada.' });
+            setMessage({ type: 'success', text: 'Pedido de reserva realizado com sucesso! Aguarde a aprovação da administração.' });
             setCart([]);
             setPickupDate('');
+            fetchMyReservations();
+            if (isAdmin) fetchReservations();
         } catch (err: any) {
             console.error('Error during checkout:', err);
             setMessage({ type: 'error', text: 'Erro ao processar reserva: ' + err.message });
@@ -441,6 +485,83 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                 </div>
             </div>
 
+            {/* User's Reservations Table (Matches Lodging Style) */}
+            <div className="mt-12 space-y-6 max-w-4xl mx-auto no-print">
+                <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                    <span className="w-2 h-8 bg-farm-500 rounded-full mr-3"></span>
+                    Meus Pedidos de Produtos
+                </h3>
+
+                {fetchingMyReservations ? (
+                    <div className="flex justify-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-farm-700"></div>
+                    </div>
+                ) : myReservations.length === 0 ? (
+                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-8 text-center text-gray-500">
+                        Você ainda não possui pedidos de produtos.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {myReservations.map((res) => (
+                            <div key={res.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] text-gray-400 uppercase font-bold">Data de Retirada</span>
+                                        <p className="font-bold text-gray-800">{new Date(res.pickup_date + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+                                    </div>
+                                    <span className="text-[10px] text-gray-400">Ref: #{res.id}</span>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div className="bg-gray-50 p-3 rounded-lg">
+                                        <p className="text-[10px] text-gray-400 uppercase font-bold mb-2">Itens Solicitados:</p>
+                                        <ul className="space-y-1">
+                                            {res.items?.map((item, i) => (
+                                                <li key={i} className="text-xs text-gray-700 flex justify-between">
+                                                    <span>{item.quantity}x {(item as any).products?.name || 'Produto'}</span>
+                                                    <span className="text-gray-400">R$ {(item.quantity * item.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <div className="mt-2 pt-2 border-t border-gray-200 flex justify-between items-center">
+                                            <span className="text-xs font-bold text-gray-800">Total</span>
+                                            <span className="text-sm font-bold text-farm-700">R$ {Number(res.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-3 flex justify-between items-center text-sm">
+                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${res.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                                res.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
+                                                    res.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                                        'bg-red-100 text-red-700'
+                                            }`}>
+                                            {res.status === 'pending' ? 'Aguardando Análise' :
+                                                res.status === 'confirmed' ? 'Aprovado' :
+                                                    res.status === 'completed' ? 'Entregue' : 'Cancelado'}
+                                        </span>
+                                        {res.status === 'pending' && (
+                                            <button
+                                                onClick={() => handleDeleteReservation(res.id)}
+                                                className="text-red-400 hover:text-red-600 text-xs font-medium"
+                                            >
+                                                Cancelar Pedido
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {res.admin_notes && (
+                                        <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg text-xs">
+                                            <p className="font-bold text-red-700 mb-1">Observação da Administração:</p>
+                                            <p className="text-red-600 italic">"{res.admin_notes}"</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             {/* Reservations List for Admins */}
             {isAdmin && (
                 <div className="mt-12 space-y-6 print:m-0 print:p-0">
@@ -516,24 +637,52 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                                             </td>
                                             <td className="px-6 py-4 font-bold">R$ {Number(res.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                                             <td className="px-6 py-4">
-                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${res.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${res.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                                    res.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
+                                                        res.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                                            'bg-red-100 text-red-700'
                                                     }`}>
-                                                    {res.status === 'pending' ? 'Pendente' : 'Concluído'}
+                                                    {res.status === 'pending' ? 'Pendente' :
+                                                        res.status === 'confirmed' ? 'Aprovado' :
+                                                            res.status === 'completed' ? 'Entregue' : 'Cancelado'}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 space-x-2 no-print">
-                                                {res.status === 'pending' ? (
+                                                {res.status === 'pending' && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleUpdateStatus(res.id, 'confirmed')}
+                                                            className="text-blue-600 hover:text-blue-800 font-bold text-xs bg-blue-50 px-2 py-1 rounded border border-blue-100 transition-colors"
+                                                            title="Aprovar pedido"
+                                                        >
+                                                            Aprovar
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setRejectionId(res.id);
+                                                                setRejectionReason('');
+                                                                setShowRejectionModal(true);
+                                                            }}
+                                                            className="text-red-600 hover:text-red-800 font-bold text-xs bg-red-50 px-2 py-1 rounded border border-red-100 transition-colors"
+                                                            title="Recusar pedido com motivo"
+                                                        >
+                                                            Recusar
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {res.status === 'confirmed' && (
                                                     <button
                                                         onClick={() => handleUpdateStatus(res.id, 'completed')}
                                                         className="text-green-600 hover:text-green-800 font-bold text-xs bg-green-50 px-2 py-1 rounded border border-green-100 transition-colors"
-                                                        title="Dar baixa / Entregue"
+                                                        title="Marcar como entregue"
                                                     >
-                                                        Concluir
+                                                        Entregar
                                                     </button>
-                                                ) : (
+                                                )}
+                                                {res.status !== 'pending' && (
                                                     <button
-                                                        onClick={() => handleUpdateStatus(res.id, 'pending')}
-                                                        className="text-yellow-600 hover:text-yellow-800 font-bold text-xs bg-yellow-50 px-2 py-1 rounded border border-yellow-100 transition-colors"
+                                                        onClick={() => handleUpdateStatus(res.id, 'pending', null as any)}
+                                                        className="text-gray-400 hover:text-gray-600 font-bold text-xs bg-gray-50 px-2 py-1 rounded border border-gray-100 transition-colors"
                                                         title="Reverter para pendente"
                                                     >
                                                         Reverter
