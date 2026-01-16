@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Família São Bento</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        farm: {
+                            50: '#f2fbf5',
+                            100: '#e1f5e8',
+                            200: '#c3ead4',
+                            300: '#95d8b6',
+                            400: '#5ebb92',
+                            500: '#389f76',
+                            600: '#2a7f5e',
+                            700: '#26664d',
+                            800: '#23513f',
+                            900: '#1d4336',
+                        }
+                    },
+                    fontFamily: {
+                        serif: ['Georgia', 'Cambria', '"Times New Roman"', 'Times', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Scrollbar Principal (Conteúdo) - Cinza e Discreta */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #bbb;
+        }
+
+        /* Scrollbar da Sidebar - Verde e Temática */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1a3a2e;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #389f76;
+            border-radius: 5px;
+            border: 2px solid #1a3a2e;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #5ebb92;
+        }
+
+        /* Estilo para navegadores Firefox */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #ccc #f1f1f1;
+        }
+
+        .custom-scrollbar {
+            scrollbar-color: #389f76 #1a3a2e;
+        }
+    </style>
+    <link rel="stylesheet" href="/index.css">
+</head>
+
+<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
+    <div id="root" class="flex-1 flex flex-col w-full h-full"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+
+</html>
