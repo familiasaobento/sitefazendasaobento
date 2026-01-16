@@ -43,6 +43,7 @@ export enum Page {
   PROFILE = 'profile',
   CONTACT = 'contact',
   SHOP = 'shop',
+  ADMIN_USERS = 'admin_users',
 }
 
 export interface Document {

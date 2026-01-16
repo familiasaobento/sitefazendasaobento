@@ -9,6 +9,7 @@ import { ContactPage } from './pages/Contact';
 import { HomePage } from './pages/Home';
 import { GalleryPage } from './pages/Gallery';
 import { ShopPage } from './pages/Shop';
+import { AdminUsersPage } from './pages/AdminUsers';
 import { Page, NewsItem } from './types';
 import { IconLock, IconInstagram, IconWhatsapp } from './components/Icons';
 import { supabase } from './lib/supabase';
@@ -242,20 +243,27 @@ const App: React.FC = () => {
 
       if (error) throw error;
 
+      const { data: { user } } = await supabase.auth.getUser();
+      const isSuperAdmin = user?.email === 'admin@familiasaobento.com';
+
       if (data && data.length > 0) {
-        setIsApproved(data[0].approved === true);
-        setIsAdmin(data[0].role === 'admin');
+        setIsApproved(data[0].approved === true || isSuperAdmin);
+        setIsAdmin(data[0].role === 'admin' || isSuperAdmin);
       } else {
-        // If profile doesn't exist yet, we don't block access immediately, 
-        // but we keep as null or false depending on how we want to handle new signups.
-        setIsApproved(false);
-        setIsAdmin(false);
+        setIsApproved(isSuperAdmin);
+        setIsAdmin(isSuperAdmin);
       }
     } catch (err) {
       console.error('Error checking user info:', err);
-      // Only set to false if we are sure it's an error that warrants blocking
-      setIsApproved(false);
-      setIsAdmin(false);
+      // Fallback radical: se der erro de rede, mas for o email do admin, libera.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email === 'admin@familiasaobento.com') {
+        setIsApproved(true);
+        setIsAdmin(true);
+      } else {
+        setIsApproved(false);
+        setIsAdmin(false);
+      }
     } finally {
       setLoading(false);
     }
@@ -278,7 +286,7 @@ const App: React.FC = () => {
     return <LoginPage onAuthChange={() => { }} />;
   }
 
-  if (isApproved === false) {
+  if (isApproved === false && !isAdmin) {
     return <ApprovalPending onSignOut={handleSignOut} />;
   }
 
@@ -302,6 +310,8 @@ const App: React.FC = () => {
         return <ContactPage />;
       case Page.SHOP:
         return <ShopPage isAdmin={isAdmin} />;
+      case Page.ADMIN_USERS:
+        return isAdmin ? <AdminUsersPage /> : <HomePage />;
       default:
         return <HomePage />;
     }
@@ -312,6 +322,7 @@ const App: React.FC = () => {
       currentPage={currentPage}
       onNavigate={setCurrentPage}
       onLogout={handleSignOut}
+      isAdmin={isAdmin}
     >
       {renderContent()}
     </Layout>

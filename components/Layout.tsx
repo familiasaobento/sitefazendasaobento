@@ -7,9 +7,10 @@ interface LayoutProps {
   currentPage: Page;
   onNavigate: (page: Page) => void;
   onLogout: () => void;
+  isAdmin?: boolean;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate, onLogout }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate, onLogout, isAdmin }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
@@ -23,6 +24,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
     { page: Page.PROFILE, label: 'Meu Cadastro', icon: IconUser },
     { page: Page.CONTACT, label: 'Contato e Sugestões', icon: IconMail },
   ];
+
+  if (isAdmin) {
+    navItems.push({ page: Page.ADMIN_USERS, label: 'Gestão de Usuários', icon: IconUser });
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
