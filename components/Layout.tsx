@@ -42,12 +42,20 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
       </div>
 
       {/* Sidebar Navigation */}
+      {/* Backdrop for mobile */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       <aside className={`
         bg-farm-900 text-farm-50 w-full md:w-64 flex-shrink-0 transition-all duration-300 ease-in-out
         ${isMobileMenuOpen ? 'block' : 'hidden'} md:block
-        md:fixed md:top-0 md:left-0 md:h-screen md:z-10
+        md:fixed md:top-0 md:left-0 md:h-screen z-50
       `}>
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full max-h-screen">
           {/* Logo Section */}
           <div className="p-6 border-b border-farm-800/50 flex flex-col items-center flex-shrink-0">
             <div className="bg-white p-2 rounded-xl shadow-inner mb-4 w-full">
@@ -93,7 +101,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 md:ml-64 p-6 md:p-12 min-h-screen">
+      <main className="flex-1 md:ml-64 p-4 sm:p-6 md:p-8 lg:p-12 min-h-screen">
         <div className="max-w-6xl mx-auto">
           {children}
         </div>

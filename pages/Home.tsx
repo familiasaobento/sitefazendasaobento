@@ -89,28 +89,28 @@ export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
 
     return (
         <div className="space-y-8">
-            <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 flex flex-col md:flex-row items-center gap-8">
-                <div className="flex-1">
-                    <h2 className="text-3xl font-bold text-farm-900 font-serif mb-4">Bem-vindo a Fazenda São Bento!</h2>
-                    <p className="text-gray-600 leading-relaxed mb-4">
+            <div className="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-100 flex flex-col md:flex-row items-center gap-8">
+                <div className="flex-1 order-2 md:order-1">
+                    <h2 className="text-2xl sm:text-3xl font-bold text-farm-900 font-serif mb-4 text-center md:text-left">Bem-vindo a Fazenda São Bento!</h2>
+                    <p className="text-gray-600 leading-relaxed mb-6 text-sm sm:text-base text-justify md:text-left">
                         Este site nasce para unir a nossa família em torno do legado da Fazenda São Bento, oferecendo um espaço transparente para acompanhar nossos resultados financeiros, documentos e o calendário de eventos. Queremos que cada sócio tenha a facilidade de realizar reservas, atualizar seus dados e reviver nossas memórias em fotos, mantendo viva a conexão com nossas raízes e com a administração. É o nosso ponto de encontro digital para cuidar, com amor e clareza, do que construímos juntos.
                     </p>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                         <div className="bg-farm-50 p-3 rounded-lg text-farm-800 flex items-center gap-2">
-                            <IconInstagram className="w-5 h-5" />
-                            <span><strong>Instagram:</strong> fazendasb23</span>
+                            <IconInstagram className="w-5 h-5 flex-shrink-0" />
+                            <span className="truncate"><strong>Instagram:</strong> fazendasb23</span>
                         </div>
                         <div className="bg-farm-50 p-3 rounded-lg text-farm-800 flex items-center gap-2">
-                            <IconWhatsapp className="w-5 h-5" />
-                            <span><strong>WhatsApp:</strong> (32) 8465-3051</span>
+                            <IconWhatsapp className="w-5 h-5 flex-shrink-0" />
+                            <span className="truncate"><strong>WhatsApp:</strong> (32) 8465-3051</span>
                         </div>
                     </div>
                 </div>
-                <div className="w-full md:w-1/3">
+                <div className="w-full md:w-1/3 order-1 md:order-2">
                     <img
                         src="/home-photo.jpg"
                         alt="Foto da Fazenda"
-                        className="rounded-xl shadow-md w-full h-64 object-cover"
+                        className="rounded-xl shadow-md w-full h-48 sm:h-64 object-cover"
                     />
                 </div>
             </div>

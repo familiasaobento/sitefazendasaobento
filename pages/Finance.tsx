@@ -121,21 +121,27 @@ export const FinancePage: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden min-h-[800px] relative">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px] sm:min-h-[800px] relative">
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-farm-700"></div>
           </div>
         ) : dashboardUrl ? (
-          <iframe
-            width="100%"
-            height="1200"
-            src={dashboardUrl}
-            frameBorder="0"
-            style={{ border: 0 }}
-            allowFullScreen
-            sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
-          ></iframe>
+          <>
+            <div className="md:hidden bg-blue-50 p-3 text-xs text-blue-800 flex items-center gap-2 border-b border-blue-100">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+              <span>Dica: No celular, gire o aparelho para "Paisagem" para ver o gráfico com mais detalhes.</span>
+            </div>
+            <iframe
+              width="100%"
+              height="1200"
+              src={dashboardUrl}
+              frameBorder="0"
+              style={{ border: 0 }}
+              allowFullScreen
+              sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
+            ></iframe>
+          </>
         ) : (
           <div className="flex flex-col items-center justify-center py-32 px-6 text-center">
             <div className="bg-gray-50 p-8 rounded-full mb-6">

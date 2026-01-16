@@ -114,8 +114,8 @@ export const EventsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-3xl font-bold text-farm-900 font-serif">Agenda da Fazenda</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h2 className="text-2xl sm:text-3xl font-bold text-farm-900 font-serif">Agenda da Fazenda</h2>
         {isAdmin && (
           <button
             onClick={() => setShowAddForm(!showAddForm)}

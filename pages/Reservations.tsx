@@ -187,9 +187,9 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
   return (
     <div className="max-w-6xl mx-auto space-y-12">
       <div className="max-w-2xl mx-auto no-print">
-        <div className="mb-8 text-center">
-          <h2 className="text-3xl font-bold text-farm-900 font-serif">Reservas de Hospedagem</h2>
-          <p className="text-gray-600 mt-2">Avise que você está indo para a fazenda</p>
+        <div className="mb-6 sm:mb-8 text-center px-4">
+          <h2 className="text-2xl sm:text-3xl font-bold text-farm-900 font-serif">Reservas de Hospedagem</h2>
+          <p className="text-sm sm:text-base text-gray-600 mt-2 italic sm:not-italic">Avise que você está indo para a fazenda</p>
         </div>
 
         {submitted ? (
