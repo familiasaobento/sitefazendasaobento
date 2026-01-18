@@ -25,7 +25,7 @@ interface ProductReservation {
     admin_notes: string | null;
     created_at: string;
     user_profiles?: { full_name: string };
-    items?: { product: Product; quantity: number; unit_price: number }[];
+    items?: { id: number; product: Product; quantity: number; unit_price: number; products?: { name: string } }[];
 }
 
 export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
@@ -85,6 +85,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                     *,
                     profiles:profiles!user_id(full_name),
                     items:product_reservation_items(
+                        id,
                         quantity,
                         unit_price,
                         products:products!product_id(name)
@@ -110,6 +111,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                 .select(`
                     *,
                     items:product_reservation_items(
+                        id,
                         quantity,
                         unit_price,
                         products:products!product_id(name)
@@ -164,6 +166,38 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
 
     const handlePrint = () => {
         window.print();
+    };
+
+    const handleCancelItem = async (reservationId: number, itemId: number, itemTotal: number) => {
+        if (!confirm('Tem certeza que deseja remover este item do pedido? O valor total será atualizado.')) return;
+
+        try {
+            // 1. Delete the item
+            const { error: deleteError } = await supabase
+                .from('product_reservation_items')
+                .delete()
+                .eq('id', itemId);
+
+            if (deleteError) throw deleteError;
+
+            // 2. Update reservation total
+            const reservation = reservations.find(r => r.id === reservationId);
+            if (reservation) {
+                const newTotal = Math.max(0, reservation.total_price - itemTotal);
+
+                const { error: updateError } = await supabase
+                    .from('product_reservations')
+                    .update({ total_price: newTotal })
+                    .eq('id', reservationId);
+
+                if (updateError) throw updateError;
+            }
+
+            fetchReservations();
+            fetchMyReservations();
+        } catch (err: any) {
+            alert('Erro ao remover item: ' + err.message);
+        }
     };
 
     const addToCart = (product: Product) => {
@@ -531,9 +565,9 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
 
                                     <div className="pt-3 flex justify-between items-center text-sm">
                                         <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${res.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                                                res.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
-                                                    res.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                        'bg-red-100 text-red-700'
+                                            res.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
+                                                res.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                                    'bg-red-100 text-red-700'
                                             }`}>
                                             {res.status === 'pending' ? 'Aguardando Análise' :
                                                 res.status === 'confirmed' ? 'Aprovado' :
@@ -631,7 +665,20 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                                             <td className="px-6 py-4 max-w-xs">
                                                 <ul className="text-xs text-gray-500">
                                                     {res.items?.map((item, i) => (
-                                                        <li key={i}>{item.quantity}x {(item as any).products?.name || 'Produto'}</li>
+                                                        <li key={i} className="flex items-center justify-between gap-2 group">
+                                                            <span>{item.quantity}x {(item as any).products?.name || 'Produto'}</span>
+                                                            {(res.status === 'pending' || res.status === 'confirmed') && (
+                                                                <button
+                                                                    onClick={() => handleCancelItem(res.id, item.id, item.quantity * item.unit_price)}
+                                                                    className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"
+                                                                    title="Remover item por estar em falta"
+                                                                >
+                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                                                    </svg>
+                                                                </button>
+                                                            )}
+                                                        </li>
                                                     ))}
                                                 </ul>
                                             </td>
