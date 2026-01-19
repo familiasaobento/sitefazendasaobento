@@ -168,8 +168,11 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
         window.print();
     };
 
-    const handleCancelItem = async (reservationId: number, itemId: number, itemTotal: number) => {
-        if (!confirm('Tem certeza que deseja remover este item do pedido? O valor total será atualizado.')) return;
+    const handleCancelItem = async (reservationId: number, itemId: number, itemName: string, itemTotal: number) => {
+        const reason = prompt(`Motivo da remoção do item "${itemName}" (ex: Em falta):`);
+        if (reason === null) return; // User cancelled prompt
+
+        const finalReason = reason.trim() || 'Indisponível';
 
         try {
             // 1. Delete the item
@@ -180,14 +183,21 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
 
             if (deleteError) throw deleteError;
 
-            // 2. Update reservation total
+            // 2. Update reservation total AND append note
             const reservation = reservations.find(r => r.id === reservationId);
             if (reservation) {
                 const newTotal = Math.max(0, reservation.total_price - itemTotal);
 
+                // Append to existing notes or create new
+                const currentNotes = reservation.admin_notes ? reservation.admin_notes + '\n' : '';
+                const newNote = `${currentNotes}* Item "${itemName}" removido. Motivo: ${finalReason}`;
+
                 const { error: updateError } = await supabase
                     .from('product_reservations')
-                    .update({ total_price: newTotal })
+                    .update({
+                        total_price: newTotal,
+                        admin_notes: newNote
+                    })
                     .eq('id', reservationId);
 
                 if (updateError) throw updateError;
@@ -669,8 +679,8 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                                                             <span>{item.quantity}x {(item as any).products?.name || 'Produto'}</span>
                                                             {(res.status === 'pending' || res.status === 'confirmed') && (
                                                                 <button
-                                                                    onClick={() => handleCancelItem(res.id, item.id, item.quantity * item.unit_price)}
-                                                                    className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"
+                                                                    onClick={() => handleCancelItem(res.id, item.id, (item as any).products?.name || 'Produto', item.quantity * item.unit_price)}
+                                                                    className="text-gray-400 hover:text-red-500 transition-all p-1"
                                                                     title="Remover item por estar em falta"
                                                                 >
                                                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
