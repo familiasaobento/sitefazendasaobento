@@ -144,7 +144,7 @@ export const MembersPage: React.FC = () => {
                                                         <div>
                                                             <p className="font-bold text-gray-800">{profile.full_name || 'Sem nome'}</p>
                                                             {profile.address && (
-                                                                <p className="text-xs text-gray-400 mt-0.5 max-w-[200px] truncate" title={profile.address}>{profile.address}</p>
+                                                                <p className="text-xs text-gray-400 mt-0.5 leading-tight" title={profile.address}>{profile.address}</p>
                                                             )}
                                                         </div>
                                                     </div>
