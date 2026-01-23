@@ -50,27 +50,34 @@ export const ProfilePage: React.FC = () => {
 
             const { data, error } = await supabase
                 .from('profiles')
-                .select('full_name, cpf, birth_date, phone, address, email, dependents')
+                .select('*')
                 .eq('id', user.id)
-                .single();
+                .limit(1);
 
             if (error) throw error;
 
-            if (data) {
+            if (data && data.length > 0) {
+                const profile = data[0];
                 setFormData({
-                    full_name: data.full_name || '',
-                    cpf: data.cpf || '',
-                    birth_date: data.birth_date || '',
-                    phone: data.phone || '',
-                    address: data.address || '',
-                    email: data.email || user.email || '',
-                    dependents: data.dependents || []
+                    full_name: profile.full_name || '',
+                    cpf: profile.cpf || '',
+                    birth_date: profile.birth_date || '',
+                    phone: profile.phone || '',
+                    address: profile.address || '',
+                    email: profile.email || user.email || '',
+                    dependents: profile.dependents || []
                 });
-                setHasDependents(data.dependents && data.dependents.length > 0 ? 'Sim' : 'Não');
+                setHasDependents(profile.dependents && profile.dependents.length > 0 ? 'Sim' : 'Não');
+            } else {
+                // If no profile found, initialize with user email
+                setFormData(prev => ({
+                    ...prev,
+                    email: user.email || ''
+                }));
             }
         } catch (err: any) {
             console.error('Erro ao buscar perfil:', err);
-            setError('Não foi possível carregar seus dados.');
+            setError(`Não foi possível carregar seus dados: ${err.message || 'Erro desconhecido'}`);
         } finally {
             setLoading(false);
         }
