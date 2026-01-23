@@ -10,6 +10,7 @@ import { HomePage } from './pages/Home';
 import { GalleryPage } from './pages/Gallery';
 import { ShopPage } from './pages/Shop';
 import { AdminUsersPage } from './pages/AdminUsers';
+import { MembersPage } from './pages/Members';
 import { Page, NewsItem } from './types';
 import { IconLock, IconInstagram, IconWhatsapp } from './components/Icons';
 import { supabase } from './lib/supabase';
@@ -305,7 +306,7 @@ const App: React.FC = () => {
       case Page.GALLERY:
         return <GalleryPage />;
       case Page.PROFILE:
-        return <ProfilePage />;
+        return isAdmin ? <MembersPage /> : <ProfilePage />;
       case Page.CONTACT:
         return <ContactPage />;
       case Page.SHOP:

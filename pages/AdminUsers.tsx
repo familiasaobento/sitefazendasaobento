@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { IconUser, IconCalendar, IconMail, IconTrash } from '../components/Icons';
+import { IconUser, IconCalendar, IconTrash } from '../components/Icons';
 
 interface Profile {
     id: string;
@@ -8,7 +8,6 @@ interface Profile {
     role: string;
     approved: boolean;
     created_at: string;
-    email?: string;
 }
 
 export const AdminUsersPage: React.FC = () => {
@@ -21,7 +20,7 @@ export const AdminUsersPage: React.FC = () => {
         try {
             const { data, error } = await supabase
                 .from('profiles')
-                .select('*')
+                .select('id, full_name, role, approved, created_at')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -80,9 +79,6 @@ export const AdminUsersPage: React.FC = () => {
         if (!confirm(`TEM CERTEZA? Isso excluirá permanentemente o acesso de "${name}". Esta ação não pode ser desfeita.`)) return;
 
         try {
-            // Note: In Supabase, deleting from 'profiles' will work if RLS allows.
-            // However, the actual Auth user remains. To fully delete, one would typically use an edge function.
-            // For now, we delete the profile record which effectively removes them from our management list.
             const { error } = await supabase
                 .from('profiles')
                 .delete()
@@ -93,7 +89,7 @@ export const AdminUsersPage: React.FC = () => {
             setProfiles(profiles.filter(p => p.id !== id));
         } catch (err) {
             console.error('Error deleting user:', err);
-            alert('Erro ao excluir usuário. Verifique se ele possui dados vinculados (reservas, etc).');
+            alert('Erro ao excluir usuário.');
         }
     };
 
@@ -107,8 +103,8 @@ export const AdminUsersPage: React.FC = () => {
         <div className="space-y-8">
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                    <h1 className="text-4xl font-bold text-gray-900 font-serif">Gerenciamento de Usuários</h1>
-                    <p className="text-gray-500 mt-2 text-lg">Aprove novos cadastros ou gerencie permissões.</p>
+                    <h1 className="text-4xl font-bold text-gray-900 font-serif">Controle de Acessos</h1>
+                    <p className="text-gray-500 mt-2 text-lg">Aprovação de novos usuários e gestão de permissões do portal.</p>
                 </div>
 
                 <div className="flex bg-white rounded-lg shadow-sm p-1 border border-gray-100">
@@ -140,8 +136,8 @@ export const AdminUsersPage: React.FC = () => {
             ) : filteredProfiles.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-sm p-12 text-center border border-gray-100">
                     <IconUser className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-                    <h3 className="text-xl font-medium text-gray-600">Nenhum usuário encontrado</h3>
-                    <p className="text-gray-400 mt-2">Não existem usuários nesta categoria no momento.</p>
+                    <h3 className="text-xl font-medium text-gray-600">Nenhum registro encontrado</h3>
+                    <p className="text-gray-400 mt-2">Nenhum usuário se encaixa no filtro selecionado.</p>
                 </div>
             ) : (
                 <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
@@ -149,9 +145,9 @@ export const AdminUsersPage: React.FC = () => {
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
-                                    <th className="px-6 py-4 font-semibold">Nome / Data Cadastro</th>
+                                    <th className="px-6 py-4 font-semibold">Usuário</th>
                                     <th className="px-6 py-4 font-semibold">Papel</th>
-                                    <th className="px-6 py-4 font-semibold">Status</th>
+                                    <th className="px-6 py-4 font-semibold">Status de Acesso</th>
                                     <th className="px-6 py-4 font-semibold text-right">Ações</th>
                                 </tr>
                             </thead>
@@ -164,7 +160,7 @@ export const AdminUsersPage: React.FC = () => {
                                                     {profile.full_name?.charAt(0) || '?'}
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-gray-800">{profile.full_name || 'Sem nome'}</p>
+                                                    <p className="font-bold text-gray-800">{profile.full_name || 'Usuário sem nome'}</p>
                                                     <p className="text-xs text-gray-400 flex items-center gap-1">
                                                         <IconCalendar className="w-3 h-3" />
                                                         {new Date(profile.created_at).toLocaleDateString('pt-BR')}
@@ -179,6 +175,7 @@ export const AdminUsersPage: React.FC = () => {
                                                     ? 'bg-purple-100 text-purple-800 hover:bg-purple-200'
                                                     : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
                                                     } transition-colors cursor-pointer`}
+                                                title="Clique para alterar"
                                             >
                                                 {profile.role === 'admin' ? 'Administrador' : 'Sócio'}
                                             </button>
@@ -188,7 +185,7 @@ export const AdminUsersPage: React.FC = () => {
                                                 ? 'bg-green-100 text-green-800'
                                                 : 'bg-yellow-100 text-yellow-800'
                                                 }`}>
-                                                {profile.approved ? 'Aprovado' : 'Pendente'}
+                                                {profile.approved ? 'Acesso Liberado' : 'Aguardando Aprovação'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
@@ -200,11 +197,11 @@ export const AdminUsersPage: React.FC = () => {
                                                         : 'bg-farm-700 text-white hover:bg-farm-800 shadow-sm'
                                                         }`}
                                                 >
-                                                    {profile.approved ? 'Bloquear' : 'Aprovar'}
+                                                    {profile.approved ? 'Bloquear Acesso' : 'Liberar Acesso'}
                                                 </button>
                                                 <button
                                                     onClick={() => handleDeleteUser(profile.id, profile.full_name)}
-                                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                                     title="Excluir Usuário"
                                                 >
                                                     <IconTrash className="w-5 h-5" />
@@ -221,3 +218,4 @@ export const AdminUsersPage: React.FC = () => {
         </div>
     );
 };
+

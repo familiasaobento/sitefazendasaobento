@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 interface Dependent {
     name: string;
     birthDate: string;
+    relationship: string;
 }
 
 interface ProfileData {
@@ -78,7 +79,7 @@ export const ProfilePage: React.FC = () => {
         if (value === 'Sim' && formData.dependents.length === 0) {
             setFormData(prev => ({
                 ...prev,
-                dependents: [{ name: '', birthDate: '' }]
+                dependents: [{ name: '', birthDate: '', relationship: '' }]
             }));
         } else if (value === 'Não') {
             setFormData(prev => ({
@@ -91,7 +92,7 @@ export const ProfilePage: React.FC = () => {
     const addDependent = () => {
         setFormData(prev => ({
             ...prev,
-            dependents: [...prev.dependents, { name: '', birthDate: '' }]
+            dependents: [...prev.dependents, { name: '', birthDate: '', relationship: '' }]
         }));
     };
 
@@ -141,7 +142,8 @@ export const ProfilePage: React.FC = () => {
                     birth_date: formData.birth_date || null,
                     phone: formData.phone,
                     address: formData.address,
-                    dependents: formData.dependents
+                    dependents: formData.dependents,
+                    email: email // Save email to profile to allow admin listing
                 })
                 .eq('id', user.id);
 
@@ -321,6 +323,20 @@ export const ProfilePage: React.FC = () => {
                                                 onChange={(e) => handleDependentChange(idx, 'birthDate', e.target.value)}
                                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none text-sm"
                                             />
+                                        </div>
+                                        <div className="space-y-1 md:col-span-2">
+                                            <label className="block text-xs font-semibold text-gray-500">Parentesco</label>
+                                            <select
+                                                required
+                                                value={dep.relationship || ''}
+                                                onChange={(e) => handleDependentChange(idx, 'relationship', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none text-sm bg-white"
+                                            >
+                                                <option value="">Selecione...</option>
+                                                <option value="Filho(a)">Filho(a)</option>
+                                                <option value="Esposa/Marido">Esposa/Marido</option>
+                                                <option value="Outros">Outros</option>
+                                            </select>
                                         </div>
                                         <button
                                             type="button"

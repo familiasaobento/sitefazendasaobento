@@ -26,7 +26,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
   ];
 
   if (isAdmin) {
-    navItems.push({ page: Page.ADMIN_USERS, label: 'Gestão de Usuários', icon: IconUser });
+    // Rename Profile to "Cadastros dos Sócios"
+    const profileItem = navItems.find(item => item.page === Page.PROFILE);
+    if (profileItem) {
+      profileItem.label = 'Cadastros dos Sócios';
+    }
+    // Add "Controle de Acessos"
+    navItems.push({ page: Page.ADMIN_USERS, label: 'Controle de Acessos', icon: IconUser });
   }
 
   return (
