@@ -65,6 +65,14 @@ export const MembersPage: React.FC = () => {
         setExpandedProfileId(expandedProfileId === id ? null : id);
     };
 
+    const formatDate = (dateStr: string) => {
+        if (!dateStr) return '—';
+        // Handle YYYY-MM-DD format without timezone shift
+        const [year, month, day] = dateStr.split('-').map(Number);
+        if (!year || !month || !day) return dateStr;
+        return `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`;
+    };
+
     return (
         <div className="space-y-8">
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 print:hidden">
@@ -196,7 +204,7 @@ export const MembersPage: React.FC = () => {
                                                                         <div className="font-semibold text-gray-800">{dep.name}</div>
                                                                         <div className="text-gray-500 text-xs mt-1 flex justify-between">
                                                                             <span>{dep.relationship}</span>
-                                                                            <span>{new Date(dep.birthDate).toLocaleDateString('pt-BR')}</span>
+                                                                            <span>{formatDate(dep.birthDate)}</span>
                                                                         </div>
                                                                     </div>
                                                                 ))}
@@ -285,7 +293,7 @@ export const MembersPage: React.FC = () => {
                                                                 <div key={idx} className="flex justify-between items-center text-[9px] border-b border-dotted border-gray-300 pb-0.5">
                                                                     <span className="font-medium text-gray-900 uppercase truncate pr-1">{dep.name}</span>
                                                                     <span className="text-gray-500 whitespace-nowrap">
-                                                                        {dep.relationship} {dep.birthDate ? `• ${new Date(dep.birthDate).toLocaleDateString('pt-BR')}` : ''}
+                                                                        {dep.relationship} {dep.birthDate ? `• ${formatDate(dep.birthDate)}` : ''}
                                                                     </span>
                                                                 </div>
                                                             ))}

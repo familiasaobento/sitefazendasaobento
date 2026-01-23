@@ -13,6 +13,7 @@ interface ProfileData {
     birth_date: string;
     phone: string;
     address: string;
+    email: string;
     dependents: Dependent[];
 }
 
@@ -21,7 +22,7 @@ export const ProfilePage: React.FC = () => {
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [email, setEmail] = useState('');
+    const [authEmail, setAuthEmail] = useState('');
 
     const [formData, setFormData] = useState<ProfileData>({
         full_name: '',
@@ -29,6 +30,7 @@ export const ProfilePage: React.FC = () => {
         birth_date: '',
         phone: '',
         address: '',
+        email: '',
         dependents: []
     });
 
@@ -44,11 +46,11 @@ export const ProfilePage: React.FC = () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
-            setEmail(user.email || '');
+            setAuthEmail(user.email || '');
 
             const { data, error } = await supabase
                 .from('profiles')
-                .select('full_name, cpf, birth_date, phone, address, dependents')
+                .select('full_name, cpf, birth_date, phone, address, email, dependents')
                 .eq('id', user.id)
                 .single();
 
@@ -61,6 +63,7 @@ export const ProfilePage: React.FC = () => {
                     birth_date: data.birth_date || '',
                     phone: data.phone || '',
                     address: data.address || '',
+                    email: data.email || user.email || '',
                     dependents: data.dependents || []
                 });
                 setHasDependents(data.dependents && data.dependents.length > 0 ? 'Sim' : 'Não');
@@ -143,7 +146,7 @@ export const ProfilePage: React.FC = () => {
                     phone: formData.phone,
                     address: formData.address,
                     dependents: formData.dependents,
-                    email: email // Save email to profile to allow admin listing
+                    email: formData.email // Use contact email from form
                 })
                 .eq('id', user.id);
 
@@ -239,16 +242,29 @@ export const ProfilePage: React.FC = () => {
                         />
                     </div>
                     <div className="space-y-1">
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">E-mail</label>
+                        <label htmlFor="auth_email" className="block text-sm font-medium text-gray-700">E-mail de Acesso (Login)</label>
                         <input
-                            id="email"
+                            id="auth_email"
                             type="email"
                             disabled
-                            value={email}
+                            value={authEmail}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
                         />
-                        <p className="text-[10px] text-gray-400">O e-mail não pode ser alterado por aqui.</p>
+                        <p className="text-[10px] text-gray-400">O e-mail de login não pode ser alterado por aqui.</p>
                     </div>
+                </div>
+
+                <div className="space-y-1">
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">E-mail de Contato (Para relatórios e avisos)</label>
+                    <input
+                        id="email"
+                        type="email"
+                        required
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                    />
+                    <p className="text-[10px] text-gray-400">Este é o e-mail que aparecerá nos cadastros e relatórios.</p>
                 </div>
 
                 <div className="space-y-1">
