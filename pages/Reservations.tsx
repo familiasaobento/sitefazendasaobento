@@ -402,10 +402,49 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
           <style dangerouslySetInnerHTML={{
             __html: `
             @media print {
-              body * { visibility: hidden; }
-              .print-area, .print-area * { visibility: visible; }
-              .print-area { position: absolute; left: 0; top: 0; width: 100%; }
-              .no-print { display: none !important; }
+              @page {
+                size: landscape;
+                margin: 1cm;
+              }
+              body {
+                background: white !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              .no-print {
+                display: none !important;
+              }
+              .print-area {
+                position: static !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+                box-shadow: none !important;
+              }
+              table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+                font-size: 10px !important;
+              }
+              th, td {
+                border: 1px solid #e5e7eb !important;
+                padding: 6px 8px !important;
+                word-break: break-word !important;
+                white-space: normal !important;
+              }
+              th {
+                background-color: #f9fafb !important;
+                color: #111827 !important;
+              }
+              /* Hide everything else */
+              header, aside, main > div:not(.print-area), .max-w-2xl, .max-w-4xl {
+                display: none !important;
+              }
+              main {
+                margin: 0 !important;
+                padding: 0 !important;
+              }
             }
           `}} />
 
@@ -439,7 +478,84 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-sm print-area">
+          {/* Mobile Admin View (Cards) */}
+          <div className="grid grid-cols-1 gap-4 md:hidden no-print">
+            {allReservations.map((res) => (
+              <div key={res.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-bold text-gray-900">
+                      {(() => {
+                        const profiles = (res as any).profiles;
+                        if (Array.isArray(profiles)) return profiles[0]?.full_name || 'Usuário';
+                        return profiles?.full_name || 'Usuário';
+                      })()}
+                    </p>
+                    <p className="text-[10px] text-gray-400">ID: #{res.id} • {res.accommodation}</p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${res.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                    res.status === 'canceled' ? 'bg-red-100 text-red-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>
+                    {res.status === 'confirmed' ? 'Confirmada' :
+                      res.status === 'canceled' ? 'Cancelada' : 'Pendente'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-xs bg-gray-50 p-3 rounded-lg">
+                  <div>
+                    <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Chegada</p>
+                    <p className="text-gray-700 font-bold">{formatDate(res.check_in)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Saída</p>
+                    <p className="text-gray-700 font-bold">{formatDate(res.check_out)}</p>
+                  </div>
+                  <div className="col-span-2 pt-2 border-t border-gray-200">
+                    <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Hóspedes ({res.num_guests})</p>
+                    <p className="text-gray-700 italic">
+                      {res.guests_details?.map((g: any) => `${g.name} (${g.age})`).join(', ') || 'Sem detalhes'}
+                    </p>
+                  </div>
+                </div>
+
+                {res.notes && (
+                  <div className="text-xs text-gray-600 italic px-2">
+                    "{res.notes}"
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2 border-t border-gray-100">
+                  {res.status !== 'confirmed' ? (
+                    <button
+                      onClick={() => handleUpdateStatus(res.id, 'confirmed')}
+                      className="flex-1 bg-green-600 text-white font-bold py-2 rounded-lg text-xs"
+                    >
+                      Confirmar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleUpdateStatus(res.id, 'canceled')}
+                      className="flex-1 bg-orange-500 text-white font-bold py-2 rounded-lg text-xs"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDeleteReservation(res.id)}
+                    className="bg-red-50 text-red-500 p-2 rounded-lg border border-red-100"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table View (Admin) */}
+          <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-sm print-area hidden md:block">
             <div className="hidden print:block mb-6">
               <h1 className="text-2xl font-bold text-gray-900 border-b-2 border-farm-800 pb-2">Fazenda São Bento - Relatório de Hospedagem</h1>
               <p className="text-sm text-gray-500 mt-1">Relatório gerado em: {new Date().toLocaleString('pt-BR')}</p>
@@ -469,20 +585,23 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
                           return profiles?.full_name || 'Usuário';
                         })()}
                       </p>
-                      <p className="text-[10px] text-gray-400">Ref: #{res.id}</p>
+                      <p className="text-[10px] text-gray-400">ID: #{res.id}</p>
                     </td>
                     <td className="px-6 py-4">{res.accommodation}</td>
                     <td className="px-6 py-4">{formatDate(res.check_in)}</td>
                     <td className="px-6 py-4">{formatDate(res.check_out)}</td>
                     <td className="px-6 py-4">
-                      <p>{res.num_guests} total</p>
-                      <div className="text-[10px] text-gray-400 max-w-[150px] truncate print:whitespace-normal print:overflow-visible print:max-w-none">
-                        {res.guests_details?.map((g: any) => g.name).join(', ')}
-                      </div>
+                      <p className="font-medium">{res.num_guests} {res.num_guests === 1 ? 'pessoa' : 'pessoas'}</p>
+                      {res.guests_details && res.guests_details.length > 0 && (
+                        <div className="text-[10px] text-gray-500 mt-1">
+                          <span className="font-bold">Acompanhantes:</span><br />
+                          {res.guests_details.map((g: any) => `${g.name} (${g.age} anos)`).join(', ')}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-xs text-gray-600 max-w-[200px] break-words print:max-w-none">
-                        {res.notes || '-'}
+                      <div className="text-xs text-gray-600 max-w-[250px] whitespace-normal">
+                        {res.notes || <span className="text-gray-300 italic">Sem observações</span>}
                       </div>
                     </td>
                     <td className="px-6 py-4">

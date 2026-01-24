@@ -308,7 +308,7 @@ const App: React.FC = () => {
       case Page.PROFILE:
         return isAdmin ? <MembersPage /> : <ProfilePage />;
       case Page.CONTACT:
-        return <ContactPage />;
+        return <ContactPage isAdmin={isAdmin} />;
       case Page.SHOP:
         return <ShopPage isAdmin={isAdmin} />;
       case Page.ADMIN_USERS:

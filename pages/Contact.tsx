@@ -1,13 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { IconMail, IconUser, IconCalendar, IconLoader } from '../components/Icons';
 
-export const ContactPage: React.FC = () => {
+interface Message {
+    id: number;
+    user_id: string;
+    type: string;
+    subject: string;
+    message: string;
+    created_at: string;
+    profiles?: {
+        full_name: string;
+    };
+}
+
+export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [fetchingMessages, setFetchingMessages] = useState(false);
     const [type, setType] = useState('Sugestão');
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (isAdmin) {
+            fetchMessages();
+        }
+    }, [isAdmin]);
+
+    const fetchMessages = async () => {
+        setFetchingMessages(true);
+        try {
+            const { data, error } = await supabase
+                .from('contact_messages')
+                .select(`
+                    *,
+                    profiles:user_id (full_name)
+                `)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setMessages(data || []);
+        } catch (err) {
+            console.error('Error fetching messages:', err);
+        } finally {
+            setFetchingMessages(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -17,7 +58,6 @@ export const ContactPage: React.FC = () => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
 
-            // 1. Salvar no Banco de Dados
             const { error: insertError } = await supabase
                 .from('contact_messages')
                 .insert([{
@@ -29,11 +69,7 @@ export const ContactPage: React.FC = () => {
 
             if (insertError) throw insertError;
 
-            // 2. Chamar a função de envio de e-mail (Opcional: Pode ser feito via Database Webhook depois)
-            // Por enquanto, vamos apenas garantir que os dados estão salvos.
-
             setSubmitted(true);
-            // Reset form
             setSubject('');
             setMessage('');
             setTimeout(() => setSubmitted(false), 5000);
@@ -44,6 +80,63 @@ export const ContactPage: React.FC = () => {
             setLoading(false);
         }
     };
+
+    if (isAdmin) {
+        return (
+            <div className="space-y-8">
+                <header>
+                    <h1 className="text-4xl font-bold text-gray-900 font-serif">Mensagens e Sugestões</h1>
+                    <p className="text-gray-500 mt-2 text-lg">Visualize as comunicações enviadas pelos sócios pelo portal.</p>
+                </header>
+
+                {fetchingMessages ? (
+                    <div className="flex justify-center p-12">
+                        <IconLoader className="w-12 h-12 text-farm-700 animate-spin" />
+                    </div>
+                ) : messages.length === 0 ? (
+                    <div className="bg-white rounded-2xl shadow-sm p-12 text-center border border-gray-100">
+                        <IconMail className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                        <h3 className="text-xl font-medium text-gray-600">Nenhuma mensagem encontrada</h3>
+                    </div>
+                ) : (
+                    <div className="grid gap-6">
+                        {messages.map((msg) => (
+                            <div key={msg.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                                <div className="p-6">
+                                    <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-farm-50 rounded-full flex items-center justify-center text-farm-700">
+                                                <IconUser className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-gray-900">{msg.profiles?.full_name || 'Usuário Desconhecido'}</p>
+                                                <div className="flex items-center gap-3 text-xs text-gray-500">
+                                                    <span className="flex items-center gap-1">
+                                                        <IconCalendar className="w-3 h-3" />
+                                                        {new Date(msg.created_at).toLocaleString('pt-BR')}
+                                                    </span>
+                                                    <span className={`px-2 py-0.5 rounded-full font-medium ${msg.type === 'Elogio' ? 'bg-green-100 text-green-700' :
+                                                            msg.type === 'Crítica/Reclamação' ? 'bg-red-100 text-red-700' :
+                                                                'bg-blue-100 text-blue-700'
+                                                        }`}>
+                                                        {msg.type}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <h4 className="text-lg font-bold text-gray-800 mb-2">{msg.subject}</h4>
+                                    <p className="text-gray-600 whitespace-pre-wrap leading-relaxed bg-gray-50 p-4 rounded-xl border border-gray-100 italic">
+                                        "{msg.message}"
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     if (submitted) {
         return (

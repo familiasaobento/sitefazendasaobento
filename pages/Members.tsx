@@ -119,8 +119,74 @@ export const MembersPage: React.FC = () => {
                 </div>
             ) : (
                 <>
-                    {/* Screen View */}
-                    <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden print:hidden">
+                    {/* Mobile Card View (Hidden on Desktop) */}
+                    <div className="grid grid-cols-1 gap-4 md:hidden">
+                        {filteredProfiles.map((profile) => (
+                            <div key={profile.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-farm-50 w-12 h-12 rounded-full flex items-center justify-center text-farm-700 font-bold shrink-0 text-xl">
+                                        {profile.full_name?.charAt(0) || '?'}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-gray-900 truncate">{profile.full_name || 'Sem nome'}</p>
+                                        <p className="text-xs text-gray-400 font-mono">{profile.cpf || 'CPF não informado'}</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div className="bg-gray-50 p-2 rounded-lg">
+                                        <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Contato</p>
+                                        <p className="text-gray-700 truncate">{profile.phone || '—'}</p>
+                                    </div>
+                                    <div className="bg-gray-50 p-2 rounded-lg">
+                                        <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">E-mail</p>
+                                        <p className="text-gray-700 truncate" title={profile.email}>{profile.email || '—'}</p>
+                                    </div>
+                                </div>
+
+                                {profile.address && (
+                                    <div className="bg-gray-50 p-2 rounded-lg">
+                                        <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Endereço</p>
+                                        <p className="text-gray-700 text-xs leading-tight">{profile.address}</p>
+                                    </div>
+                                )}
+
+                                {profile.dependents && profile.dependents.length > 0 && (
+                                    <div className="pt-2 border-t border-gray-100">
+                                        <button
+                                            onClick={() => toggleExpanded(profile.id)}
+                                            className="w-full flex items-center justify-between text-blue-600 font-bold text-xs"
+                                        >
+                                            <span>{profile.dependents.length} dependentes</span>
+                                            <svg
+                                                className={`w-4 h-4 transition-transform ${expandedProfileId === profile.id ? 'rotate-180' : ''}`}
+                                                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                            >
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </button>
+
+                                        {expandedProfileId === profile.id && (
+                                            <div className="mt-3 space-y-2 animate-in slide-in-from-top-2">
+                                                {profile.dependents.map((dep, idx) => (
+                                                    <div key={idx} className="bg-blue-50/50 p-2 rounded-lg border border-blue-100">
+                                                        <p className="font-bold text-gray-800 text-xs">{dep.name}</p>
+                                                        <p className="text-[10px] text-gray-500 flex justify-between">
+                                                            <span>{dep.relationship}</span>
+                                                            <span>{formatDate(dep.birthDate)}</span>
+                                                        </p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Desktop Table View (Hidden on Mobile) */}
+                    <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden print:hidden hidden md:block">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
                                 <thead>

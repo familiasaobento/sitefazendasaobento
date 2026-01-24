@@ -31,6 +31,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
     if (profileItem) {
       profileItem.label = 'Cadastros dos Sócios';
     }
+    // Rename Contact to "Mensagens Recebidas"
+    const contactItem = navItems.find(item => item.page === Page.CONTACT);
+    if (contactItem) {
+      contactItem.label = 'Mensagens Recebidas';
+    }
     // Add "Controle de Acessos"
     navItems.push({ page: Page.ADMIN_USERS, label: 'Controle de Acessos', icon: IconUser });
   }
