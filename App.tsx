@@ -300,7 +300,7 @@ const App: React.FC = () => {
       case Page.RESERVATIONS:
         return <ReservationsPage isAdmin={isAdmin} />;
       case Page.EVENTS:
-        return <EventsPage />;
+        return <EventsPage isAdmin={isAdmin} />;
       case Page.DOCUMENTS:
         return <DocumentsPage />;
       case Page.GALLERY:

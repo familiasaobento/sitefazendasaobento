@@ -9,6 +9,7 @@ interface NewsItem {
     category: string;
     published_at: string;
     author_name?: string;
+    file_url?: string;
 }
 
 export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
@@ -207,14 +208,14 @@ export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                                         />
                                         <label
                                             htmlFor="file-upload"
-                                            className={`w-full flex items-center justify-center gap-2 px-4 py-2 border border-dashed rounded-lg cursor-pointer transition-all ${fileUrl ? 'bg-green-50 border-green-300 text-green-700' : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'
+                                            className={`w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed rounded-lg cursor-pointer transition-all ${fileUrl ? 'bg-green-50 border-green-500 text-green-700' : 'bg-farm-50 border-farm-200 text-farm-700 hover:bg-farm-100'
                                                 }`}
                                         >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                                             </svg>
-                                            <span className="text-xs font-bold truncate">
-                                                {uploadingFile ? 'Enviando...' : fileUrl ? 'Arquivo Pronto' : 'Escolher Arquivo'}
+                                            <span className="text-sm font-bold truncate">
+                                                {uploadingFile ? 'Enviando...' : fileUrl ? 'PDF/Arquivo Pronto' : 'Selecionar Arquivo'}
                                             </span>
                                         </label>
                                     </div>

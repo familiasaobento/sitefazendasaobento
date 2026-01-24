@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { IconMail, IconUser, IconCalendar, IconLoader } from '../components/Icons';
+import { IconMail, IconUser, IconCalendar, IconLoader, IconTrash } from '../components/Icons';
 
 interface Message {
     id: number;
@@ -56,6 +56,23 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
             setError(`Erro ao carregar mensagens: ${err.message}`);
         } finally {
             setFetchingMessages(false);
+        }
+    };
+
+    const handleDeleteMessage = async (id: number) => {
+        if (!confirm('Deseja realmente excluir esta mensagem permanentemente?')) return;
+
+        try {
+            const { error } = await supabase
+                .from('contact_messages')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            setMessages(messages.filter(msg => msg.id !== id));
+        } catch (err: any) {
+            console.error('Erro ao excluir mensagem:', err);
+            alert('Erro ao excluir mensagem.');
         }
     };
 
@@ -133,6 +150,13 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                                                 </div>
                                             </div>
                                         </div>
+                                        <button
+                                            onClick={() => handleDeleteMessage(msg.id)}
+                                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
+                                            title="Excluir Mensagem"
+                                        >
+                                            <IconTrash className="w-5 h-5" />
+                                        </button>
                                     </div>
                                     <h4 className="text-lg font-bold text-gray-800 mb-2">{msg.subject}</h4>
                                     <p className="text-gray-600 whitespace-pre-wrap leading-relaxed bg-gray-50 p-4 rounded-xl border border-gray-100 italic">
