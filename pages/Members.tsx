@@ -102,7 +102,7 @@ export const MembersPage: React.FC = () => {
                             className="bg-farm-700 hover:bg-farm-800 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
                         >
                             <IconPrinter className="w-5 h-5" />
-                            Relatório Completo
+                            Lista Completa
                         </button>
                     </div>
                 </div>
@@ -290,10 +290,10 @@ export const MembersPage: React.FC = () => {
                     <div className="hidden print:block bg-white p-8">
                         <div className="text-center mb-8 border-b-2 border-gray-900 pb-4">
                             <h1 className="text-3xl font-bold font-serif text-gray-900">Fazenda São Bento</h1>
-                            <h2 className="text-xl text-gray-600 mt-2">
-                                {printMode === 'simple' ? 'Listagem Geral de Sócios' : 'Relatório Detalhado de Sócios e Dependentes'}
+                            <h2 className="text-xl text-gray-600 mt-2 font-bold uppercase">
+                                {printMode === 'simple' ? 'Lista Simples de Sócios' : 'Lista Completa de Sócios e Dependentes'}
                             </h2>
-                            <p className="text-sm text-gray-400 mt-1">Gerado em {new Date().toLocaleDateString('pt-BR')}</p>
+                            <p className="text-xs text-gray-400 mt-1">Portal Fazenda São Bento - {new Date().toLocaleDateString('pt-BR')}</p>
                         </div>
 
                         <style>
@@ -323,10 +323,14 @@ export const MembersPage: React.FC = () => {
                         <table className="w-full text-left border-collapse border border-gray-300">
                             <thead>
                                 <tr className="bg-gray-100 print-header">
-                                    <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[35%]">Nome / Endereço</th>
-                                    <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[15%]">CPF</th>
-                                    <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[20%]">Telefone</th>
-                                    <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[30%]">E-mail</th>
+                                    <th className={`px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs ${printMode === 'simple' ? 'w-[45%]' : 'w-[30%]'}`}>
+                                        {printMode === 'simple' ? 'Nome do Sócio' : 'Nome / Endereço'}
+                                    </th>
+                                    <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[20%]">CPF</th>
+                                    <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[35%]">Telefone de Contato</th>
+                                    {printMode === 'detailed' && (
+                                        <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[35%]">E-mail</th>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody>
@@ -336,18 +340,20 @@ export const MembersPage: React.FC = () => {
                                             <td className="px-2 py-1 border border-gray-400 align-top">
                                                 <div className="font-bold text-gray-900 text-[10px] uppercase leading-tight">{profile.full_name}</div>
                                                 {printMode === 'detailed' && profile.address && (
-                                                    <div className="text-[9px] text-gray-600 mt-0.5 leading-tight">{profile.address}</div>
+                                                    <div className="text-[9px] text-gray-600 mt-1 leading-tight border-t border-gray-200 pt-0.5">{profile.address}</div>
                                                 )}
                                             </td>
                                             <td className="px-2 py-1 border border-gray-400 align-top text-[10px] text-gray-800 font-mono">
-                                                {profile.cpf}
+                                                {profile.cpf || '—'}
                                             </td>
                                             <td className="px-2 py-1 border border-gray-400 align-top text-[10px] text-gray-800 whitespace-nowrap">
-                                                {profile.phone}
+                                                {profile.phone || '—'}
                                             </td>
-                                            <td className="px-2 py-1 border border-gray-400 align-top text-[10px] text-gray-800 break-all leading-tight">
-                                                {profile.email || '-'}
-                                            </td>
+                                            {printMode === 'detailed' && (
+                                                <td className="px-2 py-1 border border-gray-400 align-top text-[10px] text-gray-800 break-all leading-tight">
+                                                    {profile.email || '—'}
+                                                </td>
+                                            )}
                                         </tr>
                                         {printMode === 'detailed' && profile.dependents && profile.dependents.length > 0 && (
                                             <tr className="break-inside-avoid print-row">
