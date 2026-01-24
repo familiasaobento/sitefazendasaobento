@@ -120,7 +120,8 @@ export const MembersPage: React.FC = () => {
             ) : (
                 <>
                     {/* Mobile Card View (Hidden on Desktop) */}
-                    <div className="grid grid-cols-1 gap-4 md:hidden">
+                    {/* Mobile Card View (Hidden on Desktop & Print) */}
+                    <div className="grid grid-cols-1 gap-4 md:hidden print:hidden">
                         {filteredProfiles.map((profile) => (
                             <div key={profile.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-4">
                                 <div className="flex items-center gap-3">
@@ -323,14 +324,12 @@ export const MembersPage: React.FC = () => {
                         <table className="w-full text-left border-collapse border border-gray-300">
                             <thead>
                                 <tr className="bg-gray-100 print-header">
-                                    <th className={`px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs ${printMode === 'simple' ? 'w-[45%]' : 'w-[30%]'}`}>
+                                    <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[30%]">
                                         {printMode === 'simple' ? 'Nome do Sócio' : 'Nome / Endereço'}
                                     </th>
-                                    <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[20%]">CPF</th>
-                                    <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[35%]">Telefone de Contato</th>
-                                    {printMode === 'detailed' && (
-                                        <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[35%]">E-mail</th>
-                                    )}
+                                    <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[15%]">CPF</th>
+                                    <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[20%]">Telefone</th>
+                                    <th className="px-2 py-1 border border-gray-400 font-bold text-gray-900 text-xs w-[35%]">E-mail</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -349,11 +348,9 @@ export const MembersPage: React.FC = () => {
                                             <td className="px-2 py-1 border border-gray-400 align-top text-[10px] text-gray-800 whitespace-nowrap">
                                                 {profile.phone || '—'}
                                             </td>
-                                            {printMode === 'detailed' && (
-                                                <td className="px-2 py-1 border border-gray-400 align-top text-[10px] text-gray-800 break-all leading-tight">
-                                                    {profile.email || '—'}
-                                                </td>
-                                            )}
+                                            <td className="px-2 py-1 border border-gray-400 align-top text-[10px] text-gray-800 break-all leading-tight">
+                                                {profile.email || '—'}
+                                            </td>
                                         </tr>
                                         {printMode === 'detailed' && profile.dependents && profile.dependents.length > 0 && (
                                             <tr className="break-inside-avoid print-row">
