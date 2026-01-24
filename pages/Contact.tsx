@@ -33,18 +33,27 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
     const fetchMessages = async () => {
         setFetchingMessages(true);
         try {
+            // Buscamos todas as mensagens e trazemos o nome do sócio da tabela profiles
             const { data, error } = await supabase
                 .from('contact_messages')
                 .select(`
                     *,
-                    profiles:user_id (full_name)
+                    profiles ( full_name )
                 `)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            setMessages(data || []);
-        } catch (err) {
-            console.error('Error fetching messages:', err);
+
+            // Garantimos que profiles seja tratado corretamente, seja objeto ou array
+            const formattedMessages = (data || []).map((msg: any) => ({
+                ...msg,
+                profiles: Array.isArray(msg.profiles) ? msg.profiles[0] : msg.profiles
+            }));
+
+            setMessages(formattedMessages);
+        } catch (err: any) {
+            console.error('Erro ao carregar mensagens:', err);
+            setError(`Erro ao carregar mensagens: ${err.message}`);
         } finally {
             setFetchingMessages(false);
         }
@@ -116,8 +125,8 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                                                         {new Date(msg.created_at).toLocaleString('pt-BR')}
                                                     </span>
                                                     <span className={`px-2 py-0.5 rounded-full font-medium ${msg.type === 'Elogio' ? 'bg-green-100 text-green-700' :
-                                                            msg.type === 'Crítica/Reclamação' ? 'bg-red-100 text-red-700' :
-                                                                'bg-blue-100 text-blue-700'
+                                                        msg.type === 'Crítica/Reclamação' ? 'bg-red-100 text-red-700' :
+                                                            'bg-blue-100 text-blue-700'
                                                         }`}>
                                                         {msg.type}
                                                     </span>

@@ -20,6 +20,8 @@ export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
     const [title, setTitle] = useState('');
     const [category, setCategory] = useState('Social');
     const [body, setBody] = useState('');
+    const [fileUrl, setFileUrl] = useState('');
+    const [uploadingFile, setUploadingFile] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
@@ -36,7 +38,8 @@ export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
           title,
           body,
           category,
-          published_at
+          published_at,
+          file_url
         `)
                 .order('published_at', { ascending: false });
 
@@ -46,6 +49,34 @@ export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
             console.error('Erro ao buscar notícias:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingFile(true);
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random()}.${fileExt}`;
+            const filePath = `news-attachments/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('documents')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('documents')
+                .getPublicUrl(filePath);
+
+            setFileUrl(publicUrl);
+        } catch (err: any) {
+            alert('Erro no upload: ' + err.message);
+        } finally {
+            setUploadingFile(false);
         }
     };
 
@@ -61,6 +92,7 @@ export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                     title,
                     category,
                     body,
+                    file_url: fileUrl || null,
                     author: user?.id
                 }]);
 
@@ -69,6 +101,7 @@ export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
             setTitle('');
             setBody('');
             setCategory('Social');
+            setFileUrl('');
             setShowAddForm(false);
             fetchNews();
         } catch (err) {
@@ -89,6 +122,7 @@ export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
 
     return (
         <div className="space-y-8">
+            {/* Welcome Section */}
             <div className="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-100 flex flex-col md:flex-row items-center gap-8">
                 <div className="flex-1 order-2 md:order-1">
                     <h2 className="text-2xl sm:text-3xl font-bold text-farm-900 font-serif mb-4 text-center md:text-left">Bem-vindo a Fazenda São Bento!</h2>
@@ -115,6 +149,7 @@ export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                 </div>
             </div>
 
+            {/* News Section */}
             <div>
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-bold text-gray-800 flex items-center">
@@ -135,8 +170,8 @@ export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                     <div className="bg-white p-6 rounded-xl shadow-md border border-farm-100 mb-8 fade-in">
                         <h4 className="text-lg font-bold text-farm-800 mb-4">Novo Aviso ou Notícia</h4>
                         <form onSubmit={handleAddNews} className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div className="md:col-span-3">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="md:col-span-2 lg:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
                                     <input
                                         type="text"
@@ -160,21 +195,45 @@ export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                                         <option>Aviso</option>
                                     </select>
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Anexar Detalhamento</label>
+                                    <div className="relative">
+                                        <input
+                                            type="file"
+                                            onChange={handleFileUpload}
+                                            className="hidden"
+                                            id="file-upload"
+                                            disabled={uploadingFile}
+                                        />
+                                        <label
+                                            htmlFor="file-upload"
+                                            className={`w-full flex items-center justify-center gap-2 px-4 py-2 border border-dashed rounded-lg cursor-pointer transition-all ${fileUrl ? 'bg-green-50 border-green-300 text-green-700' : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'
+                                                }`}
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                            </svg>
+                                            <span className="text-xs font-bold truncate">
+                                                {uploadingFile ? 'Enviando...' : fileUrl ? 'Arquivo Pronto' : 'Escolher Arquivo'}
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Conteúdo</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Resumo do Conteúdo</label>
                                 <textarea
                                     required
                                     rows={4}
                                     value={body}
                                     onChange={(e) => setBody(e.target.value)}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
-                                    placeholder="Escreva a notícia detalhadamente..."
+                                    placeholder="Escreva a notícia resumidamente..."
                                 ></textarea>
                             </div>
                             <button
                                 type="submit"
-                                disabled={submitting}
+                                disabled={submitting || uploadingFile}
                                 className="w-full bg-farm-600 text-white font-bold py-2 rounded-lg hover:bg-farm-700 disabled:opacity-50 transition-all font-serif"
                             >
                                 {submitting ? 'Publicando...' : 'Publicar Notícia'}
@@ -203,7 +262,21 @@ export const HomePage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                                 </span>
                                 <h4 className="font-bold text-lg mt-3 mb-2 text-gray-800">{item.title}</h4>
                                 <p className="text-gray-400 text-[10px] mb-3">{formatDate(item.published_at)}</p>
-                                <p className="text-gray-600 text-sm whitespace-pre-wrap">{item.body}</p>
+                                <p className="text-gray-600 text-sm whitespace-pre-wrap mb-4">{item.body}</p>
+
+                                {item.file_url && (
+                                    <a
+                                        href={item.file_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 text-xs font-bold text-farm-700 bg-farm-50 px-3 py-2 rounded-lg hover:bg-farm-100 transition-colors w-full justify-center border border-farm-100"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        Ver Detalhamento (PDF/Arquivo)
+                                    </a>
+                                )}
                             </div>
                         ))}
                     </div>

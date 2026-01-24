@@ -7,6 +7,7 @@ interface EventItem {
   description: string;
   start_date: string;
   end_date?: string;
+  file_url?: string;
 }
 
 export const EventsPage: React.FC = () => {
@@ -20,6 +21,8 @@ export const EventsPage: React.FC = () => {
   const [newDescription, setNewDescription] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [fileUrl, setFileUrl] = useState('');
+  const [uploadingFile, setUploadingFile] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -70,6 +73,34 @@ export const EventsPage: React.FC = () => {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `event-attachments/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('documents')
+        .getPublicUrl(filePath);
+
+      setFileUrl(publicUrl);
+    } catch (err: any) {
+      alert('Erro no upload: ' + err.message);
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
   const handleAddEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -80,7 +111,8 @@ export const EventsPage: React.FC = () => {
           title: newTitle,
           description: newDescription,
           start_date: startDate,
-          end_date: endDate || null
+          end_date: endDate || null,
+          file_url: fileUrl || null
         }]);
 
       if (error) throw error;
@@ -89,6 +121,7 @@ export const EventsPage: React.FC = () => {
       setNewDescription('');
       setStartDate('');
       setEndDate('');
+      setFileUrl('');
       setShowAddForm(false);
       fetchEvents();
     } catch (err) {
@@ -141,7 +174,7 @@ export const EventsPage: React.FC = () => {
                 placeholder="Ex: Reunião de Sócios"
               />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Data de Início</label>
                 <input
@@ -161,21 +194,45 @@ export const EventsPage: React.FC = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Anexar Detalhamento</label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="event-file-upload"
+                    disabled={uploadingFile}
+                  />
+                  <label
+                    htmlFor="event-file-upload"
+                    className={`w-full flex items-center justify-center gap-2 px-4 py-2 border border-dashed rounded-lg cursor-pointer transition-all ${fileUrl ? 'bg-green-50 border-green-300 text-green-700' : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'
+                      }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    <span className="text-xs font-bold truncate">
+                      {uploadingFile ? 'Enviando...' : fileUrl ? 'Arquivo Pronto' : 'Escolher Arquivo'}
+                    </span>
+                  </label>
+                </div>
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Resumo da Descrição</label>
               <textarea
                 required
                 value={newDescription}
                 onChange={(e) => setNewDescription(e.target.value)}
                 rows={3}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
-                placeholder="Descreva o que acontecerá..."
+                placeholder="Descreva resumidamente o que acontecerá..."
               ></textarea>
             </div>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || uploadingFile}
               className="w-full bg-farm-600 text-white font-bold py-2 rounded-lg hover:bg-farm-700 disabled:opacity-50 transition-all"
             >
               {submitting ? 'Salvando...' : 'Salvar Evento'}
@@ -201,7 +258,21 @@ export const EventsPage: React.FC = () => {
                   {formatEventDate(event.start_date, event.end_date)}
                 </div>
                 <h3 className="text-xl font-bold text-gray-800 mb-2">{event.title}</h3>
-                <p className="text-gray-600 text-sm leading-relaxed">{event.description}</p>
+                <p className="text-gray-600 text-sm leading-relaxed mb-4">{event.description}</p>
+
+                {event.file_url && (
+                  <a
+                    href={event.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-xs font-bold text-farm-700 bg-farm-50 px-3 py-2 rounded-lg hover:bg-farm-100 transition-colors w-full justify-center border border-farm-100"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Detalhes do Evento (Arquivo)
+                  </a>
+                )}
               </div>
             </div>
           ))}
