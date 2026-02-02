@@ -11,6 +11,7 @@ import { GalleryPage } from './pages/Gallery';
 import { ShopPage } from './pages/Shop';
 import { AdminUsersPage } from './pages/AdminUsers';
 import { MembersPage } from './pages/Members';
+import { VisitorsPage } from './pages/Visitors';
 import { Page, NewsItem } from './types';
 import { IconLock, IconInstagram, IconWhatsapp } from './components/Icons';
 import { supabase } from './lib/supabase';
@@ -19,7 +20,7 @@ import { Session } from '@supabase/supabase-js';
 // --- Components ---
 
 const LoginPage = ({ onAuthChange }: { onAuthChange: () => void }) => {
-  const [isRegister, setIsRegister] = useState(false);
+  const [mode, setMode] = useState<'login' | 'register' | 'visitor'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -34,16 +35,19 @@ const LoginPage = ({ onAuthChange }: { onAuthChange: () => void }) => {
     setLoading(true);
 
     try {
-      if (isRegister) {
+      if (mode === 'register' || mode === 'visitor') {
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { full_name: fullName }
+            data: {
+              full_name: fullName,
+              role: mode === 'visitor' ? 'visitor' : 'member'
+            }
           }
         });
         if (error) throw error;
-        setMessage('Cadastro realizado! Aguarde a aprovação manual da administração para acessar o portal.');
+        setMessage(mode === 'visitor' ? 'Cadastro de visitante realizado! Seu acesso será liberado em breve.' : 'Cadastro realizado! Aguarde a aprovação manual da administração para acessar o portal.');
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -65,20 +69,20 @@ const LoginPage = ({ onAuthChange }: { onAuthChange: () => void }) => {
           <div className="bg-farm-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
             <IconLock className="w-8 h-8 text-farm-700" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-800 font-serif">Portal Família São Bento</h1>
-          <p className="text-gray-500 mt-2">
-            {isRegister ? 'Solicite seu acesso ao portal' : 'Área restrita para sócios e familiares'}
+          <h1 className="text-3xl font-bold text-gray-900 font-serif tracking-tight">Portal Família São Bento</h1>
+          <p className="text-gray-600 mt-3 text-sm font-medium">
+            {mode === 'visitor' ? 'Bem-vindo, acompanhe suas solicitações' : mode === 'register' ? 'Solicite seu acesso ao portal' : 'Área restrita de acesso aos Sócios'}
           </p>
         </div>
 
         {message ? (
           <div className="bg-green-50 text-green-700 p-4 rounded-lg mb-6 text-sm">
             {message}
-            <button onClick={() => { setIsRegister(false); setMessage(''); }} className="block mt-2 font-bold underline">Voltar para login</button>
+            <button onClick={() => { setMode('login'); setMessage(''); }} className="block mt-2 font-bold underline">Voltar para login</button>
           </div>
         ) : (
           <form onSubmit={handleAuth} className="space-y-4">
-            {isRegister && (
+            {(mode === 'register' || mode === 'visitor') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
                 <input
@@ -118,17 +122,30 @@ const LoginPage = ({ onAuthChange }: { onAuthChange: () => void }) => {
               disabled={loading}
               className="w-full bg-farm-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-farm-800 transition-colors shadow-lg disabled:opacity-50"
             >
-              {loading ? 'Carregando...' : isRegister ? 'Solicitar Cadastro' : 'Entrar'}
+              {loading ? 'Carregando...' : mode === 'login' ? 'Entrar' : 'Solicitar Cadastro'}
             </button>
 
-            <div className="text-center mt-4 text-sm">
+            <div className="flex flex-col gap-3 text-center mt-4 text-sm">
               <button
                 type="button"
                 className="text-farm-700 font-medium hover:underline"
-                onClick={() => { setIsRegister(!isRegister); setError(''); }}
+                onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
               >
-                {isRegister ? 'Já tem conta? Faça login' : 'Não tem conta? Cadastre-se'}
+                {mode === 'login' ? 'Não tem conta de sócio? Cadastre-se' : 'Já tem conta? Faça login'}
               </button>
+
+              {mode !== 'visitor' && (
+                <div className="pt-2 border-t border-gray-100">
+                  <p className="text-gray-500 mb-2">É um visitante?</p>
+                  <button
+                    type="button"
+                    className="bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors w-full"
+                    onClick={() => { setMode('visitor'); setError(''); }}
+                  >
+                    Cadastrar como Visitante
+                  </button>
+                </div>
+              )}
             </div>
           </form>
         )}
@@ -167,6 +184,7 @@ const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isApproved, setIsApproved] = useState<boolean | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isVisitor, setIsVisitor] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<Page>(() => {
     const savedPage = localStorage.getItem('portal_last_page');
     return (savedPage as Page) || Page.HOME;
@@ -222,6 +240,7 @@ const App: React.FC = () => {
       } else {
         setIsApproved(null);
         setIsAdmin(false);
+        setIsVisitor(false);
         setCurrentPage(Page.HOME);
         localStorage.removeItem('portal_last_page');
         setLoading(false);
@@ -250,9 +269,11 @@ const App: React.FC = () => {
       if (data && data.length > 0) {
         setIsApproved(data[0].approved === true || isSuperAdmin);
         setIsAdmin(data[0].role === 'admin' || isSuperAdmin);
+        setIsVisitor(data[0].role === 'visitor');
       } else {
         setIsApproved(isSuperAdmin);
         setIsAdmin(isSuperAdmin);
+        setIsVisitor(false);
       }
     } catch (err) {
       console.error('Error checking user info:', err);
@@ -264,6 +285,7 @@ const App: React.FC = () => {
       } else {
         setIsApproved(false);
         setIsAdmin(false);
+        setIsVisitor(false);
       }
     } finally {
       setLoading(false);
@@ -294,27 +316,29 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentPage) {
       case Page.HOME:
-        return <HomePage isAdmin={isAdmin} />;
+        return <HomePage isAdmin={isAdmin} isVisitor={isVisitor} />;
       case Page.FINANCE:
-        return <FinancePage />;
+        return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <FinancePage />;
       case Page.RESERVATIONS:
-        return <ReservationsPage isAdmin={isAdmin} />;
+        return <ReservationsPage isAdmin={isAdmin} isVisitor={isVisitor} />;
       case Page.EVENTS:
-        return <EventsPage isAdmin={isAdmin} />;
+        return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <EventsPage isAdmin={isAdmin} />;
       case Page.DOCUMENTS:
-        return <DocumentsPage />;
+        return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <DocumentsPage />;
       case Page.GALLERY:
-        return <GalleryPage />;
+        return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <GalleryPage />;
       case Page.PROFILE:
-        return isAdmin ? <MembersPage /> : <ProfilePage />;
+        return isAdmin ? <MembersPage /> : (isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <ProfilePage />);
       case Page.CONTACT:
-        return <ContactPage isAdmin={isAdmin} />;
+        return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <ContactPage isAdmin={isAdmin} />;
       case Page.SHOP:
-        return <ShopPage isAdmin={isAdmin} />;
+        return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <ShopPage isAdmin={isAdmin} />;
+      case Page.VISITORS:
+        return isAdmin ? <VisitorsPage /> : <HomePage isAdmin={isAdmin} isVisitor={isVisitor} />;
       case Page.ADMIN_USERS:
-        return isAdmin ? <AdminUsersPage /> : <HomePage />;
+        return isAdmin ? <AdminUsersPage /> : <HomePage isAdmin={isAdmin} isVisitor={isVisitor} />;
       default:
-        return <HomePage />;
+        return <HomePage isAdmin={isAdmin} isVisitor={isVisitor} />;
     }
   };
 
@@ -324,6 +348,7 @@ const App: React.FC = () => {
       onNavigate={setCurrentPage}
       onLogout={handleSignOut}
       isAdmin={isAdmin}
+      isVisitor={isVisitor}
     >
       {renderContent()}
     </Layout>

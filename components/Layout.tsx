@@ -8,9 +8,10 @@ interface LayoutProps {
   onNavigate: (page: Page) => void;
   onLogout: () => void;
   isAdmin?: boolean;
+  isVisitor?: boolean;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate, onLogout, isAdmin }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate, onLogout, isAdmin, isVisitor }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
@@ -20,24 +21,33 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
     { page: Page.DOCUMENTS, label: 'Documentos', icon: IconFileText },
     { page: Page.GALLERY, label: 'Álbum de Fotos', icon: IconImage },
     { page: Page.FINANCE, label: 'Financeiro', icon: IconChart },
-    { page: Page.SHOP, label: 'Reserva de Produtos', icon: IconShoppingCart },
+    { page: Page.SHOP, label: 'Produtos da Fazenda', icon: IconShoppingCart },
     { page: Page.PROFILE, label: 'Meu Cadastro', icon: IconUser },
     { page: Page.CONTACT, label: 'Contato e Sugestões', icon: IconMail },
   ];
 
+  let filteredNavItems = [...navItems];
+
+  if (isVisitor) {
+    filteredNavItems = navItems.filter(item =>
+      item.page === Page.HOME || item.page === Page.RESERVATIONS || item.page === Page.SHOP
+    );
+  }
+
   if (isAdmin) {
     // Rename Profile to "Cadastros dos Sócios"
-    const profileItem = navItems.find(item => item.page === Page.PROFILE);
+    const profileItem = filteredNavItems.find(item => item.page === Page.PROFILE);
     if (profileItem) {
       profileItem.label = 'Cadastros dos Sócios';
     }
     // Rename Contact to "Mensagens Recebidas"
-    const contactItem = navItems.find(item => item.page === Page.CONTACT);
+    const contactItem = filteredNavItems.find(item => item.page === Page.CONTACT);
     if (contactItem) {
       contactItem.label = 'Mensagens Recebidas';
     }
-    // Add "Controle de Acessos"
-    navItems.push({ page: Page.ADMIN_USERS, label: 'Controle de Acessos', icon: IconUser });
+    // Admin specific items
+    filteredNavItems.push({ page: Page.VISITORS, label: 'Visitantes Cadastrados', icon: IconUser });
+    filteredNavItems.push({ page: Page.ADMIN_USERS, label: 'Controle de Acessos', icon: IconUser });
   }
 
   return (
@@ -77,7 +87,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
 
           {/* Scrollable Navigation */}
           <nav className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
-            {navItems.map((item) => {
+            {filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentPage === item.page;
               return (

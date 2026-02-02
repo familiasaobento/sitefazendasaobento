@@ -11,16 +11,23 @@ interface Reservation {
   created_at: string;
 }
 
-export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
+export const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({ isAdmin, isVisitor }) => {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [myReservations, setMyReservations] = useState<Reservation[]>([]);
   const [allReservations, setAllReservations] = useState<any[]>([]);
   const [fetching, setFetching] = useState(true);
+  const [authEmail, setAuthEmail] = useState('');
 
   // Form states
   const [name, setName] = useState('');
+  const [visitorName, setVisitorName] = useState('');
+  const [visitorCpf, setVisitorCpf] = useState('');
+  const [visitorEmail, setVisitorEmail] = useState('');
+  const [visitorPhone, setVisitorPhone] = useState('');
+  const [arrivalTime, setArrivalTime] = useState('');
+  const [departureTime, setDepartureTime] = useState('');
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
   const [numGuests, setNumGuests] = useState(1);
@@ -40,6 +47,22 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
       setFetching(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      setAuthEmail(user.email || '');
+
+      // Fetch profile to get full_name
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single();
+
+      if (isVisitor) {
+        setVisitorEmail(user.email || '');
+        if (profile?.full_name) {
+          setVisitorName(profile.full_name);
+        }
+      }
 
       const { data, error } = await supabase
         .from('reservations')
@@ -74,10 +97,21 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
   };
 
   const handleUpdateStatus = async (id: number, newStatus: string) => {
+    const promptMsg = newStatus === 'confirmed'
+      ? 'Deseja confirmar esta reserva? Informe detalhes como n- do quarto/chalé (opcional):'
+      : 'Deseja recusar esta reserva? Por favor, informe o motivo:';
+
+    const adminNote = prompt(promptMsg);
+    if (newStatus === 'rejected' && adminNote === null) return;
+    if (newStatus === 'confirmed' && adminNote === null) return;
+
     try {
       const { error } = await supabase
         .from('reservations')
-        .update({ status: newStatus })
+        .update({
+          status: newStatus,
+          admin_notes: adminNote || ''
+        })
         .eq('id', id);
 
       if (error) throw error;
@@ -152,7 +186,7 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
             num_guests: numGuests,
             guests_details: guestsDetails,
             accommodation: accommodation,
-            notes: notes,
+            notes: `${notes}${isVisitor ? `\n\n--- Dados do Visitante ---\nNome: ${visitorName}\nCPF: ${visitorCpf}\nE-mail: ${visitorEmail}\nTelefone: ${visitorPhone}\nChegada Prevista: ${arrivalTime}\nSaída Prevista: ${departureTime}` : ''}`,
             status: 'pending'
           }
         ]);
@@ -162,6 +196,12 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
       setSubmitted(true);
       // Reset form
       setName('');
+      setVisitorName('');
+      setVisitorCpf('');
+      setVisitorEmail(authEmail);
+      setVisitorPhone('');
+      setArrivalTime('');
+      setDepartureTime('');
       setCheckIn('');
       setCheckOut('');
       setNumGuests(1);
@@ -209,7 +249,9 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
               )}
 
               <div className="space-y-1">
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nome do Sócio Principal</label>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                  {isVisitor ? 'Nome do sócio anfitrião' : 'Nome do Sócio Principal'}
+                </label>
                 <input
                   type="text"
                   id="name"
@@ -217,9 +259,66 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 focus:border-farm-500 transition-colors"
-                  placeholder="Ex: João da Silva"
+                  placeholder={isVisitor ? "Ex: Nome do Sócio que o convidou" : "Ex: João da Silva"}
                 />
               </div>
+
+              {isVisitor && (
+                <div className="space-y-6 fade-in border-l-4 border-farm-200 pl-4 py-2 bg-farm-50/30 rounded-r-lg">
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label htmlFor="visitorName" className="block text-sm font-medium text-gray-700 text-farm-800">Seu Nome Completo (Visitante)</label>
+                      <input
+                        type="text"
+                        id="visitorName"
+                        required
+                        disabled
+                        value={visitorName}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label htmlFor="visitorCpf" className="block text-sm font-medium text-gray-700">Seu CPF</label>
+                        <input
+                          type="text"
+                          id="visitorCpf"
+                          required
+                          value={visitorCpf}
+                          onChange={(e) => setVisitorCpf(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 focus:border-farm-500 transition-colors bg-white"
+                          placeholder="000.000.000-00"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label htmlFor="visitorPhone" className="block text-sm font-medium text-gray-700">Seu Telefone</label>
+                        <input
+                          type="tel"
+                          id="visitorPhone"
+                          required
+                          value={visitorPhone}
+                          onChange={(e) => setVisitorPhone(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 focus:border-farm-500 transition-colors bg-white"
+                          placeholder="(00) 00000-0000"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label htmlFor="visitorEmail" className="block text-sm font-medium text-gray-700">Seu E-mail (Cadastro)</label>
+                      <input
+                        type="email"
+                        id="visitorEmail"
+                        required
+                        disabled
+                        value={visitorEmail}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1">
@@ -245,6 +344,33 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
                   />
                 </div>
               </div>
+
+              {isVisitor && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 fade-in">
+                  <div className="space-y-1">
+                    <label htmlFor="arrivalTime" className="block text-sm font-medium text-gray-700">Horário Previsto de Chegada</label>
+                    <input
+                      type="time"
+                      id="arrivalTime"
+                      required
+                      value={arrivalTime}
+                      onChange={(e) => setArrivalTime(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 focus:border-farm-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="departureTime" className="block text-sm font-medium text-gray-700">Horário Previsto de Saída</label>
+                    <input
+                      type="time"
+                      id="departureTime"
+                      required
+                      value={departureTime}
+                      onChange={(e) => setDepartureTime(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 focus:border-farm-500"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-1">
                 <label htmlFor="guests" className="block text-sm font-medium text-gray-700">Número de Pessoas (Total)</label>
@@ -333,7 +459,7 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
                   disabled={loading}
                   className="w-full bg-farm-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-farm-700 transition-colors shadow-md hover:shadow-lg transform active:scale-95 duration-200 disabled:opacity-50"
                 >
-                  {loading ? 'Processando...' : 'Confirmar Reserva'}
+                  {loading ? 'Processando...' : 'Solicitar Reserva'}
                 </button>
                 <p className="text-xs text-gray-500 text-center mt-3">
                   * Ao clicar, as informações serão salvas no sistema da fazenda.
@@ -386,9 +512,15 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
                       res.status === 'confirmed' ? 'text-green-600' : 'text-yellow-600'
                       }`}>
                       {res.status === 'canceled' ? 'Cancelada' :
-                        res.status === 'confirmed' ? 'Confirmada' : 'Aguardando Análise'}
+                        res.status === 'rejected' ? 'Recusada' :
+                          res.status === 'confirmed' ? 'Confirmada' : 'Aguardando Análise'}
                     </span>
                   </div>
+                  {(res as any).admin_notes && (
+                    <div className="mt-2 p-2 bg-gray-50 rounded text-xs text-gray-600 border-l-2 border-farm-300 italic">
+                      <strong>Nota da Admin:</strong> {(res as any).admin_notes}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -397,10 +529,11 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
       </div>
 
       {/* Admin Lodging Management Section */}
-      {isAdmin && (
-        <div className="mt-16 space-y-6 pt-12 border-t border-gray-200 print:m-0 print:p-0">
-          <style dangerouslySetInnerHTML={{
-            __html: `
+      {
+        isAdmin && (
+          <div className="mt-16 space-y-6 pt-12 border-t border-gray-200 print:m-0 print:p-0">
+            <style dangerouslySetInnerHTML={{
+              __html: `
             @media print {
               @page {
                 size: landscape;
@@ -448,208 +581,236 @@ export const ReservationsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) =
             }
           `}} />
 
-          <div className="flex items-center justify-between no-print">
-            <div>
-              <h3 className="text-2xl font-bold text-gray-800 font-serif flex items-center">
-                <span className="w-2 h-8 bg-farm-800 rounded-full mr-3"></span>
-                Gerenciamento de Hospedagem (ADM)
-              </h3>
-              <p className="text-sm text-gray-500 ml-5">Visualize todas as solicitações enviadas pelos sócios</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handlePrint}
-                className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all border border-gray-200"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                Imprimir Lista
-              </button>
-              <button
-                onClick={fetchAllReservations}
-                className="flex items-center gap-1 text-xs text-farm-600 font-bold hover:bg-farm-50 px-3 py-2 rounded-lg transition-all"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Atualizar Lista
-              </button>
-            </div>
-          </div>
-
-          {/* Mobile Admin View (Cards) */}
-          <div className="grid grid-cols-1 gap-4 md:hidden no-print">
-            {allReservations.map((res) => (
-              <div key={res.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-bold text-gray-900">
-                      {(() => {
-                        const profiles = (res as any).profiles;
-                        if (Array.isArray(profiles)) return profiles[0]?.full_name || 'Usuário';
-                        return profiles?.full_name || 'Usuário';
-                      })()}
-                    </p>
-                    <p className="text-[10px] text-gray-400">ID: #{res.id} • {res.accommodation}</p>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${res.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                    res.status === 'canceled' ? 'bg-red-100 text-red-700' :
-                      'bg-yellow-100 text-yellow-700'
-                    }`}>
-                    {res.status === 'confirmed' ? 'Confirmada' :
-                      res.status === 'canceled' ? 'Cancelada' : 'Pendente'}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-xs bg-gray-50 p-3 rounded-lg">
-                  <div>
-                    <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Chegada</p>
-                    <p className="text-gray-700 font-bold">{formatDate(res.check_in)}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Saída</p>
-                    <p className="text-gray-700 font-bold">{formatDate(res.check_out)}</p>
-                  </div>
-                  <div className="col-span-2 pt-2 border-t border-gray-200">
-                    <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Hóspedes ({res.num_guests})</p>
-                    <p className="text-gray-700 italic">
-                      {res.guests_details?.map((g: any) => `${g.name} (${g.age})`).join(', ') || 'Sem detalhes'}
-                    </p>
-                  </div>
-                </div>
-
-                {res.notes && (
-                  <div className="text-xs text-gray-600 italic px-2">
-                    "{res.notes}"
-                  </div>
-                )}
-
-                <div className="flex gap-2 pt-2 border-t border-gray-100">
-                  {res.status !== 'confirmed' ? (
-                    <button
-                      onClick={() => handleUpdateStatus(res.id, 'confirmed')}
-                      className="flex-1 bg-green-600 text-white font-bold py-2 rounded-lg text-xs"
-                    >
-                      Confirmar
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleUpdateStatus(res.id, 'canceled')}
-                      className="flex-1 bg-orange-500 text-white font-bold py-2 rounded-lg text-xs"
-                    >
-                      Cancelar
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDeleteReservation(res.id)}
-                    className="bg-red-50 text-red-500 p-2 rounded-lg border border-red-100"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
+            <div className="flex items-center justify-between no-print">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-800 font-serif flex items-center">
+                  <span className="w-2 h-8 bg-farm-800 rounded-full mr-3"></span>
+                  Gerenciamento de Hospedagem (ADM)
+                </h3>
+                <p className="text-sm text-gray-500 ml-5">Visualize todas as solicitações enviadas pelos sócios</p>
               </div>
-            ))}
-          </div>
-
-          {/* Desktop Table View (Admin) */}
-          <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-sm print-area hidden md:block">
-            <div className="hidden print:block mb-6">
-              <h1 className="text-2xl font-bold text-gray-900 border-b-2 border-farm-800 pb-2">Fazenda São Bento - Relatório de Hospedagem</h1>
-              <p className="text-sm text-gray-500 mt-1">Relatório gerado em: {new Date().toLocaleString('pt-BR')}</p>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handlePrint}
+                  className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all border border-gray-200"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Imprimir Lista
+                </button>
+                <button
+                  onClick={fetchAllReservations}
+                  className="flex items-center gap-1 text-xs text-farm-600 font-bold hover:bg-farm-50 px-3 py-2 rounded-lg transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Atualizar Lista
+                </button>
+              </div>
             </div>
 
-            <table className="w-full bg-white text-left text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="px-6 py-4 font-bold text-gray-700">Sócio</th>
-                  <th className="px-6 py-4 font-bold text-gray-700">Acomodação</th>
-                  <th className="px-6 py-4 font-bold text-gray-700">Chegada</th>
-                  <th className="px-6 py-4 font-bold text-gray-700">Saída</th>
-                  <th className="px-6 py-4 font-bold text-gray-700">Pessoas</th>
-                  <th className="px-6 py-4 font-bold text-gray-700">Observações</th>
-                  <th className="px-6 py-4 font-bold text-gray-700">Status</th>
-                  <th className="px-6 py-4 font-bold text-gray-700 no-print text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {allReservations.map((res) => (
-                  <tr key={res.id} className="hover:bg-gray-50/50">
-                    <td className="px-6 py-4">
-                      <p className="font-bold text-gray-800">
+            {/* Mobile Admin View (Cards) */}
+            <div className="grid grid-cols-1 gap-4 md:hidden no-print">
+              {allReservations.map((res) => (
+                <div key={res.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-gray-900">
                         {(() => {
                           const profiles = (res as any).profiles;
                           if (Array.isArray(profiles)) return profiles[0]?.full_name || 'Usuário';
                           return profiles?.full_name || 'Usuário';
                         })()}
                       </p>
-                      <p className="text-[10px] text-gray-400">ID: #{res.id}</p>
-                    </td>
-                    <td className="px-6 py-4">{res.accommodation}</td>
-                    <td className="px-6 py-4">{formatDate(res.check_in)}</td>
-                    <td className="px-6 py-4">{formatDate(res.check_out)}</td>
-                    <td className="px-6 py-4">
-                      <p className="font-medium">{res.num_guests} {res.num_guests === 1 ? 'pessoa' : 'pessoas'}</p>
-                      {res.guests_details && res.guests_details.length > 0 && (
-                        <div className="text-[10px] text-gray-500 mt-1">
-                          <span className="font-bold">Acompanhantes:</span><br />
-                          {res.guests_details.map((g: any) => `${g.name} (${g.age} anos)`).join(', ')}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-xs text-gray-600 max-w-[250px] whitespace-normal">
-                        {res.notes || <span className="text-gray-300 italic">Sem observações</span>}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${res.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                        res.status === 'canceled' ? 'bg-red-100 text-red-700' :
+                      <p className="text-[10px] text-gray-400">ID: #{res.id} • {res.accommodation}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${res.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                      res.status === 'canceled' ? 'bg-red-100 text-red-700' :
+                        res.status === 'rejected' ? 'bg-red-100 text-red-700' :
                           'bg-yellow-100 text-yellow-700'
-                        }`}>
-                        {res.status === 'confirmed' ? 'Confirmada' :
+                      }`}>
+                      {res.status === 'confirmed' ? 'Confirmada' :
+                        res.status === 'rejected' ? 'Recusada' :
                           res.status === 'canceled' ? 'Cancelada' : 'Pendente'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 no-print text-center space-x-2">
-                      {res.status !== 'confirmed' ? (
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-xs bg-gray-50 p-3 rounded-lg">
+                    <div>
+                      <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Chegada</p>
+                      <p className="text-gray-700 font-bold">{formatDate(res.check_in)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Saída</p>
+                      <p className="text-gray-700 font-bold">{formatDate(res.check_out)}</p>
+                    </div>
+                    <div className="col-span-2 pt-2 border-t border-gray-200">
+                      <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Hóspedes ({res.num_guests})</p>
+                      <p className="text-gray-700 italic">
+                        {res.guests_details?.map((g: any) => `${g.name} (${g.age})`).join(', ') || 'Sem detalhes'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {res.notes && (
+                    <div className="text-xs text-gray-600 italic px-2">
+                      "{res.notes}"
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-2 border-t border-gray-100">
+                    {res.status === 'pending' && (
+                      <>
                         <button
                           onClick={() => handleUpdateStatus(res.id, 'confirmed')}
-                          className="text-green-600 hover:text-green-800 font-bold text-[10px] bg-green-50 px-2 py-1 rounded border border-green-100"
+                          className="flex-1 bg-green-600 text-white font-bold py-2 rounded-lg text-xs"
                         >
-                          Confirmar
+                          Aceitar
                         </button>
-                      ) : (
                         <button
-                          onClick={() => handleUpdateStatus(res.id, 'canceled')}
-                          className="text-orange-600 hover:text-orange-800 font-bold text-[10px] bg-orange-50 px-2 py-1 rounded border border-orange-100"
+                          onClick={() => handleUpdateStatus(res.id, 'rejected')}
+                          className="flex-1 bg-red-600 text-white font-bold py-2 rounded-lg text-xs"
                         >
-                          Cancelar
+                          Recusar
                         </button>
-                      )}
+                      </>
+                    )}
+                    {res.status === 'confirmed' && (
                       <button
-                        onClick={() => handleDeleteReservation(res.id)}
-                        className="text-red-500 hover:text-red-700 bg-red-50 p-1 rounded border border-red-100 transition-colors inline-flex align-middle"
+                        onClick={() => handleUpdateStatus(res.id, 'canceled')}
+                        className="flex-1 bg-orange-500 text-white font-bold py-2 rounded-lg text-xs"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
+                        Cancelar
                       </button>
-                    </td>
-                  </tr>
-                ))}
-                {allReservations.length === 0 && (
+                    )}
+                    <button
+                      onClick={() => handleDeleteReservation(res.id)}
+                      className="bg-red-50 text-red-500 p-2 rounded-lg border border-red-100"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View (Admin) */}
+            <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-sm print-area hidden md:block">
+              <div className="hidden print:block mb-6">
+                <h1 className="text-2xl font-bold text-gray-900 border-b-2 border-farm-800 pb-2">Fazenda São Bento - Relatório de Hospedagem</h1>
+                <p className="text-sm text-gray-500 mt-1">Relatório gerado em: {new Date().toLocaleString('pt-BR')}</p>
+              </div>
+
+              <table className="w-full bg-white text-left text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-gray-400">Nenhuma reserva encontrada no sistema.</td>
+                    <th className="px-6 py-4 font-bold text-gray-700">Sócio</th>
+                    <th className="px-6 py-4 font-bold text-gray-700">Acomodação</th>
+                    <th className="px-6 py-4 font-bold text-gray-700">Chegada</th>
+                    <th className="px-6 py-4 font-bold text-gray-700">Saída</th>
+                    <th className="px-6 py-4 font-bold text-gray-700">Pessoas</th>
+                    <th className="px-6 py-4 font-bold text-gray-700">Observações</th>
+                    <th className="px-6 py-4 font-bold text-gray-700">Status</th>
+                    <th className="px-6 py-4 font-bold text-gray-700 no-print text-center">Ações</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {allReservations.map((res) => (
+                    <tr key={res.id} className="hover:bg-gray-50/50">
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-gray-800">
+                          {(() => {
+                            const profiles = (res as any).profiles;
+                            if (Array.isArray(profiles)) return profiles[0]?.full_name || 'Usuário';
+                            return profiles?.full_name || 'Usuário';
+                          })()}
+                        </p>
+                        <p className="text-[10px] text-gray-400">ID: #{res.id}</p>
+                      </td>
+                      <td className="px-6 py-4">{res.accommodation}</td>
+                      <td className="px-6 py-4">{formatDate(res.check_in)}</td>
+                      <td className="px-6 py-4">{formatDate(res.check_out)}</td>
+                      <td className="px-6 py-4">
+                        <p className="font-medium">{res.num_guests} {res.num_guests === 1 ? 'pessoa' : 'pessoas'}</p>
+                        {res.guests_details && res.guests_details.length > 0 && (
+                          <div className="text-[10px] text-gray-500 mt-1">
+                            <span className="font-bold">Acompanhantes:</span><br />
+                            {res.guests_details.map((g: any) => `${g.name} (${g.age} anos)`).join(', ')}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-xs text-gray-600 max-w-[250px] whitespace-normal">
+                          {res.notes || <span className="text-gray-300 italic">Sem observações</span>}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${res.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                          res.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                            res.status === 'canceled' ? 'bg-red-100 text-red-700' :
+                              'bg-yellow-100 text-yellow-700'
+                          }`}>
+                          {res.status === 'confirmed' ? 'Confirmada' :
+                            res.status === 'rejected' ? 'Recusada' :
+                              res.status === 'canceled' ? 'Cancelada' : 'Pendente'}
+                        </span>
+                        {res.admin_notes && (
+                          <p className="text-[9px] text-gray-500 mt-1 italic max-w-[120px] truncate" title={res.admin_notes}>
+                            Obs: {res.admin_notes}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 no-print text-center space-x-2">
+                        {res.status === 'pending' && (
+                          <div className="flex gap-2 justify-center">
+                            <button
+                              onClick={() => handleUpdateStatus(res.id, 'confirmed')}
+                              className="text-green-600 hover:text-green-800 font-bold text-[10px] bg-green-50 px-2 py-1 rounded border border-green-100"
+                            >
+                              Aceitar
+                            </button>
+                            <button
+                              onClick={() => handleUpdateStatus(res.id, 'rejected')}
+                              className="text-red-600 hover:text-red-800 font-bold text-[10px] bg-red-50 px-2 py-1 rounded border border-red-100"
+                            >
+                              Recusar
+                            </button>
+                          </div>
+                        )}
+                        {res.status === 'confirmed' && (
+                          <button
+                            onClick={() => handleUpdateStatus(res.id, 'canceled')}
+                            className="text-orange-600 hover:text-orange-800 font-bold text-[10px] bg-orange-50 px-2 py-1 rounded border border-orange-100"
+                          >
+                            Cancelar
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteReservation(res.id)}
+                          className="text-red-500 hover:text-red-700 bg-red-50 p-1 rounded border border-red-100 transition-colors inline-flex align-middle"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {allReservations.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-12 text-center text-gray-400">Nenhuma reserva encontrada no sistema.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };

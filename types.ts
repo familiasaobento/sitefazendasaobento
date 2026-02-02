@@ -1,7 +1,7 @@
 export interface User {
   id: string;
   name: string;
-  role: 'admin' | 'member';
+  role: 'admin' | 'member' | 'visitor';
 }
 
 export interface NewsItem {
@@ -43,6 +43,7 @@ export enum Page {
   PROFILE = 'profile',
   CONTACT = 'contact',
   SHOP = 'shop',
+  VISITORS = 'visitors',
   ADMIN_USERS = 'admin_users',
 }
 

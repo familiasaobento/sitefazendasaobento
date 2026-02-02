@@ -359,246 +359,84 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
         <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-farm-900 font-serif">Reserva de Produtos</h1>
-                    <p className="text-gray-600">Produtos fresquinhos da fazenda para levar para casa</p>
+                    <h1 className="text-3xl font-bold text-farm-900 font-serif">Produtos da Fazenda</h1>
+                    <p className="text-gray-600">Conheça os produtos frescos produzidos em nossa terra.</p>
                 </div>
                 {isAdmin && (
                     <button
                         onClick={() => { setEditingProduct({ name: '', price: 0, category: 'Doces' }); setShowAdminModal(true); }}
                         className="bg-farm-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-farm-700 transition-colors shadow-sm"
                     >
-                        + Novo Produto
+                        + Gerenciar Produtos
                     </button>
                 )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Column: Products */}
-                <div className="lg:col-span-2 space-y-6">
-                    {/* Categories */}
-                    <div className="flex flex-wrap gap-2">
-                        {categories.map(cat => (
-                            <button
-                                key={cat}
-                                onClick={() => setActiveCategory(cat)}
-                                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeCategory === cat
-                                    ? 'bg-farm-600 text-white shadow-md scale-105'
-                                    : 'bg-white text-gray-600 hover:bg-farm-50 border border-gray-100'
-                                    }`}
-                            >
-                                {cat}
-                            </button>
-                        ))}
-                    </div>
-
-                    {loading ? (
-                        <div className="flex justify-center py-20">
-                            <IconLoader className="w-10 h-10 text-farm-600 animate-spin" />
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {filteredProducts.map(product => (
-                                <div key={product.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow flex gap-4">
-                                    <div className="w-24 h-24 bg-gray-50 rounded-xl flex-shrink-0 overflow-hidden">
-                                        {product.image_url ? (
-                                            <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-gray-300">
-                                                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                </svg>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="flex-1 flex flex-col justify-between">
-                                        <div>
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-farm-500">{product.category}</span>
-                                            <h3 className="font-bold text-gray-800 leading-tight">{product.name}</h3>
-                                            <p className="text-farm-700 font-bold mt-1">
-                                                R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center justify-between mt-2">
-                                            {isAdmin ? (
-                                                <button
-                                                    onClick={() => { setEditingProduct(product); setShowAdminModal(true); }}
-                                                    className="text-gray-400 hover:text-farm-600 transition-colors"
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                    </svg>
-                                                </button>
-                                            ) : <div></div>}
-                                            <button
-                                                onClick={() => addToCart(product)}
-                                                className="bg-farm-50 text-farm-700 p-2 rounded-lg hover:bg-farm-100 transition-colors"
-                                                title="Adicionar ao carrinho"
-                                            >
-                                                <IconShoppingCart className="w-5 h-5" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+            <div className="space-y-6">
+                {/* Categories */}
+                <div className="flex flex-wrap gap-2">
+                    {categories.map(cat => (
+                        <button
+                            key={cat}
+                            onClick={() => setActiveCategory(cat)}
+                            className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${activeCategory === cat
+                                ? 'bg-farm-600 text-white shadow-md scale-105'
+                                : 'bg-white text-gray-600 hover:bg-farm-50 border border-gray-100'
+                                }`}
+                        >
+                            {cat}
+                        </button>
+                    ))}
                 </div>
 
-                {/* Right Column: Cart */}
-                <div className="space-y-6">
-                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 sticky top-8">
-                        <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                            <IconShoppingCart className="w-6 h-6 text-farm-600" />
-                            Seu Carrinho
-                        </h2>
-
-                        {cart.length === 0 ? (
-                            <div className="text-center py-10">
-                                <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <IconShoppingCart className="w-8 h-8 text-gray-300" />
-                                </div>
-                                <p className="text-gray-400 text-sm">Carrinho vazio.<br />Selecione produtos ao lado.</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                <div className="max-h-[40vh] overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                                    {cart.map(item => (
-                                        <div key={item.product.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl group">
-                                            <div className="flex-1">
-                                                <h4 className="text-sm font-bold text-gray-800 line-clamp-1">{item.product.name}</h4>
-                                                <p className="text-xs text-gray-500">R$ {item.product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} un.</p>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={() => updateQuantity(item.product.id, -1)}
-                                                    className="w-6 h-6 flex items-center justify-center bg-white border border-gray-200 rounded text-gray-500 hover:bg-gray-100"
-                                                >-</button>
-                                                <span className="text-sm font-bold w-4 text-center">{item.quantity}</span>
-                                                <button
-                                                    onClick={() => updateQuantity(item.product.id, 1)}
-                                                    className="w-6 h-6 flex items-center justify-center bg-white border border-gray-200 rounded text-gray-500 hover:bg-gray-100"
-                                                >+</button>
-                                                <button
-                                                    onClick={() => removeFromCart(item.product.id)}
-                                                    className="ml-2 text-gray-300 hover:text-red-500"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <div className="pt-4 border-t border-gray-100 space-y-4">
-                                    <div className="flex justify-between items-center text-lg font-bold">
-                                        <span className="text-gray-600">Total</span>
-                                        <span className="text-farm-700">R$ {calculateTotal().toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                    </div>
-
-                                    <form onSubmit={handleCheckout} className="space-y-4">
-                                        <div>
-                                            <label className="block text-xs font-bold uppercase text-gray-400 mb-1 tracking-wider">Data de Retirada (na Copa)</label>
-                                            <input
-                                                type="date"
-                                                required
-                                                value={pickupDate}
-                                                onChange={(e) => setPickupDate(e.target.value)}
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 focus:bg-white transition-all outline-none"
-                                            />
-                                        </div>
-                                        <button
-                                            type="submit"
-                                            disabled={isSubmitting}
-                                            className="w-full bg-farm-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-farm-700 hover:shadow-xl transform active:scale-[0.98] transition-all disabled:opacity-50"
-                                        >
-                                            {isSubmitting ? 'Processando...' : 'Confirmar Reserva'}
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                        )}
-
-                        {message && (
-                            <div className={`mt-4 p-4 rounded-xl text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
-                                {message.text}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* User's Reservations Table (Matches Lodging Style) */}
-            <div className="mt-12 space-y-6 max-w-4xl mx-auto no-print">
-                <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
-                    <span className="w-2 h-8 bg-farm-500 rounded-full mr-3"></span>
-                    Meus Pedidos de Produtos
-                </h3>
-
-                {fetchingMyReservations ? (
-                    <div className="flex justify-center py-12">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-farm-700"></div>
-                    </div>
-                ) : myReservations.length === 0 ? (
-                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-8 text-center text-gray-500">
-                        Você ainda não possui pedidos de produtos.
+                {loading ? (
+                    <div className="flex justify-center py-20">
+                        <IconLoader className="w-10 h-10 text-farm-600 animate-spin" />
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {myReservations.map((res) => (
-                            <div key={res.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] text-gray-400 uppercase font-bold">Data de Retirada</span>
-                                        <p className="font-bold text-gray-800">{new Date(res.pickup_date + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
-                                    </div>
-                                    <span className="text-[10px] text-gray-400">Ref: #{res.id}</span>
-                                </div>
-
-                                <div className="space-y-3">
-                                    <div className="bg-gray-50 p-3 rounded-lg">
-                                        <p className="text-[10px] text-gray-400 uppercase font-bold mb-2">Itens Solicitados:</p>
-                                        <ul className="space-y-1">
-                                            {res.items?.map((item, i) => (
-                                                <li key={i} className="text-xs text-gray-700 flex justify-between">
-                                                    <span>{item.quantity}x {(item as any).products?.name || 'Produto'}</span>
-                                                    <span className="text-gray-400">R$ {(item.quantity * item.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        <div className="mt-2 pt-2 border-t border-gray-200 flex justify-between items-center">
-                                            <span className="text-xs font-bold text-gray-800">Total</span>
-                                            <span className="text-sm font-bold text-farm-700">R$ {Number(res.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {filteredProducts.map(product => (
+                            <div key={product.id} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all group flex flex-col h-full">
+                                <div className="aspect-square bg-gray-50 relative overflow-hidden">
+                                    {product.image_url ? (
+                                        <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-gray-200">
+                                            <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            </svg>
                                         </div>
-                                    </div>
-
-                                    <div className="pt-3 flex justify-between items-center text-sm">
-                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${res.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                                            res.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
-                                                res.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                    'bg-red-100 text-red-700'
-                                            }`}>
-                                            {res.status === 'pending' ? 'Aguardando Análise' :
-                                                res.status === 'confirmed' ? 'Aprovado' :
-                                                    res.status === 'completed' ? 'Entregue' : 'Cancelado'}
+                                    )}
+                                    <div className="absolute top-3 left-3">
+                                        <span className="bg-white/90 backdrop-blur-sm text-farm-600 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider shadow-sm border border-farm-100">
+                                            {product.category}
                                         </span>
-                                        {res.status === 'pending' && (
+                                    </div>
+                                </div>
+                                <div className="p-5 flex-1 flex flex-col">
+                                    <div className="flex-1">
+                                        <h3 className="font-bold text-gray-900 text-lg leading-tight mb-1">{product.name}</h3>
+                                        <p className="text-gray-500 text-sm line-clamp-2 italic">{product.description || 'Produto natural da Fazenda São Bento.'}</p>
+                                    </div>
+                                    <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
+                                        <div className="flex flex-col">
+                                            <span className="text-xs text-gray-400 font-medium">Preço médio</span>
+                                            <span className="text-xl font-bold text-farm-800">
+                                                R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </span>
+                                        </div>
+                                        {isAdmin && (
                                             <button
-                                                onClick={() => handleDeleteReservation(res.id)}
-                                                className="text-red-400 hover:text-red-600 text-xs font-medium"
+                                                onClick={() => { setEditingProduct(product); setShowAdminModal(true); }}
+                                                className="bg-gray-50 text-gray-400 p-2 rounded-lg hover:bg-farm-100 hover:text-farm-600 transition-all border border-gray-100"
+                                                title="Editar produto"
                                             >
-                                                Cancelar Pedido
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                </svg>
                                             </button>
                                         )}
                                     </div>
-
-                                    {res.admin_notes && (
-                                        <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg text-xs">
-                                            <p className="font-bold text-red-700 mb-1">Observação da Administração:</p>
-                                            <p className="text-red-600 italic">"{res.admin_notes}"</p>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         ))}
@@ -606,161 +444,45 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                 )}
             </div>
 
-            {/* Reservations List for Admins */}
-            {isAdmin && (
-                <div className="mt-12 space-y-6 print:m-0 print:p-0">
-                    <style dangerouslySetInnerHTML={{
-                        __html: `
-                        @media print {
-                            body * { visibility: hidden; }
-                            .print-area, .print-area * { visibility: visible; }
-                            .print-area { position: absolute; left: 0; top: 0; width: 100%; }
-                            .no-print { display: none !important; }
-                        }
-                    `}} />
+            {!isAdmin && (
+                <div className="bg-farm-50 border border-farm-100 p-6 rounded-2xl text-center space-y-2">
+                    <p className="text-farm-800 font-medium">Os produtos acima estão disponíveis para aquisição diretamente na sede da fazenda.</p>
+                    <p className="text-farm-600 text-sm italic">* A reserva online está temporariamente desabilitada. Consulte a disponibilidade durante sua visita.</p>
+                </div>
+            )}
 
-                    <div className="flex items-center justify-between no-print">
-                        <h2 className="text-2xl font-bold text-gray-800 font-serif">Gerenciamento de Pedidos</h2>
-                        <div className="flex items-center gap-4">
-                            <button
-                                onClick={handlePrint}
-                                className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all border border-gray-200"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                                </svg>
-                                Imprimir Lista
-                            </button>
-                            <button
-                                onClick={fetchReservations}
-                                className="text-xs text-farm-600 hover:underline"
-                            >
-                                Atualizar lista
-                            </button>
+            {/* Rejection Modal */}
+            {showRejectionModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6 border-b border-gray-100 bg-gray-50">
+                            <h3 className="text-xl font-bold text-gray-800">Recusar Pedido</h3>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Motivo da Recusa</label>
+                                <textarea
+                                    value={rejectionReason}
+                                    onChange={e => setRejectionReason(e.target.value)}
+                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none h-32 resize-none"
+                                    placeholder="Informe o motivo para o sócio..."
+                                />
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowRejectionModal(false)}
+                                    className="flex-1 py-3 px-4 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors"
+                                >Cancelar</button>
+                                <button
+                                    onClick={() => {
+                                        if (rejectionId) handleUpdateStatus(rejectionId, 'rejected', rejectionReason);
+                                        setShowRejectionModal(false);
+                                    }}
+                                    className="flex-1 py-3 px-4 rounded-xl font-bold bg-red-600 text-white shadow-lg hover:bg-red-700 transition-colors"
+                                >Recusar Pedido</button>
+                            </div>
                         </div>
                     </div>
-
-                    {reservations.length === 0 ? (
-                        <div className="bg-white rounded-2xl p-12 text-center border border-dashed border-gray-200 no-print">
-                            <p className="text-gray-400">Nenhum pedido de reserva encontrado.</p>
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-sm print-area">
-                            <div className="hidden print:block mb-6">
-                                <h1 className="text-2xl font-bold text-gray-900 border-b-2 border-farm-800 pb-2">Fazenda São Bento - Reservas de Produtos</h1>
-                                <p className="text-sm text-gray-500 mt-1">Relatório gerado em: {new Date().toLocaleString('pt-BR')}</p>
-                            </div>
-                            <table className="w-full bg-white text-left text-sm">
-                                <thead className="bg-gray-50 border-b border-gray-100">
-                                    <tr>
-                                        <th className="px-6 py-4 font-bold text-gray-700">Sócio</th>
-                                        <th className="px-6 py-4 font-bold text-gray-700">Data Retirada</th>
-                                        <th className="px-6 py-4 font-bold text-gray-700">Produtos</th>
-                                        <th className="px-6 py-4 font-bold text-gray-700">Total</th>
-                                        <th className="px-6 py-4 font-bold text-gray-700">Status</th>
-                                        <th className="px-6 py-4 font-bold text-gray-700 no-print">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50">
-                                    {reservations.map(res => (
-                                        <tr key={res.id} className="hover:bg-gray-50/50">
-                                            <td className="px-6 py-4 font-medium">
-                                                {(() => {
-                                                    const profiles = (res as any).profiles;
-                                                    if (Array.isArray(profiles)) return profiles[0]?.full_name || 'Usuário';
-                                                    return profiles?.full_name || 'Usuário';
-                                                })()}
-                                            </td>
-                                            <td className="px-6 py-4">{new Date(res.pickup_date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                                            <td className="px-6 py-4 max-w-xs">
-                                                <ul className="text-xs text-gray-500">
-                                                    {res.items?.map((item, i) => (
-                                                        <li key={i} className="flex items-center justify-between gap-2 group">
-                                                            <span>{item.quantity}x {(item as any).products?.name || 'Produto'}</span>
-                                                            {(res.status === 'pending' || res.status === 'confirmed') && (
-                                                                <button
-                                                                    onClick={() => handleCancelItem(res.id, item.id, (item as any).products?.name || 'Produto', item.quantity * item.unit_price)}
-                                                                    className="text-gray-400 hover:text-red-500 transition-all p-1"
-                                                                    title="Remover item por estar em falta"
-                                                                >
-                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                                                    </svg>
-                                                                </button>
-                                                            )}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </td>
-                                            <td className="px-6 py-4 font-bold">R$ {Number(res.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${res.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                                                    res.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
-                                                        res.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                            'bg-red-100 text-red-700'
-                                                    }`}>
-                                                    {res.status === 'pending' ? 'Pendente' :
-                                                        res.status === 'confirmed' ? 'Aprovado' :
-                                                            res.status === 'completed' ? 'Entregue' : 'Cancelado'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 space-x-2 no-print">
-                                                {res.status === 'pending' && (
-                                                    <>
-                                                        <button
-                                                            onClick={() => handleUpdateStatus(res.id, 'confirmed')}
-                                                            className="text-blue-600 hover:text-blue-800 font-bold text-xs bg-blue-50 px-2 py-1 rounded border border-blue-100 transition-colors"
-                                                            title="Aprovar pedido"
-                                                        >
-                                                            Aprovar
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                setRejectionId(res.id);
-                                                                setRejectionReason('');
-                                                                setShowRejectionModal(true);
-                                                            }}
-                                                            className="text-red-600 hover:text-red-800 font-bold text-xs bg-red-50 px-2 py-1 rounded border border-red-100 transition-colors"
-                                                            title="Recusar pedido com motivo"
-                                                        >
-                                                            Recusar
-                                                        </button>
-                                                    </>
-                                                )}
-                                                {res.status === 'confirmed' && (
-                                                    <button
-                                                        onClick={() => handleUpdateStatus(res.id, 'completed')}
-                                                        className="text-green-600 hover:text-green-800 font-bold text-xs bg-green-50 px-2 py-1 rounded border border-green-100 transition-colors"
-                                                        title="Marcar como entregue"
-                                                    >
-                                                        Entregar
-                                                    </button>
-                                                )}
-                                                {res.status !== 'pending' && (
-                                                    <button
-                                                        onClick={() => handleUpdateStatus(res.id, 'pending', null as any)}
-                                                        className="text-gray-400 hover:text-gray-600 font-bold text-xs bg-gray-50 px-2 py-1 rounded border border-gray-100 transition-colors"
-                                                        title="Reverter para pendente"
-                                                    >
-                                                        Reverter
-                                                    </button>
-                                                )}
-                                                <button
-                                                    onClick={() => handleDeleteReservation(res.id)}
-                                                    className="text-red-500 hover:text-red-700 bg-red-50 p-1 rounded border border-red-100 transition-colors inline-flex align-middle"
-                                                    title="Excluir do sistema"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
                 </div>
             )}
 
@@ -808,6 +530,15 @@ export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                                             {categories.filter(c => c !== 'Todos').map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                     </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">Descrição</label>
+                                    <textarea
+                                        value={editingProduct.description || ''}
+                                        onChange={e => setEditingProduct({ ...editingProduct, description: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none h-20 resize-none bg-white"
+                                        placeholder="Ex: Doce de leite caseiro feito no fogão a lenha..."
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1">Foto do Produto</label>

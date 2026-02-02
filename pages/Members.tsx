@@ -34,6 +34,7 @@ export const MembersPage: React.FC = () => {
             const { data, error } = await supabase
                 .from('profiles')
                 .select('*')
+                .neq('role', 'visitor')
                 .order('full_name', { ascending: true });
 
             if (error) throw error;
@@ -192,7 +193,7 @@ export const MembersPage: React.FC = () => {
                             <table className="w-full text-left">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
-                                        <th className="px-6 py-4 font-semibold">Sócio</th>
+                                        <th className="px-6 py-4 font-semibold">Usuário</th>
                                         <th className="px-6 py-4 font-semibold">CPF</th>
                                         <th className="px-6 py-4 font-semibold">Contato</th>
                                         <th className="px-6 py-4 font-semibold">E-mail</th>

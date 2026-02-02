@@ -55,8 +55,12 @@ export const AdminUsersPage: React.FC = () => {
     };
 
     const handleToggleRole = async (id: string, currentRole: string) => {
-        const newRole = currentRole === 'admin' ? 'member' : 'admin';
-        if (!confirm(`Deseja realmente alterar o papel deste usuário para ${newRole}?`)) return;
+        let newRole = 'member';
+        if (currentRole === 'member') newRole = 'visitor';
+        else if (currentRole === 'visitor') newRole = 'admin';
+        else newRole = 'member';
+
+        if (!confirm(`Deseja realmente alterar o tipo deste usuário para ${newRole === 'admin' ? 'Administrador' : newRole === 'visitor' ? 'Visitante' : 'Sócio'}?`)) return;
 
         try {
             const { error } = await supabase
@@ -71,7 +75,7 @@ export const AdminUsersPage: React.FC = () => {
             ));
         } catch (err) {
             console.error('Error updating role:', err);
-            alert('Erro ao atualizar papel.');
+            alert('Erro ao atualizar tipo.');
         }
     };
 
@@ -169,10 +173,12 @@ export const AdminUsersPage: React.FC = () => {
                                         onClick={() => handleToggleRole(profile.id, profile.role)}
                                         className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${profile.role === 'admin'
                                             ? 'bg-purple-100 text-purple-800'
-                                            : 'bg-blue-100 text-blue-800'
+                                            : profile.role === 'visitor'
+                                                ? 'bg-orange-100 text-orange-800'
+                                                : 'bg-blue-100 text-blue-800'
                                             }`}
                                     >
-                                        {profile.role === 'admin' ? 'Administrador' : 'Sócio'}
+                                        {profile.role?.toLowerCase() === 'admin' ? 'Administrador' : profile.role?.toLowerCase() === 'visitor' ? 'Visitante' : 'Sócio'}
                                     </button>
                                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${profile.approved
                                         ? 'bg-green-100 text-green-800'
@@ -202,7 +208,7 @@ export const AdminUsersPage: React.FC = () => {
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
                                         <th className="px-6 py-4 font-semibold">Usuário</th>
-                                        <th className="px-6 py-4 font-semibold">Papel</th>
+                                        <th className="px-6 py-4 font-semibold">Tipo</th>
                                         <th className="px-6 py-4 font-semibold">Status de Acesso</th>
                                         <th className="px-6 py-4 font-semibold text-right">Ações</th>
                                     </tr>
@@ -229,11 +235,13 @@ export const AdminUsersPage: React.FC = () => {
                                                     onClick={() => handleToggleRole(profile.id, profile.role)}
                                                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${profile.role === 'admin'
                                                         ? 'bg-purple-100 text-purple-800 hover:bg-purple-200'
-                                                        : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                                        : profile.role === 'visitor'
+                                                            ? 'bg-orange-100 text-orange-800 hover:bg-orange-200'
+                                                            : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
                                                         } transition-colors cursor-pointer`}
                                                     title="Clique para alterar"
                                                 >
-                                                    {profile.role === 'admin' ? 'Administrador' : 'Sócio'}
+                                                    {profile.role?.toLowerCase() === 'admin' ? 'Administrador' : profile.role?.toLowerCase() === 'visitor' ? 'Visitante' : 'Sócio'}
                                                 </button>
                                             </td>
                                             <td className="px-6 py-4">
