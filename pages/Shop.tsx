@@ -28,7 +28,7 @@ interface ProductReservation {
     items?: { id: number; product: Product; quantity: number; unit_price: number; products?: { name: string } }[];
 }
 
-export const ShopPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
+export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({ isAdmin, isVisitor }) => {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [cart, setCart] = useState<CartItem[]>([]);

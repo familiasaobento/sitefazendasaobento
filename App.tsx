@@ -332,7 +332,7 @@ const App: React.FC = () => {
       case Page.CONTACT:
         return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <ContactPage isAdmin={isAdmin} />;
       case Page.SHOP:
-        return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <ShopPage isAdmin={isAdmin} />;
+        return <ShopPage isAdmin={isAdmin} isVisitor={isVisitor} />;
       case Page.VISITORS:
         return isAdmin ? <VisitorsPage /> : <HomePage isAdmin={isAdmin} isVisitor={isVisitor} />;
       case Page.ADMIN_USERS:
