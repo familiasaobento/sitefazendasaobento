@@ -929,7 +929,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                       <label className="block text-sm font-bold text-gray-700">Nome do Titular</label>
                       <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" placeholder="Ex: João da Silva" />
                     </div>
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-1">
                         <label className="block text-sm font-bold text-gray-700">Chegada</label>
                         <input type="date" required value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" />
@@ -939,7 +939,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                         <input type="date" required value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" />
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-1">
                         <label className="block text-sm font-bold text-gray-700">Acomodação</label>
                         <select required value={accommodation} onChange={(e) => setAccommodation(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all bg-white">

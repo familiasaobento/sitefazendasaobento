@@ -121,7 +121,7 @@ export const PublicGuestReservation: React.FC<PublicGuestReservationProps> = ({ 
                 value={formData.email}
                 onChange={e => setFormData({...formData, email: e.target.value})}
               />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="text"
                   required
@@ -173,7 +173,7 @@ export const PublicGuestReservation: React.FC<PublicGuestReservationProps> = ({ 
                 <option value="Casa Grande / Chalés">Casa Grande / Chalés</option>
                 <option value="Casa de Sócio">Casa de Sócio</option>
               </select>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">IN:</span>
