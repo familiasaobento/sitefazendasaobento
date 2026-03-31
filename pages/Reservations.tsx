@@ -450,6 +450,25 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
     );
   }
 
+  const combinedListReservations = [
+    ...allReservations.filter(res => {
+      const stay = res.estadias?.[0];
+      if (stay?.status === 'finalizada' && stay.checkout_at) {
+        const checkoutDate = new Date(stay.checkout_at);
+        const limitDate = new Date();
+        limitDate.setMonth(limitDate.getMonth() - 1);
+        return checkoutDate > limitDate;
+      }
+      return true;
+    }),
+    ...guestRequests.filter(r => r.status === 'pending').map(r => ({
+      ...r,
+      isGuestRequest: true,
+      accommodation: 'A definir',
+      status: 'pending'
+    }))
+  ].sort((a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime());
+
   return (
     <div className="w-full space-y-12 pb-20">
         <style dangerouslySetInnerHTML={{
@@ -640,8 +659,8 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
             )}
 
             {adminTab === 'list' && (
-              <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200">
+              <div className="bg-transparent shadow-none border-none md:bg-white md:rounded-3xl md:shadow-xl md:border md:border-gray-100 md:overflow-hidden space-y-4 md:space-y-0">
+                <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200 hidden md:block">
                   <table className="w-full text-left text-sm min-w-[1200px]">
                     <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
                       <tr>
@@ -653,26 +672,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {[
-                        ...allReservations.filter(res => {
-                          const stay = res.estadias?.[0];
-                          if (stay?.status === 'finalizada' && stay.checkout_at) {
-                            const checkoutDate = new Date(stay.checkout_at);
-                            const limitDate = new Date();
-                            limitDate.setMonth(limitDate.getMonth() - 1);
-                            return checkoutDate > limitDate;
-                          }
-                          return true;
-                        }),
-                        ...guestRequests.filter(r => r.status === 'pending').map(r => ({
-                          ...r,
-                          isGuestRequest: true,
-                          accommodation: 'A definir',
-                          status: 'pending'
-                        }))
-                      ]
-                      .sort((a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime())
-                      .map((res) => {
+                      {combinedListReservations.map((res) => {
                         const isGuestRequest = (res as any).isGuestRequest;
                         return (
                         <tr key={res.id} className={`hover:bg-gray-50/50 transition-colors border-b border-gray-50 ${isGuestRequest ? 'bg-amber-50/20 border-l-4 border-l-amber-400' : ''}`}>
@@ -822,6 +822,128 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                     </tbody>
                   </table>
                 </div>
+
+                {/* Mobile View */}
+                <div className="md:hidden space-y-4">
+                  {combinedListReservations.map((res) => {
+                    const isGuestRequest = (res as any).isGuestRequest;
+                    return (
+                      <div key={res.id} className={`bg-white p-5 rounded-2xl shadow-sm border ${isGuestRequest ? 'border-amber-300' : 'border-gray-100'} space-y-4`}>
+                        <div className="flex items-start justify-between border-b pb-4 border-gray-50">
+                          <div>
+                            <p className="font-bold text-gray-900 text-lg leading-tight">{res.name || res.full_name || res.profiles?.full_name || 'Usuário'}</p>
+                            <div className="flex gap-2 text-xs items-center mt-2">
+                              <span className="text-gray-500 font-mono bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{res.cpf || 'Sem CPF'}</span>
+                              {isGuestRequest && (res as any).birth_date && <span className="bg-farm-50 text-farm-600 px-2 py-0.5 rounded font-bold text-xs border border-farm-100">{new Date((res as any).birth_date).toLocaleDateString('pt-BR')}</span>}
+                            </div>
+                            {isGuestRequest && <p className="text-xs text-amber-600 mt-2 italic font-medium">Anfitrião: {(res as any).host_member_name}</p>}
+                          </div>
+                          <div className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-lg ring-4 ring-white shadow-sm ${isGuestRequest ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {isGuestRequest ? <IconMail className="w-6 h-6" /> : (res.name?.[0] || res.full_name?.[0] || res.profiles?.full_name?.[0] || 'U')}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <p className="text-gray-400 font-bold uppercase text-[10px] mb-1">Período Selecionado</p>
+                            <div className="flex items-center gap-1 font-bold text-gray-800">
+                              <IconCalendar className="w-3 h-3 text-farm-500" />
+                              {formatDate(res.check_in)}
+                            </div>
+                            <p className="text-gray-500 text-[10px] italic ml-4 mt-0.5">até {formatDate(res.check_out)}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-400 font-bold uppercase text-[10px] mb-1">Acomodação</p>
+                            <span className="px-3 py-1 bg-gray-50 text-gray-700 font-bold rounded-lg border border-gray-100 inline-block">
+                              {isGuestRequest ? 'A definir' : res.accommodation}
+                            </span>
+                            {res.arrival_time && <p className="text-blue-600 text-[10px] font-bold mt-1.5 flex items-center gap-1"><IconClock className="w-3 h-3"/> {res.arrival_time}h</p>}
+                          </div>
+                        </div>
+
+                        {/* Status Label */}
+                        <div className="pt-2">
+                          <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter border-2 inline-block ${
+                            res.estadias?.[0]?.status === 'ativa' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                            res.estadias?.[0]?.status === 'finalizada' ? 'bg-gray-100 text-gray-700 border-gray-200' :
+                            res.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' :
+                            res.status === 'rejected' || res.status === 'canceled' ? 'bg-red-50 text-red-700 border-red-200' :
+                            isGuestRequest ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                          }`}>
+                            {res.estadias?.[0]?.status === 'ativa' ? 'Hóspede Local' :
+                             res.estadias?.[0]?.status === 'finalizada' ? 'Encerrada' :
+                             res.status === 'confirmed' ? 'Confirmada' : 
+                             isGuestRequest ? 'AGUARDANDO APROVAÇÃO' : 'PENDENTE'}
+                          </span>
+                        </div>
+
+                        {/* Mobile Actions block */}
+                        <div className="pt-4 border-t border-gray-100 space-y-3">
+                            {(res.status === 'pending' || isGuestRequest) ? (
+                              <div className={`p-4 rounded-xl border ${isGuestRequest ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'}`}>
+                                <p className="text-[11px] font-bold text-gray-600 mb-2 uppercase tracking-wider">
+                                  {isGuestRequest ? `Pretende: ${(res as any).preferred_accommodation || 'S/ Pref'}` : 'Nova Reserva'}
+                                </p>
+                                <select 
+                                  value={selectedRoomsForApproval[res.id] || ''} 
+                                  onChange={(e) => setSelectedRoomsForApproval(prev => ({ ...prev, [res.id]: e.target.value }))}
+                                  className="w-full text-sm p-3 bg-white border border-gray-300 rounded-lg outline-none mb-3 font-medium"
+                                >
+                                  <option value="">Atribuir Local...</option>
+                                  {accommodationGroups.map(group => (
+                                    <optgroup key={group.name} label={group.name}>
+                                      {group.units.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                                      {group.name === 'Casas de Sócios' && group.units.length === 0 && <option value="Casa de Sócio">Casa de Sócio</option>}
+                                    </optgroup>
+                                  ))}
+                                </select>
+                                
+                                <div className="flex gap-2">
+                                  {isGuestRequest ? (
+                                    <>
+                                      <button onClick={() => handleActionGuestRequest(res.id, 'approve', res)} disabled={processingRequestId === res.id} className="flex-1 bg-green-600 text-white py-3 rounded-lg text-sm font-bold flex justify-center items-center shadow-lg shadow-green-100 active:scale-95 transition-all">Aprovar</button>
+                                      <button onClick={() => handleActionGuestRequest(res.id, 'reject', res)} disabled={processingRequestId === res.id} className="flex-1 bg-red-50 text-red-600 py-3 rounded-lg text-sm font-bold flex justify-center items-center active:scale-95 transition-all border border-red-100">Recusar</button>
+                                    </>
+                                  ) : (
+                                    canApprove ? (
+                                      <>
+                                        <button onClick={() => { const rm = selectedRoomsForApproval[res.id]; if(!rm) return alert('Atribua local'); handleUpdateStatus(res.id, 'confirmed', rm); }} className="flex-1 bg-green-600 text-white py-3 rounded-lg text-sm font-bold flex justify-center items-center shadow-lg shadow-green-100 active:scale-95 transition-all">Aprovar</button>
+                                        <button onClick={() => handleUpdateStatus(res.id, 'rejected')} className="flex-1 bg-red-50 text-red-600 py-3 rounded-lg text-sm font-bold flex justify-center items-center active:scale-95 transition-all border border-red-100">Negar</button>
+                                      </>
+                                    ) : <span className="text-sm text-amber-600 font-bold w-full text-center py-2">Aguardando Avaliação</span>
+                                  )}
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {!isGuestRequest && res.status !== 'pending' && (
+                               <div className="flex flex-col gap-2">
+                                 {(res.estadias?.[0]?.status === 'ativa' || res.estadias?.[0]?.status === 'finalizada') && (
+                                   <button onClick={() => handleViewProforma(res.estadias[0].id)} className={`w-full text-white font-bold py-3.5 rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all ${res.estadias[0].status === 'ativa' ? 'bg-blue-600 shadow-blue-100' : 'bg-farm-700 shadow-farm-100'}`}>
+                                     <IconFileText className="w-5 h-5" /> {res.estadias[0].status === 'ativa' ? 'Gestão Financeira / Comanda' : 'Ver Recibo Final'}
+                                   </button>
+                                 )}
+                                 {res.status === 'confirmed' && !res.estadias?.[0]?.status && (
+                                   <button onClick={() => handleStartCheckin(res)} className="w-full bg-farm-600 text-white font-bold py-3.5 rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-farm-100 active:scale-95 transition-all">
+                                     <IconZap className="w-5 h-5" /> Dar Check-in Rápido
+                                   </button>
+                                 )}
+                                 <button onClick={() => handleDeleteReservation(res.id)} className="w-full mt-3 text-red-400 font-bold py-3 text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 bg-red-50 rounded-xl active:bg-red-100 transition-colors">
+                                   <IconX className="w-4 h-4" /> Excluir Registro
+                                 </button>
+                               </div>
+                            )}
+
+                            {isGuestRequest && res.status === 'pending' && (
+                                <button onClick={() => handleActionGuestRequest(res.id, 'reject', res)} className="w-full mt-2 text-red-400 font-bold py-3 text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 bg-red-50 rounded-xl active:bg-red-100 transition-colors">
+                                   <IconX className="w-4 h-4" /> Excluir Pedido Permanentemente
+                                </button>
+                            )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
 
@@ -872,8 +994,8 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
             )}
 
             {adminTab === 'history' && (
-              <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto">
+              <div className="bg-transparent shadow-none border-none md:bg-white md:rounded-3xl md:shadow-xl md:border md:border-gray-100 md:overflow-hidden space-y-4 md:space-y-0">
+                <div className="overflow-x-auto hidden md:block">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
                       <tr>
@@ -912,6 +1034,41 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile View */}
+                <div className="md:hidden space-y-4">
+                  {historyStays.map(res => (
+                    <div key={res.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                      <div className="flex items-center gap-3 border-b border-gray-50 pb-4">
+                        <div className="w-12 h-12 shrink-0 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 font-bold text-lg ring-4 ring-white shadow-sm">
+                          {res.name?.[0] || res.profiles?.full_name?.[0]}
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-900 text-lg leading-tight">{res.name || res.profiles?.full_name}</p>
+                          <p className="text-[10px] text-gray-400 font-mono mt-0.5">ID Estadia: #{res.estadias?.[0]?.id}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <p className="text-gray-400 font-bold uppercase text-[10px] mb-1">Período</p>
+                          <p className="font-bold text-gray-800">{formatDate(res.check_in)}</p>
+                          <p className="font-bold text-gray-800">até {formatDate(res.check_out)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 font-bold uppercase text-[10px] mb-1">Checkout</p>
+                          <p className="font-bold text-gray-600">{new Date(res.estadias?.[0]?.checkout_at).toLocaleString('pt-BR')}</p>
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                         <button onClick={() => handleViewProforma(res.estadias[0].id)} className="w-full bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl text-sm hover:bg-gray-200 transition-all flex items-center justify-center gap-2 active:scale-95">
+                           <IconFileText className="w-5 h-5" /> Ver Recibo Final
+                         </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
