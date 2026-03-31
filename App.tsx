@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
+import { PublicGuestReservation } from './components/PublicGuestReservation';
 import { FinancePage } from './pages/Finance';
 import { ReservationsPage } from './pages/Reservations';
 import { EventsPage } from './pages/Events';
@@ -12,8 +13,16 @@ import { ShopPage } from './pages/Shop';
 import { AdminUsersPage } from './pages/AdminUsers';
 import { MembersPage } from './pages/Members';
 import { VisitorsPage } from './pages/Visitors';
+import { PDVPage } from './pages/PDV';
+import { ConsumptionReviewPage } from './pages/ConsumptionReview';
+import { SuppliesPage } from './pages/Supplies';
+import { InventoryManagementPage } from './pages/InventoryManagement';
+import { CashFlowPage } from './pages/CashFlow';
+import { PricingRulesPage } from './pages/PricingRules';
+import { CostCategoriesPage } from './pages/CostCategories';
+import { PdvConfigPage } from './pages/PdvConfig';
 import { Page, NewsItem } from './types';
-import { IconLock, IconInstagram, IconWhatsapp } from './components/Icons';
+import { IconLock, IconCheck, IconInstagram, IconWhatsapp } from './components/Icons';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 
@@ -27,6 +36,8 @@ const LoginPage = ({ onAuthChange }: { onAuthChange: () => void }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [hostMember, setHostMember] = useState('');
+  const [isReservationSubmitted, setIsReservationSubmitted] = useState(false);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +53,8 @@ const LoginPage = ({ onAuthChange }: { onAuthChange: () => void }) => {
           options: {
             data: {
               full_name: fullName,
-              role: mode === 'visitor' ? 'visitor' : 'member'
+              role: mode === 'visitor' ? 'visitor' : 'member',
+              ...(mode === 'visitor' && { host_member: hostMember })
             }
           }
         });
@@ -71,11 +83,36 @@ const LoginPage = ({ onAuthChange }: { onAuthChange: () => void }) => {
           </div>
           <h1 className="text-3xl font-bold text-gray-900 font-serif tracking-tight">Portal Família São Bento</h1>
           <p className="text-gray-600 mt-3 text-sm font-medium">
-            {mode === 'visitor' ? 'Bem-vindo, acompanhe suas solicitações' : mode === 'register' ? 'Solicite seu acesso ao portal' : 'Área restrita de acesso aos Sócios'}
+            {mode === 'visitor' ? 'Solicite sua Reserva de Convidado' : mode === 'register' ? 'Solicite seu acesso ao portal' : 'Área restrita de acesso aos Sócios'}
           </p>
         </div>
 
-        {message ? (
+        {isReservationSubmitted ? (
+          <div className="bg-blue-50 border border-blue-200 p-8 rounded-3xl text-center space-y-6 animate-fade-in">
+            <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto shadow-lg">
+                <IconCheck className="w-8 h-8 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-blue-900 font-serif mb-2">Solicitação Recebida!</h3>
+              <p className="text-blue-800 text-sm leading-relaxed">
+                Sua reserva e cadastro foram enviados para a administração da Fazenda São Bento. <br/><br/>
+                <strong>O que acontece agora?</strong><br/> 
+                Assim que sua reserva for aprovada, você receberá um **voucher por e-mail** com o link para definir sua senha e acessar seus QR Codes de entrada.
+              </p>
+            </div>
+            <button 
+              onClick={() => { setMode('login'); setIsReservationSubmitted(false); }}
+              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold font-sans shadow-xl hover:bg-blue-700 transition-all uppercase tracking-widest text-xs"
+            >
+              Voltar ao Início
+            </button>
+          </div>
+        ) : mode === 'visitor' ? (
+          <PublicGuestReservation 
+            onBack={() => setMode('login')} 
+            onSuccess={() => setIsReservationSubmitted(true)}
+          />
+        ) : message ? (
           <div className="bg-green-50 text-green-700 p-4 rounded-lg mb-6 text-sm">
             {message}
             <button onClick={() => { setMode('login'); setMessage(''); }} className="block mt-2 font-bold underline">Voltar para login</button>
@@ -83,15 +120,31 @@ const LoginPage = ({ onAuthChange }: { onAuthChange: () => void }) => {
         ) : (
           <form onSubmit={handleAuth} className="space-y-4">
             {(mode === 'register' || mode === 'visitor') && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none transition-all"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                />
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none transition-all"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
+                </div>
+
+                {mode === 'visitor' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Quem é o sócio que convidou?</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Nome do Sócio"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none transition-all"
+                      value={hostMember}
+                      onChange={(e) => setHostMember(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
             )}
             <div>
@@ -131,20 +184,17 @@ const LoginPage = ({ onAuthChange }: { onAuthChange: () => void }) => {
                 className="text-farm-700 font-medium hover:underline"
                 onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
               >
-                {mode === 'login' ? 'Não tem conta de sócio? Cadastre-se' : 'Já tem conta? Faça login'}
+                {mode === 'login' ? 'É sócio e não tem cadastro? Cadastre aqui.' : 'Já tem conta? Faça login'}
               </button>
 
-              {mode !== 'visitor' && (
-                <div className="pt-2 border-t border-gray-100">
-                  <p className="text-gray-500 mb-2">É um visitante?</p>
-                  <button
-                    type="button"
-                    className="bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors w-full"
-                    onClick={() => { setMode('visitor'); setError(''); }}
-                  >
-                    Cadastrar como Visitante
-                  </button>
-                </div>
+              {mode === 'login' && (
+                <button
+                  type="button"
+                  className="text-farm-700 font-medium hover:underline"
+                  onClick={() => { setMode('visitor'); setError(''); }}
+                >
+                  É convidado? Faça seu pedido de reserva aqui.
+                </button>
               )}
             </div>
           </form>
@@ -183,20 +233,46 @@ const ApprovalPending = ({ onSignOut }: { onSignOut: () => void }) => (
 const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isApproved, setIsApproved] = useState<boolean | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [isVisitor, setIsVisitor] = useState<boolean>(false);
-  const [currentPage, setCurrentPage] = useState<Page>(() => {
-    const savedPage = localStorage.getItem('portal_last_page');
-    return (savedPage as Page) || Page.HOME;
-  });
+  const [userRole, setUserRole] = useState<'admin' | 'site_admin' | 'finance_manager' | 'finance' | 'accounting' | 'member' | 'visitor' | 'pdv' | null>(null);
+  const [userName, setUserName] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState<Page>(Page.HOME);
   const [loading, setLoading] = useState(true);
 
-  // Persistence effect
+  // Sync currentPage with URL hash for navigation persistence and back button support
   useEffect(() => {
     if (session) {
+      const pageHash = currentPage.toLowerCase();
+      if (window.location.hash.replace('#', '') !== pageHash) {
+        window.location.hash = pageHash;
+      }
       localStorage.setItem('portal_last_page', currentPage);
     }
   }, [currentPage, session]);
+
+  // Listen for hash changes (e.g. browser back/forward buttons)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '').toUpperCase();
+      if (Object.values(Page).includes(hash as Page)) {
+        setCurrentPage(hash as Page);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Initial load from hash or localStorage
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '').toUpperCase();
+    if (hash && Object.values(Page).includes(hash as Page)) {
+      setCurrentPage(hash as Page);
+    } else {
+      const savedPage = localStorage.getItem('portal_last_page');
+      if (savedPage && Object.values(Page).includes(savedPage as Page)) {
+        setCurrentPage(savedPage as Page);
+      }
+    }
+  }, []);
 
   // Inactivity Timer (30 minutes)
   useEffect(() => {
@@ -239,8 +315,8 @@ const App: React.FC = () => {
         checkUserInfo(session.user.id);
       } else {
         setIsApproved(null);
-        setIsAdmin(false);
-        setIsVisitor(false);
+        setUserRole(null);
+        setUserName('');
         setCurrentPage(Page.HOME);
         localStorage.removeItem('portal_last_page');
         setLoading(false);
@@ -258,22 +334,23 @@ const App: React.FC = () => {
       // to avoid throwing an error if nothing is found (it just returns an empty array).
       const { data, error } = await supabase
         .from('profiles')
-        .select('approved, role')
+        .select('approved, role, full_name')
         .eq('id', userId);
 
       if (error) throw error;
 
       const { data: { user } } = await supabase.auth.getUser();
-      const isSuperAdmin = user?.email === 'admin@familiasaobento.com';
+      const email = user?.email || '';
+      const isSuperAdmin = email === 'admin@familiasaobento.com';
 
       if (data && data.length > 0) {
         setIsApproved(data[0].approved === true || isSuperAdmin);
-        setIsAdmin(data[0].role === 'admin' || isSuperAdmin);
-        setIsVisitor(data[0].role === 'visitor');
+        setUserRole(isSuperAdmin ? 'admin' : data[0].role);
+        setUserName(data[0].full_name || email.split('@')[0] || 'Usuário');
       } else {
         setIsApproved(isSuperAdmin);
-        setIsAdmin(isSuperAdmin);
-        setIsVisitor(false);
+        setUserRole(isSuperAdmin ? 'admin' : 'member');
+        setUserName(email.split('@')[0] || 'Novo Usuário');
       }
     } catch (err) {
       console.error('Error checking user info:', err);
@@ -281,11 +358,12 @@ const App: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.email === 'admin@familiasaobento.com') {
         setIsApproved(true);
-        setIsAdmin(true);
+        setUserRole('admin');
+        setUserName('Administrador Mestre');
       } else {
         setIsApproved(false);
-        setIsAdmin(false);
-        setIsVisitor(false);
+        setUserRole('member');
+        setUserName('Visitante');
       }
     } finally {
       setLoading(false);
@@ -296,6 +374,35 @@ const App: React.FC = () => {
     localStorage.removeItem('portal_last_page');
     supabase.auth.signOut();
   };
+
+  const isAdmin = userRole === 'admin';
+  const isSiteAdmin = userRole === 'site_admin';
+  const isFinanceManager = userRole === 'finance_manager';
+  const isFinance = userRole === 'finance';
+  const isVisitor = userRole === 'visitor';
+  const isMember = userRole === 'member';
+  const isPDV = userRole === 'pdv';
+  const isAccounting = userRole === 'accounting';
+
+  // Management broadly includes anyone who isn't just a visitor or standard member
+  const isManagement = isAdmin || isSiteAdmin || isFinanceManager || isFinance || isAccounting;
+
+  // Specific permission flags based on requirements
+  const canEditContent = isAdmin || isSiteAdmin;
+  const canApproveTransactions = isAdmin || isFinanceManager;
+
+  // Specific logic to redirect PDV and Financeiro to their main tool
+  useEffect(() => {
+    if (isPDV && currentPage === Page.HOME) {
+      setCurrentPage(Page.PDV);
+    }
+    if (isFinance && currentPage === Page.HOME) {
+      setCurrentPage(Page.RESERVATIONS);
+    }
+    if (isAccounting && currentPage === Page.HOME) {
+      setCurrentPage(Page.FINANCE);
+    }
+  }, [isPDV, isFinance, isAccounting, currentPage]);
 
   if (loading) {
     return (
@@ -309,36 +416,67 @@ const App: React.FC = () => {
     return <LoginPage onAuthChange={() => { }} />;
   }
 
-  if (isApproved === false && !isAdmin) {
+  if (isApproved === false && userRole !== 'admin') {
     return <ApprovalPending onSignOut={handleSignOut} />;
   }
 
   const renderContent = () => {
     switch (currentPage) {
       case Page.HOME:
-        return <HomePage isAdmin={isAdmin} isVisitor={isVisitor} />;
-      case Page.FINANCE:
-        return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <FinancePage />;
+        return <HomePage isManagement={isManagement} canEditNews={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.RESERVATIONS:
-        return <ReservationsPage isAdmin={isAdmin} isVisitor={isVisitor} />;
+        return <ReservationsPage isAdmin={isAdmin || isSiteAdmin || isFinanceManager || isFinance} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.EVENTS:
-        return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <EventsPage isAdmin={isAdmin} />;
+        return (isVisitor) ? <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} /> : <EventsPage isAdmin={canEditContent} />;
       case Page.DOCUMENTS:
-        return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <DocumentsPage />;
+        return (isVisitor) ? <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} /> : <DocumentsPage isManagement={canEditContent} />;
       case Page.GALLERY:
-        return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <GalleryPage />;
-      case Page.PROFILE:
-        return isAdmin ? <MembersPage /> : (isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <ProfilePage />);
-      case Page.CONTACT:
-        return isVisitor ? <HomePage isAdmin={isAdmin} isVisitor={isVisitor} /> : <ContactPage isAdmin={isAdmin} />;
+        return (isVisitor) ? <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} /> : <GalleryPage isAdmin={canEditContent} />;
       case Page.SHOP:
-        return <ShopPage isAdmin={isAdmin} isVisitor={isVisitor} />;
-      case Page.VISITORS:
-        return isAdmin ? <VisitorsPage /> : <HomePage isAdmin={isAdmin} isVisitor={isVisitor} />;
+        return <ShopPage isAdmin={canEditContent} isVisitor={isVisitor} />;
+      case Page.PROFILE:
+      case Page.VISITOR_PROFILE:
+        // MEU CADASTRO para todos os usuários logados
+        return <ProfilePage />;
+      case Page.MEMBERS:
+        // LISTAGEM DE SÓCIOS para Admin, Site Admin e Financeiro
+        return (isAdmin || isSiteAdmin || isFinance || isFinanceManager)
+          ? <MembersPage />
+          : <HomePage isManagement={isManagement} canEditNews={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.CONTACT:
+        return <ContactPage isAdmin={isAdmin || isSiteAdmin} />;
       case Page.ADMIN_USERS:
-        return isAdmin ? <AdminUsersPage /> : <HomePage isAdmin={isAdmin} isVisitor={isVisitor} />;
+        return (isAdmin || isSiteAdmin) ? <AdminUsersPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+
+      // FINANCEIRO (Grupo 3 e 4)
+      case Page.FINANCE: // Painel Financeiro
+        return (isAdmin || isMember || isSiteAdmin || isFinanceManager || isAccounting) ? <FinancePage isAdmin={isAdmin || isFinanceManager} userRole={userRole || 'member'} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.CASH_FLOW: // Transações
+        return (isManagement || isAccounting) ? <CashFlowPage canApprove={canApproveTransactions} isViewOnly={isAccounting} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.CONSUMPTION_REVIEW: // Conferência e aprovação
+        return (canApproveTransactions) ? <ConsumptionReviewPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+
+      // OPERACONAL
+      case Page.VISITORS:
+        return (isManagement || isSiteAdmin) ? <VisitorsPage canEdit={isManagement || isSiteAdmin} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.ACTIVE_STAYS:
+        return <ReservationsPage isAdmin={isAdmin || isSiteAdmin || isFinanceManager || isFinance} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.PDV:
+        return (isManagement || isPDV) ? <PDVPage /> : <HomePage isManagement={isManagement} canEditNews={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.SUPPLIES:
+        return (isManagement) ? <SuppliesPage isAdmin={canApproveTransactions} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.INVENTORY_MANAGEMENT:
+        return (isAdmin || isFinanceManager) ? <InventoryManagementPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+
+      case Page.PRICING_RULES:
+        return (isAdmin || isFinanceManager) ? <PricingRulesPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.COST_CATEGORIES:
+        return (isAdmin || isFinanceManager || isSiteAdmin) ? <CostCategoriesPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.PDV_CONFIG:
+        return (isAdmin || isFinanceManager) ? <PdvConfigPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+
       default:
-        return <HomePage isAdmin={isAdmin} isVisitor={isVisitor} />;
+        return <HomePage isManagement={isManagement} canEditNews={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
     }
   };
 
@@ -349,6 +487,9 @@ const App: React.FC = () => {
       onLogout={handleSignOut}
       isAdmin={isAdmin}
       isVisitor={isVisitor}
+      userName={userName}
+      userRole={userRole || 'member'}
+      fullWidth={currentPage === Page.RESERVATIONS || currentPage === Page.ACTIVE_STAYS}
     >
       {renderContent()}
     </Layout>

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { IconInstagram, IconWhatsapp, IconMail } from '../components/Icons';
+import { AdminAlerts } from '../components/AdminAlerts';
+
+import { Page } from '../types';
 
 interface NewsItem {
     id: string;
@@ -12,7 +15,7 @@ interface NewsItem {
     file_url?: string;
 }
 
-export const HomePage: React.FC<{ isAdmin: boolean; isVisitor?: boolean }> = ({ isAdmin, isVisitor }) => {
+export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; isVisitor?: boolean; onNavigate: (page: Page) => void }> = ({ isManagement, canEditNews, isVisitor, onNavigate }) => {
     const [news, setNews] = useState<NewsItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAddForm, setShowAddForm] = useState(false);
@@ -123,6 +126,7 @@ export const HomePage: React.FC<{ isAdmin: boolean; isVisitor?: boolean }> = ({ 
 
     return (
         <div className="space-y-8">
+            {isManagement && <AdminAlerts onNavigate={onNavigate} />}
             {/* Welcome Section */}
             <div className="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-100 flex flex-col md:flex-row items-center gap-8">
                 <div className="flex-1 order-2 md:order-1">
@@ -165,7 +169,7 @@ export const HomePage: React.FC<{ isAdmin: boolean; isVisitor?: boolean }> = ({ 
                             <span className="w-2 h-8 bg-farm-500 rounded-full mr-3"></span>
                             Últimas Notícias e Avisos
                         </h3>
-                        {isAdmin && (
+                        {canEditNews && (
                             <button
                                 onClick={() => setShowAddForm(!showAddForm)}
                                 className="bg-farm-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-farm-700 transition-colors shadow-sm"

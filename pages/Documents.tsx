@@ -3,10 +3,9 @@ import { IconFileText, IconLoader } from '../components/Icons';
 import { supabase } from '../lib/supabase';
 import { Document } from '../types';
 
-export const DocumentsPage: React.FC = () => {
+export const DocumentsPage: React.FC<{ isManagement?: boolean }> = ({ isManagement }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
   // Form state
@@ -17,20 +16,7 @@ export const DocumentsPage: React.FC = () => {
 
   useEffect(() => {
     fetchDocuments();
-    checkAdmin();
   }, []);
-
-  const checkAdmin = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-      setIsAdmin(data?.role === 'admin');
-    }
-  };
 
   async function fetchDocuments() {
     try {
@@ -126,7 +112,7 @@ export const DocumentsPage: React.FC = () => {
           <h2 className="text-3xl font-bold text-farm-900 font-serif mb-2">Documentos da Fazenda</h2>
           <p className="text-gray-600">Acesse arquivos importantes, atas e regulamentos armazenados com segurança.</p>
         </div>
-        {isAdmin && (
+        {isManagement && (
           <button
             onClick={() => setShowAddForm(!showAddForm)}
             className="bg-farm-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-farm-700 transition-colors shadow-sm"
@@ -225,7 +211,7 @@ export const DocumentsPage: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
-                      {isAdmin && (
+                      {isManagement && (
                         <button
                           onClick={() => handleDelete(doc)}
                           className="text-red-500 hover:text-red-700 p-2 opacity-0 group-hover:opacity-100 transition-opacity"

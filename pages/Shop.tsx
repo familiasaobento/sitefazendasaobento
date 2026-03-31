@@ -10,6 +10,8 @@ interface Product {
     image_url: string;
     category: string;
     is_active: boolean;
+    sell_by_weight: boolean;
+    unit_type: string;
 }
 
 interface CartItem {
@@ -50,7 +52,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
     const [rejectionId, setRejectionId] = useState<number | null>(null);
     const [rejectionReason, setRejectionReason] = useState('');
 
-    const categories = ['Todos', 'Doces', 'Laticínios', 'Padaria', 'Hortifruti'];
+    const categories = ['Todos', 'Refeições', 'Doces', 'Laticínios', 'Padaria', 'Hortifruti'];
 
     useEffect(() => {
         fetchProducts();
@@ -161,6 +163,24 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
             fetchMyReservations();
         } catch (err: any) {
             alert('Erro ao excluir reserva: ' + err.message);
+        }
+    };
+
+    const handleDeleteProduct = async (id: number) => {
+        if (!confirm('Tem certeza que deseja excluir este produto permanentemente?')) return;
+
+        try {
+            const { error } = await supabase
+                .from('products')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            setShowAdminModal(false);
+            setEditingProduct(null);
+            fetchProducts();
+        } catch (err: any) {
+            alert('Erro ao excluir produto: ' + err.message);
         }
     };
 
@@ -303,17 +323,30 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
         if (!editingProduct) return;
 
         try {
+            const productData = {
+                name: editingProduct.name,
+                description: editingProduct.description,
+                price: editingProduct.price,
+                category: editingProduct.category,
+                is_active: editingProduct.is_active,
+                image_url: editingProduct.image_url,
+                sell_by_weight: editingProduct.sell_by_weight || false,
+                unit_type: editingProduct.unit_type || 'unit'
+            };
+
             if (editingProduct.id) {
                 const { error } = await supabase
                     .from('products')
-                    .update(editingProduct)
+                    .update(productData)
                     .eq('id', editingProduct.id);
                 if (error) throw error;
+                alert('Produto atualizado com sucesso!');
             } else {
                 const { error } = await supabase
                     .from('products')
-                    .insert(editingProduct);
+                    .insert([productData]);
                 if (error) throw error;
+                alert('Produto cadastrado com sucesso!');
             }
             setShowAdminModal(false);
             setEditingProduct(null);
@@ -351,9 +384,11 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
         }
     };
 
-    const filteredProducts = activeCategory === 'Todos'
-        ? products
-        : products.filter(p => p.category === activeCategory);
+    const filteredProducts = products.filter(p => {
+        const matchesCategory = activeCategory === 'Todos' || p.category === activeCategory;
+        const matchesStatus = isAdmin || p.is_active; // Admins also see inactive products
+        return matchesCategory && matchesStatus;
+    });
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -364,7 +399,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                 </div>
                 {isAdmin && (
                     <button
-                        onClick={() => { setEditingProduct({ name: '', price: 0, category: 'Doces' }); setShowAdminModal(true); }}
+                        onClick={() => { setEditingProduct({ name: '', price: 0, category: 'Doces', sell_by_weight: false, unit_type: 'unit', is_active: true }); setShowAdminModal(true); }}
                         className="bg-farm-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-farm-700 transition-colors shadow-sm"
                     >
                         + Gerenciar Produtos
@@ -407,10 +442,15 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                                             </svg>
                                         </div>
                                     )}
-                                    <div className="absolute top-3 left-3">
+                                    <div className="absolute top-3 left-3 flex flex-col gap-2">
                                         <span className="bg-white/90 backdrop-blur-sm text-farm-600 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider shadow-sm border border-farm-100">
                                             {product.category}
                                         </span>
+                                        {!product.is_active && (
+                                            <span className="bg-red-500/90 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider shadow-sm">
+                                                Inativo
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="p-5 flex-1 flex flex-col">
@@ -453,9 +493,11 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
 
             {/* Rejection Modal */}
             {showRejectionModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="p-6 border-b border-gray-100 bg-gray-50">
+                <div className="fixed inset-0 z-[100] overflow-y-auto no-print">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => setShowRejectionModal(false)}></div>
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 relative z-10">
+                            <div className="p-6 border-b border-gray-100 bg-gray-50">
                             <h3 className="text-xl font-bold text-gray-800">Recusar Pedido</h3>
                         </div>
                         <div className="p-6 space-y-4">
@@ -483,14 +525,17 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                             </div>
                         </div>
                     </div>
+                    </div>
                 </div>
             )}
 
             {/* Admin Modal for Product Edit */}
             {showAdminModal && editingProduct && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <div className="fixed inset-0 z-[100] overflow-y-auto no-print">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => setShowAdminModal(false)}></div>
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 relative z-10">
+                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                             <h3 className="text-xl font-bold text-gray-800">{editingProduct.id ? 'Editar Produto' : 'Novo Produto'}</h3>
                             <button onClick={() => setShowAdminModal(false)} className="text-gray-400 hover:text-gray-600">
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -540,6 +585,26 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                                         placeholder="Ex: Doce de leite caseiro feito no fogão a lenha..."
                                     />
                                 </div>
+                                <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl">
+                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                        <input
+                                            type="checkbox"
+                                            checked={editingProduct.is_active}
+                                            onChange={e => setEditingProduct({ ...editingProduct, is_active: e.target.checked })}
+                                            className="w-5 h-5 rounded border-gray-300 text-farm-600 focus:ring-farm-500"
+                                        />
+                                        <span className="text-sm font-bold text-gray-700">Produto Ativo</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                        <input
+                                            type="checkbox"
+                                            checked={editingProduct.sell_by_weight}
+                                            onChange={e => setEditingProduct({ ...editingProduct, sell_by_weight: e.target.checked })}
+                                            className="w-5 h-5 rounded border-gray-300 text-farm-600 focus:ring-farm-500"
+                                        />
+                                        <span className="text-sm font-bold text-gray-700">Venda por Peso (Kg)</span>
+                                    </label>
+                                </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1">Foto do Produto</label>
                                     <div className="flex items-center gap-4">
@@ -562,18 +627,28 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                                     </div>
                                 </div>
                             </div>
-                            <div className="pt-4 flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAdminModal(false)}
-                                    className="flex-1 py-3 px-4 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors"
-                                >Cancelar</button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 py-3 px-4 rounded-xl font-bold bg-farm-600 text-white shadow-lg hover:bg-farm-700 transition-colors"
-                                >Salvar</button>
+                            <div className="pt-4 flex flex-col gap-3">
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAdminModal(false)}
+                                        className="flex-1 py-3 px-4 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors"
+                                    >Cancelar</button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 py-3 px-4 rounded-xl font-bold bg-farm-600 text-white shadow-lg hover:bg-farm-700 transition-colors"
+                                    >Salvar</button>
+                                </div>
+                                {editingProduct.id && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeleteProduct(editingProduct.id!)}
+                                        className="w-full py-2 px-4 rounded-xl font-bold text-red-500 hover:bg-red-50 transition-colors text-sm"
+                                    >Excluir Produto Permanentemente</button>
+                                )}
                             </div>
                         </form>
+                    </div>
                     </div>
                 </div>
             )}

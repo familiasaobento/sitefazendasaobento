@@ -1,54 +1,117 @@
 import React, { useState } from 'react';
 import { Page } from '../types';
-import { IconHome, IconCalendar, IconImage, IconChart, IconUser, IconMail, IconMenu, IconFileText, IconShoppingCart } from './Icons';
+import { IconHome, IconCalendar, IconImage, IconChart, IconUser, IconMail, IconMenu, IconFileText, IconShoppingCart, IconZap, IconPackage, IconCheck } from './Icons';
 
 interface LayoutProps {
   children: React.ReactNode;
   currentPage: Page;
   onNavigate: (page: Page) => void;
   onLogout: () => void;
+  userRole: 'admin' | 'site_admin' | 'finance_manager' | 'finance' | 'accounting' | 'member' | 'visitor' | 'pdv';
   isAdmin?: boolean;
   isVisitor?: boolean;
+  userName?: string;
+  fullWidth?: boolean;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate, onLogout, isAdmin, isVisitor }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate, onLogout, userRole, isAdmin, isVisitor, userName, fullWidth = false }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const navItems = [
-    { page: Page.HOME, label: 'Início & Notícias', icon: IconHome },
+  let filteredNavItems: { page: Page; label: string; icon: any }[] = [];
+
+  const visitorItems = [
+    { page: Page.HOME, label: 'Início', icon: IconHome },
+    { page: Page.VISITOR_PROFILE, label: 'Meu Cadastro', icon: IconUser },
     { page: Page.RESERVATIONS, label: 'Reservas', icon: IconCalendar },
+    { page: Page.SHOP, label: 'Produtos', icon: IconShoppingCart },
+  ];
+
+  const sosoItems = [
+    { page: Page.HOME, label: 'Início dos Sócios', icon: IconHome },
     { page: Page.EVENTS, label: 'Agenda de Eventos', icon: IconCalendar },
-    { page: Page.DOCUMENTS, label: 'Documentos', icon: IconFileText },
     { page: Page.GALLERY, label: 'Álbum de Fotos', icon: IconImage },
-    { page: Page.FINANCE, label: 'Financeiro', icon: IconChart },
-    { page: Page.SHOP, label: 'Produtos da Fazenda', icon: IconShoppingCart },
+    { page: Page.DOCUMENTS, label: 'Documentos', icon: IconFileText },
+    { page: Page.SHOP, label: 'Produtos', icon: IconShoppingCart },
+    { page: Page.FINANCE, label: 'Painel Financeiro', icon: IconChart },
+    { page: Page.RESERVATIONS, label: 'Reservas', icon: IconCalendar },
     { page: Page.PROFILE, label: 'Meu Cadastro', icon: IconUser },
     { page: Page.CONTACT, label: 'Contato e Sugestões', icon: IconMail },
   ];
 
-  let filteredNavItems = [...navItems];
+  const commonFinanceItems = [
+    { page: Page.HOME, label: 'Início', icon: IconHome },
+    { page: Page.EVENTS, label: 'Agenda de Eventos', icon: IconCalendar },
+    { page: Page.CASH_FLOW, label: 'Lançamento de Transações', icon: IconMenu },
+    { page: Page.SUPPLIES, label: 'Suprimentos', icon: IconPackage },
+    { page: Page.PDV, label: 'PDV / Consumo', icon: IconShoppingCart },
+  ];
 
-  if (isVisitor) {
-    filteredNavItems = navItems.filter(item =>
-      item.page === Page.HOME || item.page === Page.RESERVATIONS || item.page === Page.SHOP
-    );
+  const peopleManagementItems = [
+    { page: Page.ADMIN_USERS, label: 'Controle de Acesso', icon: IconUser },
+    { page: Page.MEMBERS, label: 'Cadastro de Sócios', icon: IconUser },
+    { page: Page.VISITORS, label: 'Cadastro de Visitantes', icon: IconUser },
+  ];
+
+  if (userRole === 'visitor') {
+    filteredNavItems = visitorItems;
+  } else if (userRole === 'pdv') {
+    filteredNavItems = [
+      { page: Page.HOME, label: 'Início', icon: IconHome },
+      { page: Page.PDV, label: 'PDV / Consumo', icon: IconShoppingCart },
+    ];
+  } else if (userRole === 'member') {
+    filteredNavItems = sosoItems;
+  } else if (userRole === 'accounting') {
+    filteredNavItems = [
+      { page: Page.FINANCE, label: 'Painel Financeiro', icon: IconChart },
+      { page: Page.CASH_FLOW, label: 'Relatórios e Fluxo', icon: IconChart },
+    ];
+  } else if (userRole === 'finance') {
+    filteredNavItems = [
+      { page: Page.RESERVATIONS, label: 'Ocupação e Reservas', icon: IconCalendar },
+      ...commonFinanceItems.filter(i => i.page !== Page.HOME && i.page !== Page.EVENTS),
+      ...peopleManagementItems.filter(i => i.page !== Page.ADMIN_USERS)
+    ];
+  } else if (userRole === 'finance_manager') {
+    filteredNavItems = [
+      ...commonFinanceItems,
+      ...peopleManagementItems.filter(i => i.page !== Page.ADMIN_USERS),
+      { page: Page.RESERVATIONS, label: 'Ocupação e Reservas', icon: IconCalendar },
+      { page: Page.PRICING_RULES, label: 'Config. de Tarifas', icon: IconMenu },
+      { page: Page.COST_CATEGORIES, label: 'Categorias de Custos', icon: IconMenu },
+      { page: Page.PDV_CONFIG, label: 'Configuração PDVs', icon: IconMenu },
+    ];
+  } else if (userRole === 'site_admin') {
+    filteredNavItems = [
+      ...sosoItems.filter(i => i.page !== Page.RESERVATIONS),
+      { page: Page.RESERVATIONS, label: 'Ocupação e Reservas', icon: IconCalendar },
+      ...peopleManagementItems,
+    ];
+  } else if (userRole === 'admin') {
+    // Gerente Geral: Acesso a tudo
+    filteredNavItems = [
+      ...sosoItems.filter(i => i.page !== Page.RESERVATIONS),
+      { page: Page.RESERVATIONS, label: 'Ocupação e Reservas', icon: IconCalendar },
+      ...commonFinanceItems.filter(i => !sosoItems.find(s => s.page === i.page)),
+      ...peopleManagementItems,
+      { page: Page.PRICING_RULES, label: 'Config. de Tarifas', icon: IconMenu },
+      { page: Page.COST_CATEGORIES, label: 'Categorias de Custos', icon: IconMenu },
+      { page: Page.PDV_CONFIG, label: 'Configuração PDVs', icon: IconMenu },
+    ];
   }
 
-  if (isAdmin) {
-    // Rename Profile to "Cadastros dos Sócios"
-    const profileItem = filteredNavItems.find(item => item.page === Page.PROFILE);
-    if (profileItem) {
-      profileItem.label = 'Cadastros dos Sócios';
-    }
-    // Rename Contact to "Mensagens Recebidas"
-    const contactItem = filteredNavItems.find(item => item.page === Page.CONTACT);
-    if (contactItem) {
-      contactItem.label = 'Mensagens Recebidas';
-    }
-    // Admin specific items
-    filteredNavItems.push({ page: Page.VISITORS, label: 'Visitantes Cadastrados', icon: IconUser });
-    filteredNavItems.push({ page: Page.ADMIN_USERS, label: 'Controle de Acessos', icon: IconUser });
-  }
+  const roleLabels: Record<string, string> = {
+    'admin': 'Administrador',
+    'site_admin': 'Gerente do Site',
+    'finance_manager': 'Gerente Financeiro',
+    'finance': 'Financeiro',
+    'member': 'Sócio da Família',
+    'visitor': 'Visitante/Convidado',
+    'pdv': 'Operador de PDV',
+    'accounting': 'Contabilidade',
+  };
+
+  const displayRole = roleLabels[userRole] || 'Usuário';
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
@@ -82,7 +145,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
             <div className="bg-white p-2 rounded-xl shadow-inner mb-4 w-full">
               <img src="/logo.jpg" alt="Logo" className="w-full h-auto object-contain" />
             </div>
-            <p className="text-sm font-medium text-farm-300">Portal do Sócio</p>
+            {userName && (
+              <div className="w-full text-center mt-2 bg-farm-800/50 p-3 rounded-xl">
+                <p className="text-white font-bold truncate text-sm px-1" title={userName}>{userName}</p>
+                <p className="text-[10px] font-medium text-farm-300 uppercase tracking-widest mt-1">{displayRole}</p>
+              </div>
+            )}
           </div>
 
           {/* Scrollable Navigation */}
@@ -122,8 +190,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 md:ml-64 p-4 sm:p-6 md:p-8 lg:p-12 min-h-screen">
-        <div className="max-w-6xl mx-auto">
+      <main className="flex-1 md:ml-64 p-4 sm:p-6 md:p-8 lg:p-10 min-h-screen">
+        <div className={fullWidth ? "w-full" : "w-full max-w-[1400px] mx-auto"}>
           {children}
         </div>
       </main>

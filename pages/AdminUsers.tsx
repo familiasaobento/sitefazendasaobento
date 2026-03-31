@@ -8,6 +8,7 @@ interface Profile {
     role: string;
     approved: boolean;
     created_at: string;
+    host_name?: string;
 }
 
 export const AdminUsersPage: React.FC = () => {
@@ -20,7 +21,7 @@ export const AdminUsersPage: React.FC = () => {
         try {
             const { data, error } = await supabase
                 .from('profiles')
-                .select('id, full_name, role, approved, created_at')
+                .select('id, full_name, role, approved, created_at, host_name')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -54,13 +55,19 @@ export const AdminUsersPage: React.FC = () => {
         }
     };
 
-    const handleToggleRole = async (id: string, currentRole: string) => {
-        let newRole = 'member';
-        if (currentRole === 'member') newRole = 'visitor';
-        else if (currentRole === 'visitor') newRole = 'admin';
-        else newRole = 'member';
+    const handleToggleRole = async (id: string, newRole: string) => {
+        const roleLabels: any = {
+            'admin': 'Administrador Geral',
+            'site_admin': 'Site Admin (Conteúdo)',
+            'finance_manager': 'Gerente Financeiro',
+            'finance': 'Financeiro Operador',
+            'member': 'Sócio',
+            'visitor': 'Visitante',
+            'pdv': 'PDV / Consumo',
+            'accounting': 'Contabilidade'
+        };
 
-        if (!confirm(`Deseja realmente alterar o tipo deste usuário para ${newRole === 'admin' ? 'Administrador' : newRole === 'visitor' ? 'Visitante' : 'Sócio'}?`)) return;
+        if (!confirm(`Deseja realmente alterar o tipo deste usuário para ${roleLabels[newRole] || newRole}?`)) return;
 
         try {
             const { error } = await supabase
@@ -83,17 +90,19 @@ export const AdminUsersPage: React.FC = () => {
         if (!confirm(`TEM CERTEZA? Isso excluirá permanentemente o acesso de "${name}". Esta ação não pode ser desfeita.`)) return;
 
         try {
-            const { error } = await supabase
-                .from('profiles')
-                .delete()
-                .eq('id', id);
+            const { error } = await supabase.rpc('delete_user_account', { target_user_id: id });
 
-            if (error) throw error;
+            if (error) {
+                // If the RPC fails (either not created or due to foreign key constraints), fallback to trying to delete just the profile
+                // Though for a complete deletion they must run the SQL to create the RPC
+                const fallbackResponse = await supabase.from('profiles').delete().eq('id', id);
+                if (fallbackResponse.error) throw fallbackResponse.error;
+            }
 
             setProfiles(profiles.filter(p => p.id !== id));
         } catch (err) {
             console.error('Error deleting user:', err);
-            alert('Erro ao excluir usuário.');
+            alert('Erro ao excluir usuário.\nVerifique se este usuário possui Reservas, Consumos no PDV ou Lançamentos vinculados a ele. Caso tenha, primeiro cancele/exclua o histórico dele.');
         }
     };
 
@@ -168,18 +177,43 @@ export const AdminUsersPage: React.FC = () => {
                                     </button>
                                 </div>
 
+                                {profile.host_name && (
+                                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                        <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">Responsável / Convite</span>
+                                        <p className="text-xs font-bold text-gray-700">{profile.host_name}</p>
+                                    </div>
+                                )}
+
                                 <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-50">
-                                    <button
-                                        onClick={() => handleToggleRole(profile.id, profile.role)}
-                                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${profile.role === 'admin'
+                                    <select
+                                        value={profile.role}
+                                        onChange={(e) => handleToggleRole(profile.id, e.target.value)}
+                                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold outline-none cursor-pointer appearance-none ${profile.role === 'admin'
                                             ? 'bg-purple-100 text-purple-800'
-                                            : profile.role === 'visitor'
-                                                ? 'bg-orange-100 text-orange-800'
-                                                : 'bg-blue-100 text-blue-800'
+                                            : profile.role === 'site_admin'
+                                                ? 'bg-blue-100 text-blue-800'
+                                                : profile.role === 'finance_manager'
+                                                    ? 'bg-emerald-100 text-emerald-800'
+                                                    : profile.role === 'finance'
+                                                        ? 'bg-teal-100 text-teal-800'
+                                                        : profile.role === 'pdv'
+                                                            ? 'bg-rose-100 text-rose-800'
+                                                            : profile.role === 'visitor'
+                                                                ? 'bg-orange-100 text-orange-800'
+                                                                : profile.role === 'accounting'
+                                                                    ? 'bg-amber-100 text-amber-800'
+                                                                    : 'bg-slate-100 text-slate-800'
                                             }`}
                                     >
-                                        {profile.role?.toLowerCase() === 'admin' ? 'Administrador' : profile.role?.toLowerCase() === 'visitor' ? 'Visitante' : 'Sócio'}
-                                    </button>
+                                        <option value="admin">Administrador Geral</option>
+                                        <option value="site_admin">Site Admin</option>
+                                        <option value="finance_manager">Ger. Financeiro</option>
+                                        <option value="finance">Financeiro Ops</option>
+                                        <option value="accounting">Contabilidade</option>
+                                        <option value="pdv">PDV / Consumo</option>
+                                        <option value="member">Sócio</option>
+                                        <option value="visitor">Visitante</option>
+                                    </select>
                                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${profile.approved
                                         ? 'bg-green-100 text-green-800'
                                         : 'bg-yellow-100 text-yellow-800'
@@ -205,9 +239,10 @@ export const AdminUsersPage: React.FC = () => {
                     <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden hidden md:block">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
-                                <thead>
-                                    <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
+                                <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
+                                    <tr>
                                         <th className="px-6 py-4 font-semibold">Usuário</th>
+                                        <th className="px-6 py-4 font-semibold">Responsável / Convite</th>
                                         <th className="px-6 py-4 font-semibold">Tipo</th>
                                         <th className="px-6 py-4 font-semibold">Status de Acesso</th>
                                         <th className="px-6 py-4 font-semibold text-right">Ações</th>
@@ -218,7 +253,7 @@ export const AdminUsersPage: React.FC = () => {
                                         <tr key={profile.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="bg-farm-50 w-10 h-10 rounded-full flex items-center justify-center text-farm-700 font-bold">
+                                                    <div className="bg-farm-50 w-10 h-10 rounded-full flex items-center justify-center text-farm-700 font-bold shrink-0">
                                                         {profile.full_name?.charAt(0) || '?'}
                                                     </div>
                                                     <div>
@@ -231,18 +266,39 @@ export const AdminUsersPage: React.FC = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <button
-                                                    onClick={() => handleToggleRole(profile.id, profile.role)}
-                                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${profile.role === 'admin'
+                                                <p className="text-sm font-medium text-gray-700">{profile.host_name || '—'}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <select
+                                                    value={profile.role}
+                                                    onChange={(e) => handleToggleRole(profile.id, e.target.value)}
+                                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium outline-none cursor-pointer appearance-none ${profile.role === 'admin'
                                                         ? 'bg-purple-100 text-purple-800 hover:bg-purple-200'
-                                                        : profile.role === 'visitor'
-                                                            ? 'bg-orange-100 text-orange-800 hover:bg-orange-200'
-                                                            : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                                        : profile.role === 'site_admin'
+                                                            ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                                            : profile.role === 'finance_manager'
+                                                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                                                : profile.role === 'finance'
+                                                                    ? 'bg-teal-100 text-teal-800 hover:bg-teal-200'
+                                                                    : profile.role === 'pdv'
+                                                                        ? 'bg-rose-100 text-rose-800 hover:bg-rose-200'
+                                                                        : profile.role === 'visitor'
+                                                                            ? 'bg-orange-100 text-orange-800 hover:bg-orange-200'
+                                                                            : profile.role === 'accounting'
+                                                                                ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                                                                : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
                                                         } transition-colors cursor-pointer`}
-                                                    title="Clique para alterar"
+                                                    title="Selecione o tipo de acesso"
                                                 >
-                                                    {profile.role?.toLowerCase() === 'admin' ? 'Administrador' : profile.role?.toLowerCase() === 'visitor' ? 'Visitante' : 'Sócio'}
-                                                </button>
+                                                    <option value="admin">Administrador Geral</option>
+                                                    <option value="site_admin">Site Admin (Conteúdo)</option>
+                                                    <option value="finance_manager">Ger. Financeiro</option>
+                                                    <option value="finance">Financeiro Operador</option>
+                                                    <option value="accounting">Contabilidade</option>
+                                                    <option value="pdv">PDV / Consumo</option>
+                                                    <option value="member">Sócio</option>
+                                                    <option value="visitor">Visitante</option>
+                                                </select>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${profile.approved

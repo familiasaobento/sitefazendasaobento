@@ -61,9 +61,9 @@ export const VisitorsPage: React.FC = () => {
 
                 let visitorData: VisitorProfile = {
                     ...profile,
-                    cpf: '—',
-                    phone: '—',
-                    host_name: '—',
+                    cpf: profile.cpf || '—',
+                    phone: profile.phone || '—',
+                    host_name: profile.host_name || '—',
                     guests_details: [],
                     notes: '',
                     history: myRes.map(r => ({
@@ -76,14 +76,20 @@ export const VisitorsPage: React.FC = () => {
                     }))
                 };
 
+                if (lastRes && visitorData.host_name === '—') {
+                    visitorData.host_name = lastRes.name || '—';
+                }
+
                 if (lastRes) {
                     const notes = lastRes.notes || '';
-                    const cpfMatch = notes.match(/CPF:\s*(.*)/i);
-                    const phoneMatch = notes.match(/Telefone:\s*(.*)/i);
-
-                    visitorData.cpf = cpfMatch ? cpfMatch[1].trim() : '—';
-                    visitorData.phone = phoneMatch ? phoneMatch[1].trim() : '—';
-                    visitorData.host_name = lastRes.name || '—';
+                    if (visitorData.cpf === '—') {
+                        const cpfMatch = notes.match(/CPF:\s*(.*)/i);
+                        visitorData.cpf = cpfMatch ? cpfMatch[1].trim() : '—';
+                    }
+                    if (visitorData.phone === '—') {
+                        const phoneMatch = notes.match(/Telefone:\s*(.*)/i);
+                        visitorData.phone = phoneMatch ? phoneMatch[1].trim() : '—';
+                    }
                     visitorData.guests_details = lastRes.guests_details || [];
                     visitorData.notes = notes;
                 }
@@ -144,11 +150,11 @@ export const VisitorsPage: React.FC = () => {
                 <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden hidden md:block">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead>
-                                <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
+                            <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
+                                <tr>
                                     <th className="px-6 py-4 font-semibold">Visitante</th>
                                     <th className="px-6 py-4 font-semibold">CPF / Telefone</th>
-                                    <th className="px-6 py-4 font-semibold">Último Anfitrião</th>
+                                    <th className="px-6 py-4 font-semibold">Sócio Responsável</th>
                                     <th className="px-6 py-4 font-semibold">Histórico de Visitas</th>
                                 </tr>
                             </thead>

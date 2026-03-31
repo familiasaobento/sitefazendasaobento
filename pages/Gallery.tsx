@@ -19,12 +19,11 @@ interface GalleryItem {
     album_id: number | null;
 }
 
-export const GalleryPage: React.FC = () => {
+export const GalleryPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
     const [albums, setAlbums] = useState<Album[]>([]);
     const [photos, setPhotos] = useState<GalleryItem[]>([]);
     const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
     const [loading, setLoading] = useState(true);
-    const [isAdmin, setIsAdmin] = useState(false);
     const [showAddForm, setShowAddForm] = useState(false);
     const [showAlbumForm, setShowAlbumForm] = useState(false);
 
@@ -38,7 +37,6 @@ export const GalleryPage: React.FC = () => {
     const [albumDescription, setAlbumDescription] = useState('');
 
     useEffect(() => {
-        checkAdmin();
         fetchAlbums();
     }, []);
 
@@ -47,18 +45,6 @@ export const GalleryPage: React.FC = () => {
             fetchPhotos(selectedAlbum.id);
         }
     }, [selectedAlbum]);
-
-    const checkAdmin = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const { data } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .single();
-            setIsAdmin(data?.role === 'admin');
-        }
-    };
 
     const fetchAlbums = async () => {
         try {

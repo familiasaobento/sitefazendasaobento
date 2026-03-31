@@ -1,169 +1,393 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+  LineChart, Line, PieChart, Pie, Cell, AreaChart, Area
+} from 'recharts';
+import { IconLoader, IconChart, IconZap, IconUser, IconShoppingCart, IconMenu } from '../components/Icons';
 
-export const FinancePage: React.FC = () => {
-  const [dashboardUrl, setDashboardUrl] = useState<string>('');
+// Helper to format currency
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+};
+
+// Colors for the charts
+const COLORS = ['#389f76', '#5ebb92', '#2a7f5e', '#23513f', '#95d8b6', '#c3ead4'];
+
+export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = ({ userRole, isAdmin }) => {
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [newUrl, setNewUrl] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [timeRange, setTimeRange] = useState<'month' | 'quarter' | 'year'>('month');
+  
+  // Data States
+  const [kpis, setKpis] = useState({
+    receitaTotal: 0,
+    despesaTotal: 0,
+    balanco: 0,
+    ocupacaoAtual: 0,
+    consumoPdv: 0,
+    novasReservas: 0
+  });
+
+  const [financialData, setFinancialData] = useState<any[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<any[]>([]);
+  const [occupancyData, setOccupancyData] = useState<any[]>([]);
+  const [accountBalances, setAccountBalances] = useState<{dinheiro: number, banco: number}>({ dinheiro: 0, banco: 0 });
 
   useEffect(() => {
-    fetchSettings();
-    checkAdmin();
-  }, []);
+    fetchDashboardData();
+  }, [timeRange]);
 
-  const checkAdmin = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-      setIsAdmin(data?.role === 'admin');
-    }
-  };
-
-  const fetchSettings = async () => {
+  const fetchDashboardData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('site_settings')
-        .select('value')
-        .eq('key', 'looker_studio_url')
-        .single();
+      const now = new Date();
+      let startDate = new Date();
+      
+      if (timeRange === 'month') startDate.setMonth(now.getMonth() - 1);
+      else if (timeRange === 'quarter') startDate.setMonth(now.getMonth() - 3);
+      else startDate.setFullYear(now.getFullYear() - 1);
 
-      if (error && error.code !== 'PGRST116') throw error;
-      if (data) {
-        let val = data.value;
-        if (val.includes('lookerstudio.google.com') && !val.includes('/embed/')) {
-          val = val.replace('/reporting/', '/embed/reporting/');
+      const startDateStr = startDate.toISOString().split('T')[0];
+
+      // 1. Fetch Fluxo de Caixa (Financeiro)
+      const { data: cashFlow } = await supabase
+        .from('fluxo_caixa')
+        .select('*')
+        .gte('data_pagamento', startDateStr);
+
+      // 2. Fetch Reservations (Ocupação e Reservas)
+      const { data: reservations } = await supabase
+        .from('reservations')
+        .select('*, estadias(*)')
+        .gte('check_in', startDateStr);
+
+      // 3. Fetch PDV Consumption
+      const { data: consumption } = await supabase
+        .from('lancamentos_consumo')
+        .select('*')
+        .gte('created_at', startDateStr);
+
+      // 4. Fetch Active Stays
+      const { data: activeStays } = await supabase
+        .from('estadias')
+        .select('id')
+        .eq('status', 'ativa');
+
+      // --- Processing Logic ---
+
+      // Process Finance Data (Monthly grouping)
+      const monthlyMap: Record<string, any> = {};
+      let totalR = 0;
+      let totalD = 0;
+
+      cashFlow?.forEach(entry => {
+        const month = new Date(entry.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        if (!monthlyMap[month]) monthlyMap[month] = { name: month, receita: 0, despesa: 0 };
+        
+        if (entry.tipo === 'entrada') {
+          monthlyMap[month].receita += entry.valor;
+          totalR += entry.valor;
+        } else {
+          monthlyMap[month].despesa += entry.valor;
+          totalD += entry.valor;
         }
-        setDashboardUrl(val);
-        setNewUrl(val);
-      }
+      });
+
+      // Process Expense Categories
+      const catMap: Record<string, number> = {};
+      cashFlow?.filter(e => e.tipo === 'saida').forEach(entry => {
+        catMap[entry.categoria] = (catMap[entry.categoria] || 0) + entry.valor;
+      });
+
+      // Process Occupancy
+      const occMap: Record<string, number> = {};
+      reservations?.forEach(res => {
+        const date = new Date(res.check_in + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'short' });
+        occMap[date] = (occMap[date] || 0) + 1;
+      });
+
+      // Total Pdv
+      const totalPdv = consumption?.reduce((acc, curr) => acc + (curr.valor_unitario_aplicado * curr.quantidade), 0) || 0;
+
+      // Set States
+      setKpis({
+        receitaTotal: totalR,
+        despesaTotal: totalD,
+        balanco: totalR - totalD,
+        ocupacaoAtual: activeStays?.length || 0,
+        consumoPdv: totalPdv,
+        novasReservas: reservations?.length || 0
+      });
+
+      // Process Account Balances
+      const balances = { dinheiro: 0, banco: 0 };
+      cashFlow?.forEach(entry => {
+          const val = Number(entry.valor);
+          if (entry.meio_pagamento === 'Dinheiro') {
+              balances.dinheiro += entry.tipo === 'entrada' ? val : -val;
+          } else {
+              balances.banco += entry.tipo === 'entrada' ? val : -val;
+          }
+      });
+      setAccountBalances(balances);
+
+      setFinancialData(Object.values(monthlyMap).sort((a, b) => {
+        const [monthA, yearA] = a.name.split('/');
+        const [monthB, yearB] = b.name.split('/');
+        // Simple heuristic for month order
+        const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+        const valA = (parseInt(yearA) * 12) + months.indexOf(monthA.toLowerCase());
+        const valB = (parseInt(yearB) * 12) + months.indexOf(monthB.toLowerCase());
+        return valA - valB;
+      }));
+
+      setExpenseCategories(Object.entries(catMap).map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 6)
+      );
+
+      const monthsRef = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+      setOccupancyData(Object.entries(occMap)
+        .map(([name, value]) => ({ name, reservas: value }))
+        .sort((a, b) => monthsRef.indexOf(a.name.toLowerCase()) - monthsRef.indexOf(b.name.toLowerCase()))
+      );
+
     } catch (err) {
-      console.error('Erro ao buscar configurações:', err);
+      console.error('Erro ao processar dashboard:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateUrl = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
+  if (loading && financialData.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32">
+        <IconLoader className="w-12 h-12 text-farm-600 animate-spin mb-4" />
+        <p className="text-gray-500 font-medium animate-pulse">Carregando inteligência financeira...</p>
+      </div>
+    );
+  }
 
-    // Auto-fix URL if it's not the embed version
-    let fixedUrl = newUrl.trim();
-    if (fixedUrl.includes('lookerstudio.google.com') && !fixedUrl.includes('/embed/')) {
-      fixedUrl = fixedUrl.replace('/reporting/', '/embed/reporting/');
-    }
+  return (
+    <div className="space-y-8 pb-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-4xl font-bold text-farm-900 font-serif">Dashboard Financeiro</h2>
+          <p className="text-gray-600 mt-1">Análise em tempo real da performance da fazenda.</p>
+        </div>
+        
+        <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100">
+          {(['month', 'quarter', 'year'] as const).map((r) => (
+            <button
+              key={r}
+              onClick={() => setTimeRange(r)}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timeRange === r ? 'bg-farm-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              {r === 'month' ? 'Mensal' : r === 'quarter' ? 'Trimestral' : 'Anual'}
+            </button>
+          ))}
+        </div>
+      </div>
 
-    try {
-      const { error } = await supabase
-        .from('site_settings')
-        .upsert({ key: 'looker_studio_url', value: fixedUrl }, { onConflict: 'key' });
+      {/* KPI Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <KpiCard 
+          title="Saldo do Período" 
+          value={formatCurrency(kpis.balanco)} 
+          subValue={`${kpis.balanco >= 0 ? '+' : ''}${formatCurrency(kpis.balanco)}`}
+          icon={<IconChart className="w-6 h-6" />}
+          trend={kpis.balanco >= 0 ? 'up' : 'down'}
+          color="farm"
+        />
+        <KpiCard 
+          title="Consumo PDV" 
+          value={formatCurrency(kpis.consumoPdv)} 
+          subValue="Total processado"
+          icon={<IconShoppingCart className="w-6 h-6" />}
+          color="blue"
+        />
+        <KpiCard 
+          title="Hóspedes Hoje" 
+          value={kpis.ocupacaoAtual} 
+          subValue="Estadias ativas"
+          icon={<IconUser className="w-6 h-6" />}
+          color="amber"
+        />
+        <KpiCard 
+          title="Novas Reservas" 
+          value={kpis.novasReservas} 
+          subValue="No período selecionado"
+          icon={<IconZap className="w-6 h-6" />}
+          color="purple"
+        />
+      </div>
 
-      if (error) throw error;
-      setDashboardUrl(fixedUrl);
-      setNewUrl(fixedUrl);
-      setIsEditing(false);
-    } catch (err) {
-      console.error('Erro ao atualizar URL:', err);
-      alert('Erro ao atualizar o dashboard.');
-    } finally {
-      setSubmitting(false);
-    }
+      {/* Account Balances Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                  <div className="bg-blue-50 p-3 rounded-xl text-blue-600">🏦</div>
+                  <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Saldo em Bancos</p>
+                      <h4 className="text-2xl font-black text-gray-800">{formatCurrency(accountBalances.banco)}</h4>
+                  </div>
+              </div>
+              <div className="text-[10px] bg-blue-50 text-blue-700 px-2 py-1 rounded font-bold">DISPONÍVEL</div>
+          </div>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                  <div className="bg-amber-50 p-3 rounded-xl text-amber-600">💵</div>
+                  <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Dinheiro em Caixa</p>
+                      <h4 className="text-2xl font-black text-gray-800">{formatCurrency(accountBalances.dinheiro)}</h4>
+                  </div>
+              </div>
+              <div className="text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded font-bold">ESPÉCIE</div>
+          </div>
+      </div>
+
+      {/* Main Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Receita vs Despesa */}
+        <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-xl font-bold text-gray-800 font-serif">Fluxo de Caixa Mensal</h3>
+            <div className="flex items-center gap-4 text-xs font-medium">
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-farm-500"></span> Receita</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-400"></span> Despesa</span>
+            </div>
+          </div>
+          <div className="h-[350px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={financialData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} tickFormatter={(value) => `R$ ${value/1000}k`} />
+                <Tooltip 
+                  cursor={{fill: '#f8fafc'}}
+                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                  formatter={(value: number) => [formatCurrency(value), '']}
+                />
+                <Bar dataKey="receita" fill="#389f76" radius={[6, 6, 0, 0]} barSize={32} />
+                <Bar dataKey="despesa" fill="#f87171" radius={[6, 6, 0, 0]} barSize={32} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Despesas por Categoria */}
+        <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+          <h3 className="text-xl font-bold text-gray-800 font-serif mb-8">Maiores Gastos</h3>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={expenseCategories}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {expenseCategories.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                   contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                   formatter={(value: number) => [formatCurrency(value), '']}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-6 space-y-3">
+            {expenseCategories.map((cat, idx) => (
+              <div key={cat.name} className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
+                  <span className="text-gray-500 truncate max-w-[120px]">{cat.name}</span>
+                </div>
+                <span className="font-bold text-gray-700">{formatCurrency(cat.value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Reservas Tendência */}
+        <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+          <h3 className="text-xl font-bold text-gray-800 font-serif mb-8">Volume de Reservas</h3>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={occupancyData}>
+                <defs>
+                  <linearGradient id="colorRes" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#389f76" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#389f76" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} />
+                <Tooltip 
+                   contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                />
+                <Area type="monotone" dataKey="reservas" stroke="#389f76" strokeWidth={3} fillOpacity={1} fill="url(#colorRes)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Informações Adicionais */}
+        <div className="bg-farm-900 rounded-3xl p-8 text-white relative overflow-hidden flex flex-col justify-center">
+          <div className="relative z-10">
+            <h3 className="text-2xl font-bold mb-4 font-serif italic">Relatórios Inteligentes</h3>
+            <p className="text-farm-100 text-sm leading-relaxed mb-6">
+              Este painel é alimentado em tempo real com todos os lançamentos de caixa, consumo nos PDVs e reservas realizadas. 
+              Diferente do relatório antigo, aqui os dados são processados instantaneamente.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <span className="bg-white/10 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-white/10">Sincronizado</span>
+              <span className="bg-white/10 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-white/10">Tempo Real</span>
+              <span className="bg-white/10 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-white/10">Privado</span>
+            </div>
+          </div>
+          {/* Decorative shapes */}
+          <div className="absolute top-[-20px] right-[-20px] w-40 h-40 bg-farm-800 rounded-full blur-3xl opacity-50"></div>
+          <div className="absolute bottom-[-40px] left-[-20px] w-64 h-64 bg-farm-700 rounded-full blur-3xl opacity-30"></div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// UI Components
+const KpiCard = ({ title, value, subValue, icon, trend, color }: any) => {
+  const colorClasses: any = {
+    farm: 'bg-farm-50 text-farm-700 border-farm-100',
+    blue: 'bg-blue-50 text-blue-700 border-blue-100',
+    amber: 'bg-amber-50 text-amber-700 border-amber-100',
+    purple: 'bg-purple-50 text-purple-700 border-purple-100',
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center mb-2">
-        <div>
-          <h2 className="text-3xl font-bold text-farm-900 font-serif">Relatórios Financeiros</h2>
-          <p className="text-gray-600 mt-1">Dados detalhados e transparência na gestão da fazenda.</p>
+    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+      <div className="flex justify-between items-start mb-4">
+        <div className={`p-3 rounded-2xl ${colorClasses[color]}`}>
+          {icon}
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="text-sm bg-farm-100 text-farm-700 px-4 py-2 rounded-lg font-bold hover:bg-farm-200 transition-colors border border-farm-200"
-          >
-            {isEditing ? 'Cancelar' : '⚙️ Configurar Dashboard'}
-          </button>
+        {trend && (
+          <span className={`text-[10px] font-black px-2 py-1 rounded-full ${trend === 'up' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {trend === 'up' ? '↑' : '↓'}
+          </span>
         )}
       </div>
-
-      {isEditing && (
-        <div className="bg-white p-6 rounded-xl shadow-md border border-farm-200 mb-6 fade-in">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">Link de Compartilhamento do Looker Studio</h3>
-          <form onSubmit={handleUpdateUrl} className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Cole o link do seu relatório (pode ser o link do navegador ou o link de incorporação).
-            </p>
-            <input
-              type="url"
-              required
-              value={newUrl}
-              onChange={(e) => setNewUrl(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
-              placeholder="https://lookerstudio.google.com/reporting/..."
-            />
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full bg-farm-600 text-white font-bold py-2 rounded-lg hover:bg-farm-700 disabled:opacity-50 transition-all"
-            >
-              {submitting ? 'Salvando...' : 'Salvar URL do Dashboard'}
-            </button>
-          </form>
-        </div>
-      )}
-
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px] sm:min-h-[800px] relative">
-        {loading ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-farm-700"></div>
-          </div>
-        ) : dashboardUrl ? (
-          <>
-            <div className="md:hidden bg-blue-50 p-3 text-xs text-blue-800 flex items-center gap-2 border-b border-blue-100">
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-              <span>Dica: No celular, gire o aparelho para "Paisagem" para ver o gráfico com mais detalhes.</span>
-            </div>
-            <iframe
-              width="100%"
-              height="1200"
-              src={dashboardUrl}
-              frameBorder="0"
-              style={{ border: 0 }}
-              allowFullScreen
-              sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
-            ></iframe>
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-32 px-6 text-center">
-            <div className="bg-gray-50 p-8 rounded-full mb-6">
-              <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold text-gray-800 mb-2">Dashboard não configurado</h3>
-            <p className="text-gray-500 max-w-md">
-              O dashboard interativo ainda não foi vinculado ao portal.
-              {isAdmin ? " Clique no botão de configuração acima para inserir o link do Looker Studio." : " Entre em contato com a administração para mais informações."}
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-farm-50 border border-farm-100 rounded-xl p-6 text-sm text-farm-800">
-        <h4 className="font-bold mb-2 flex items-center gap-2">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          Sobre os Dados
-        </h4>
-        <p>Os dados apresentados acima são atualizados mensalmente pela administração e refletem o balanço oficial da Fazenda São Bento. Caso tenha dúvidas sobre algum valor, entre em contato através do formulário de sugestões.</p>
+      <div>
+        <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">{title}</p>
+        <h4 className="text-2xl font-black text-gray-800">{value}</h4>
+        <p className="text-gray-400 text-[10px] mt-1 italic">{subValue}</p>
       </div>
     </div>
   );

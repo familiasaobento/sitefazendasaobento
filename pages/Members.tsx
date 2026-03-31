@@ -191,7 +191,7 @@ export const MembersPage: React.FC = () => {
                     <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden print:hidden hidden md:block">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
-                                <thead>
+                                <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
                                     <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
                                         <th className="px-6 py-4 font-semibold">Usuário</th>
                                         <th className="px-6 py-4 font-semibold">CPF</th>
