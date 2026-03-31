@@ -18,6 +18,7 @@ interface Profile {
     phone?: string;
     address?: string;
     email?: string;
+    member_status?: string;
     dependents?: Dependent[];
 }
 
@@ -27,6 +28,7 @@ export const MembersPage: React.FC = () => {
     const [printMode, setPrintMode] = useState<'simple' | 'detailed'>('simple');
     const [filter, setFilter] = useState<string>('');
     const [expandedProfileId, setExpandedProfileId] = useState<string | null>(null);
+    const [isAdmin, setIsAdmin] = useState(false);
 
     const fetchProfiles = async () => {
         setLoading(true);
@@ -48,7 +50,55 @@ export const MembersPage: React.FC = () => {
 
     useEffect(() => {
         fetchProfiles();
+        checkAdmin();
     }, []);
+
+    const checkAdmin = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+            setIsAdmin(profile?.role === 'admin');
+        }
+    };
+
+    const handleUpdateStatus = async (id: string, newStatus: string) => {
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ member_status: newStatus })
+                .eq('id', id);
+
+            if (error) throw error;
+
+            setProfiles(profiles.map(p =>
+                p.id === id ? { ...p, member_status: newStatus } : p
+            ));
+        } catch (err) {
+            console.error('Error updating status:', err);
+            alert('Erro ao atualizar status.');
+        }
+    };
+
+    const handleDeleteUser = async (id: string, name: string) => {
+        if (!confirm(`TEM CERTEZA? Isso excluirá permanentemente o acesso de "${name}". Esta ação não pode ser desfeita.`)) return;
+
+        try {
+            const { error } = await supabase.rpc('delete_user_account', { target_user_id: id });
+            if (error) {
+                const fallbackResponse = await supabase.from('profiles').delete().eq('id', id);
+                if (fallbackResponse.error) throw fallbackResponse.error;
+            }
+            setProfiles(profiles.filter(p => p.id !== id));
+            alert('Conta excluída com sucesso.');
+        } catch (err) {
+            console.error('Error deleting user:', err);
+            alert('Erro ao excluir usuário. Verifique se ele possui reservas ativas.');
+        }
+    };
 
     const handlePrint = (mode: 'simple' | 'detailed') => {
         setPrintMode(mode);
@@ -144,6 +194,28 @@ export const MembersPage: React.FC = () => {
                                         <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">E-mail</p>
                                         <p className="text-gray-700 truncate" title={profile.email}>{profile.email || '—'}</p>
                                     </div>
+                                    {isAdmin && (
+                                        <div className="col-span-2 pt-2 flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                            <select
+                                                value={profile.member_status || 'Ativo'}
+                                                onChange={(e) => handleUpdateStatus(profile.id, e.target.value)}
+                                                className={`text-[10px] font-bold uppercase rounded-md px-2 py-1 outline-none ${
+                                                    profile.member_status === 'Ativo' ? 'bg-green-100 text-green-700' :
+                                                    profile.member_status === 'Inativo' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                                                }`}
+                                            >
+                                                <option value="Ativo">Ativo</option>
+                                                <option value="Inativo">Inativo</option>
+                                                <option value="Licença">Licença</option>
+                                            </select>
+                                            <button 
+                                                onClick={() => handleDeleteUser(profile.id, profile.full_name)}
+                                                className="text-red-500 p-1 hover:bg-red-50 rounded"
+                                            >
+                                                <IconTrash className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {profile.address && (
@@ -197,7 +269,7 @@ export const MembersPage: React.FC = () => {
                                         <th className="px-6 py-4 font-semibold">CPF</th>
                                         <th className="px-6 py-4 font-semibold">Contato</th>
                                         <th className="px-6 py-4 font-semibold">E-mail</th>
-                                        <th className="px-6 py-4 font-semibold">Dependentes</th>
+                                        <th className="px-6 py-4 font-semibold text-right">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -237,25 +309,45 @@ export const MembersPage: React.FC = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    {profile.dependents && profile.dependents.length > 0 ? (
-                                                        <button
-                                                            onClick={() => toggleExpanded(profile.id)}
-                                                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all ${expandedProfileId === profile.id
-                                                                ? 'bg-blue-200 text-blue-900 ring-2 ring-blue-500 ring-offset-1'
-                                                                : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-                                                                }`}
-                                                        >
-                                                            {profile.dependents.length} dependentes
-                                                            <svg
-                                                                className={`w-3 h-3 transition-transform ${expandedProfileId === profile.id ? 'rotate-180' : ''}`}
-                                                                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                                    <div className="flex items-center justify-end gap-3">
+                                                        {profile.dependents && profile.dependents.length > 0 ? (
+                                                            <button
+                                                                onClick={() => toggleExpanded(profile.id)}
+                                                                className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all ${expandedProfileId === profile.id
+                                                                    ? 'bg-blue-200 text-blue-900 ring-2 ring-blue-500 ring-offset-1'
+                                                                    : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                                                    }`}
                                                             >
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                                            </svg>
-                                                        </button>
-                                                    ) : (
-                                                        <span className="text-gray-400 text-sm italic">Nenhum</span>
-                                                    )}
+                                                                {profile.dependents.length} dependentes
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-gray-400 text-sm italic">S/ dep.</span>
+                                                        )}
+
+                                                        {isAdmin && (
+                                                            <>
+                                                                <select
+                                                                    value={profile.member_status || 'Ativo'}
+                                                                    onChange={(e) => handleUpdateStatus(profile.id, e.target.value)}
+                                                                    className={`text-xs font-bold uppercase rounded-full px-3 py-1 outline-none border border-transparent hover:border-gray-200 ${
+                                                                        profile.member_status === 'Ativo' ? 'bg-green-100 text-green-700' :
+                                                                        profile.member_status === 'Inativo' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                                                                    }`}
+                                                                >
+                                                                    <option value="Ativo">Ativo</option>
+                                                                    <option value="Inativo">Inativo</option>
+                                                                    <option value="Licença">Licença</option>
+                                                                </select>
+                                                                <button
+                                                                    onClick={() => handleDeleteUser(profile.id, profile.full_name)}
+                                                                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                                    title="Excluir Sócio"
+                                                                >
+                                                                    <IconTrash className="w-5 h-5" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                             {expandedProfileId === profile.id && profile.dependents && (

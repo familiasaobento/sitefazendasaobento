@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { IconUser, IconPhone } from '../components/Icons';
+import { IconUser, IconPhone, IconTrash } from '../components/Icons';
 
 interface ReservationData {
     id: number;
@@ -32,6 +32,7 @@ export const VisitorsPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('');
     const [expandedVisitor, setExpandedVisitor] = useState<string | null>(null);
+    const [isAdmin, setIsAdmin] = useState(false);
 
     const fetchVisitors = async () => {
         setLoading(true);
@@ -107,7 +108,37 @@ export const VisitorsPage: React.FC = () => {
 
     useEffect(() => {
         fetchVisitors();
+        checkAdmin();
     }, []);
+
+    const checkAdmin = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+            setIsAdmin(profile?.role === 'admin');
+        }
+    };
+
+    const handleDeleteVisitor = async (id: string, name: string) => {
+        if (!confirm(`TEM CERTEZA? Isso excluirá permanentemente o acesso e histórico de "${name}". Esta ação não pode ser desfeita.`)) return;
+
+        try {
+            const { error } = await supabase.rpc('delete_user_account', { target_user_id: id });
+            if (error) {
+                const fallbackResponse = await supabase.from('profiles').delete().eq('id', id);
+                if (fallbackResponse.error) throw fallbackResponse.error;
+            }
+            setVisitors(visitors.filter(v => v.id !== id));
+            alert('Cadastro de visitante excluído com sucesso.');
+        } catch (err) {
+            console.error('Error deleting visitor:', err);
+            alert('Erro ao excluir visitante.');
+        }
+    };
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr + 'T00:00:00').toLocaleDateString('pt-BR');
@@ -156,6 +187,7 @@ export const VisitorsPage: React.FC = () => {
                                     <th className="px-6 py-4 font-semibold">CPF / Telefone</th>
                                     <th className="px-6 py-4 font-semibold">Sócio Responsável</th>
                                     <th className="px-6 py-4 font-semibold">Histórico de Visitas</th>
+                                    <th className="px-6 py-4 font-semibold text-right">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -203,6 +235,17 @@ export const VisitorsPage: React.FC = () => {
                                                 )}
                                             </div>
                                         </td>
+                                        <td className="px-6 py-4 text-right">
+                                            {isAdmin && (
+                                                <button
+                                                    onClick={() => handleDeleteVisitor(visitor.id, visitor.full_name)}
+                                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                    title="Excluir Visitante"
+                                                >
+                                                    <IconTrash className="w-5 h-5" />
+                                                </button>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -223,6 +266,14 @@ export const VisitorsPage: React.FC = () => {
                                 <p className="font-bold text-gray-900">{visitor.full_name}</p>
                                 <p className="text-xs text-gray-500">{visitor.email}</p>
                             </div>
+                            {isAdmin && (
+                                <button
+                                    onClick={() => handleDeleteVisitor(visitor.id, visitor.full_name)}
+                                    className="p-2 text-red-500 bg-red-50 rounded-lg"
+                                >
+                                    <IconTrash className="w-5 h-5" />
+                                </button>
+                            )}
                         </div>
                         <div className="grid grid-cols-2 gap-y-3 text-xs">
                             <div>

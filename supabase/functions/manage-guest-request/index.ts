@@ -82,21 +82,24 @@ serve(async (req) => {
 
             if (!request) throw new Error('Request not found')
 
-            // 1. Invite User
-            const { data: invitee, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(request.email, {
-                data: {
-                    full_name: request.full_name,
-                    role: 'visitor'
-                }
-            })
+            // 1. Create or Find User (Silently - avoiding duplicate Supabase email)
+            let userId: string | undefined;
+            const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
+            const found = existingUser.users.find(u => u.email === request.email);
             
-            // If user already exists, it might fail or just send the email. 
-            // We should find the user ID regardless.
-            let userId = invitee?.user?.id;
-            if (!userId) {
-                const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
-                const found = existingUser.users.find(u => u.email === request.email);
-                userId = found?.id;
+            if (found) {
+                userId = found.id;
+            } else {
+                const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+                    email: request.email,
+                    email_confirm: true,
+                    user_metadata: {
+                        full_name: request.full_name,
+                        role: 'visitor'
+                    }
+                });
+                if (createError) throw createError;
+                userId = newUser?.user?.id;
             }
 
             if (!userId) throw new Error('Could not create or find user');
@@ -129,33 +132,28 @@ serve(async (req) => {
                 .select()
                 .single()
 
-            // 4. Generate Invitation Link
+            // 4. Generate Recovery/Setup Link
             let linkResult;
             try {
-                // First try 'invite' type
+                // We use 'recovery' because it is the most reliable way to trigger the 
+                // PASSWORD_RECOVERY event in the app, allowing the user to set their first password.
                 linkResult = await supabaseAdmin.auth.admin.generateLink({
-                    type: 'invite',
+                    type: 'recovery',
                     email: request.email,
                     options: {
-                        // IMPORTANTE: Alterado temporariamente para localhost para teste local do usuário
-                        // LEMBRAR DE VOLTAR PARA https://portal.fazendafamiliasaobento.com.br ANTES DO DEPLOY FINAL
-                        redirectTo: 'http://localhost:5173',
-                        data: {
-                            full_name: request.full_name,
-                            role: 'visitor'
-                        }
+                        // PRODUÇÃO
+                        redirectTo: 'https://portal.fazendafamiliasaobento.com.br'
                     }
                 });
 
-                // If invite fails (likely user already exists), try magiclink
                 if (linkResult.error) {
-                    await logToDB("Invite link failed, trying magiclink", { error: linkResult.error });
+                    await logToDB("Recovery link failed, trying magiclink as fallback", { error: linkResult.error });
                     linkResult = await supabaseAdmin.auth.admin.generateLink({
                         type: 'magiclink',
                         email: request.email,
                         options: { 
-                            // LEMBRAR DE VOLTAR PARA https://portal.fazendafamiliasaobento.com.br ANTES DO DEPLOY FINAL
-                            redirectTo: 'http://localhost:5173' 
+                            // PRODUÇÃO
+                            redirectTo: 'https://portal.fazendafamiliasaobento.com.br' 
                         }
                     });
                 }
@@ -183,34 +181,159 @@ serve(async (req) => {
             const resendApiKey = Deno.env.get('RESEND_API_KEY');
             if (resendApiKey) {
                 await logToDB("Enviando e-mail de voucher via Resend", { to: request.email, inviteLink });
+                
+                const emailHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+                    <style>
+                        body { margin: 0; padding: 0; background-color: #f4f6f2; }
+                        .container { 
+                            width: 100%; 
+                            max-width: 600px; 
+                            margin: 0 auto; 
+                            background-color: #f4f6f2; 
+                            background-image: url('https://portal.fazendafamiliasaobento.com.br/login-bg.jpg');
+                            background-size: cover;
+                            background-position: center;
+                            border-radius: 24px;
+                            overflow: hidden;
+                            box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+                            margin-top: 40px;
+                            margin-bottom: 40px;
+                            border: 1px solid #e0e4da;
+                        }
+                        .header { 
+                            background-color: rgba(85, 108, 59, 0.9); 
+                            padding: 40px 20px; 
+                            text-align: center;
+                            color: #ffffff;
+                        }
+                        .content { 
+                            padding: 40px; 
+                            font-family: 'Inter', sans-serif; 
+                            color: #374151; 
+                            line-height: 1.6;
+                            background-color: rgba(255, 255, 255, 0.94); /* Branca com leve transparência para ver a imagem atrás */
+                            margin: 20px;
+                            border-radius: 20px;
+                        }
+                        .title { 
+                            font-family: 'Merriweather', serif; 
+                            color: #1b4332; 
+                            font-size: 28px; 
+                            margin-bottom: 24px; 
+                            text-align: center;
+                        }
+                        .voucher-card { 
+                            background-color: #ffffff; 
+                            border: 2px dashed #556C3B; 
+                            border-radius: 16px; 
+                            padding: 30px; 
+                            margin: 30px 0;
+                            position: relative;
+                        }
+                        .voucher-label { 
+                            font-size: 11px; 
+                            text-transform: uppercase; 
+                            letter-spacing: 2px; 
+                            color: #556C3B; 
+                            font-weight: 700;
+                            margin-bottom: 8px;
+                        }
+                        .voucher-value { 
+                            font-size: 18px; 
+                            font-weight: 600; 
+                            color: #1b4332;
+                            margin-bottom: 20px;
+                        }
+                        .btn { 
+                            display: block; 
+                            background-color: #556C3B; 
+                            color: #ffffff !important; 
+                            text-decoration: none; 
+                            padding: 18px 30px; 
+                            border-radius: 12px; 
+                            text-align: center; 
+                            font-weight: 700;
+                            font-size: 16px;
+                            letter-spacing: 0.5px;
+                            box-shadow: 0 4px 12px rgba(85,108,59,0.2);
+                        }
+                        .footer { 
+                            text-align: center; 
+                            padding-bottom: 40px; 
+                            color: #9ca3af; 
+                            font-size: 12px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h2 style="margin:0; font-family: 'Merriweather', serif; letter-spacing: 2px;">FAZENDA SÃO BENTO</h2>
+                        </div>
+                        <div class="content">
+                            <h1 class="title">Sua reserva foi confirmada!</h1>
+                            <p>Olá <strong>${request.full_name}</strong>,</p>
+                            <p>Temos o prazer de informar que sua solicitação de reserva na Fazenda São Bento foi <strong>aprovada</strong> pela nossa administração.</p>
+                            
+                            <div class="voucher-card">
+                                <div style="border-bottom: 1px solid #f0f2ed; margin-bottom: 20px; padding-bottom: 10px;">
+                                    <div class="voucher-label">Acomodação</div>
+                                    <div class="voucher-value">${accommodation || 'A definir'}</div>
+                                </div>
+                                
+                                <div style="display: flex; gap: 20px; border-bottom: 1px solid #f0f2ed; margin-bottom: 20px; padding-bottom: 10px;">
+                                    <div style="flex: 1;">
+                                        <div class="voucher-label">Chegada</div>
+                                        <div class="voucher-value">${request.check_in.split('-').reverse().join('/')}</div>
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <div class="voucher-label">Saída</div>
+                                        <div class="voucher-value">${request.check_out.split('-').reverse().join('/')}</div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="voucher-label">Hóspedes (${request.num_guests})</div>
+                                    <div class="voucher-value">
+                                        <ul style="margin: 0; padding: 0; list-style: none;">
+                                            <li>• ${request.full_name} (Titular)</li>
+                                            ${(request.guests_details || [])
+                                                .filter((g: any) => g.name && g.name.trim() !== "" && g.name.toLowerCase() !== request.full_name.toLowerCase())
+                                                .map((g: any) => `<li>• ${g.name}</li>`)
+                                                .join('')}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <h3 style="color:#1b4332; font-family: 'Merriweather', serif; margin-top: 40px; text-align: center;">Crie seu Acesso</h3>
+                            <p style="text-align: center; font-size: 14px;">Para acessar seus QR Codes de entrada e gerenciar sua estadia, defina uma senha de acesso:</p>
+                            
+                            <div style="margin: 30px 0; text-align: center;">
+                                <a href="${inviteLink}" class="btn" style="color: #ffffff !important; display: inline-block;">DEFINIR SENHA E ACESSAR</a>
+                            </div>
+                            
+                            <p style="font-size: 12px; color: #6b7280; text-align: center; font-style: italic;">
+                                Seja bem-vindo à nossa família! Estamos ansiosos para recebê-lo.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        &copy; 2024 Fazenda São Bento • Portal da Família
+                    </div>
+                </body>
+                </html>
+                `;
+
                 const emailPayload = {
                     from: 'Fazenda São Bento <reservas@familiasaobento.com>',
                     to: [request.email],
                     subject: `✅ Reserva Confirmada - Voucher Fazenda São Bento`,
-                    html: `
-                        <div style="font-family:serif;max-width:600px;margin:auto;padding:20px;border:1px solid #eee;border-radius:12px;">
-                            <h1 style="color:#556C3B;text-align:center;">Voucher de Reserva</h1>
-                            <p>Olá <strong>${request.full_name}</strong>,</p>
-                            <p>Temos o prazer de informar que sua solicitação de reserva na Fazenda São Bento foi <strong>Aprovada</strong>!</p>
-                            
-                            <div style="background:#f9f9f9;padding:20px;border-radius:8px;margin:20px 0;">
-                                <p><strong>📍 Local:</strong> ${accommodation || 'A definir'}</p>
-                                <p><strong>📅 Chegada:</strong> ${request.check_in.split('-').reverse().join('/')}</p>
-                                <p><strong>📅 Saída:</strong> ${request.check_out.split('-').reverse().join('/')}</p>
-                                <p><strong>👥 Hóspedes:</strong> ${request.num_guests} pessoas</p>
-                            </div>
-                            
-                            <h2 style="color:#556C3B;">Seu Acesso</h2>
-                            <p>Para acessar seus QR Codes de entrada, verificar sua comanda e atualizar seu cadastro, você deve agora definir sua senha no nosso portal:</p>
-                            <p style="text-align:center;">
-                                <a href="${inviteLink}" style="background:#556C3B;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Definir Senha e Acessar</a>
-                            </p>
-                            <p style="font-size:12px;color:#999;">* Utilize o mesmo e-mail desta mensagem para o acesso.</p>
-                            
-                            <br/>
-                            <p>Seja bem-vindo à Fazenda!</p>
-                        </div>
-                    `
+                    html: emailHtml
                 };
 
                 const resendResponse = await fetch('https://api.resend.com/emails', {

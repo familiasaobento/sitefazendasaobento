@@ -9,6 +9,7 @@ interface Profile {
     approved: boolean;
     created_at: string;
     host_name?: string;
+    member_status?: string;
 }
 
 export const AdminUsersPage: React.FC = () => {
@@ -21,7 +22,7 @@ export const AdminUsersPage: React.FC = () => {
         try {
             const { data, error } = await supabase
                 .from('profiles')
-                .select('id, full_name, role, approved, created_at, host_name')
+                .select('id, full_name, role, approved, created_at, host_name, member_status')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -103,6 +104,24 @@ export const AdminUsersPage: React.FC = () => {
         } catch (err) {
             console.error('Error deleting user:', err);
             alert('Erro ao excluir usuário.\nVerifique se este usuário possui Reservas, Consumos no PDV ou Lançamentos vinculados a ele. Caso tenha, primeiro cancele/exclua o histórico dele.');
+        }
+    };
+
+    const handleUpdateStatus = async (id: string, newStatus: string) => {
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ member_status: newStatus })
+                .eq('id', id);
+
+            if (error) throw error;
+
+            setProfiles(profiles.map(p =>
+                p.id === id ? { ...p, member_status: newStatus } : p
+            ));
+        } catch (err) {
+            console.error('Error updating status:', err);
+            alert('Erro ao atualizar status do cadastro.');
         }
     };
 
@@ -220,6 +239,19 @@ export const AdminUsersPage: React.FC = () => {
                                         }`}>
                                         {profile.approved ? 'Acesso Liberado' : 'Pendente'}
                                     </span>
+                                    
+                                    <select
+                                        value={profile.member_status || 'Ativo'}
+                                        onChange={(e) => handleUpdateStatus(profile.id, e.target.value)}
+                                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold outline-none cursor-pointer appearance-none ${
+                                            profile.member_status === 'Ativo' ? 'bg-green-50 text-green-700' :
+                                            profile.member_status === 'Inativo' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700'
+                                        }`}
+                                    >
+                                        <option value="Ativo">🟢 Ativo</option>
+                                        <option value="Inativo">🔴 Inativo</option>
+                                        <option value="Licença">🟠 Licença</option>
+                                    </select>
                                 </div>
 
                                 <button
@@ -244,7 +276,8 @@ export const AdminUsersPage: React.FC = () => {
                                         <th className="px-6 py-4 font-semibold">Usuário</th>
                                         <th className="px-6 py-4 font-semibold">Responsável / Convite</th>
                                         <th className="px-6 py-4 font-semibold">Tipo</th>
-                                        <th className="px-6 py-4 font-semibold">Status de Acesso</th>
+                                        <th className="px-6 py-4 font-semibold">Status Acesso</th>
+                                        <th className="px-6 py-4 font-semibold">Status Cadastro</th>
                                         <th className="px-6 py-4 font-semibold text-right">Ações</th>
                                     </tr>
                                 </thead>
@@ -307,6 +340,20 @@ export const AdminUsersPage: React.FC = () => {
                                                     }`}>
                                                     {profile.approved ? 'Acesso Liberado' : 'Aguardando Aprovação'}
                                                 </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <select
+                                                    value={profile.member_status || 'Ativo'}
+                                                    onChange={(e) => handleUpdateStatus(profile.id, e.target.value)}
+                                                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold outline-none cursor-pointer appearance-none border border-transparent hover:border-gray-200 transition-all ${
+                                                        profile.member_status === 'Ativo' ? 'bg-green-50 text-green-700' :
+                                                        profile.member_status === 'Inativo' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700'
+                                                    }`}
+                                                >
+                                                    <option value="Ativo">🟢 Ativo</option>
+                                                    <option value="Inativo">🔴 Inativo</option>
+                                                    <option value="Licença">🟠 Licença</option>
+                                                </select>
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-2">

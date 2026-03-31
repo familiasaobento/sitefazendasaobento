@@ -204,6 +204,81 @@ const LoginPage = ({ onAuthChange }: { onAuthChange: () => void }) => {
   );
 };
 
+const PasswordSetupModal = ({ onComplete }: { onComplete: () => void }) => {
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password !== confirmPassword) {
+      setError('As senhas não coincidem');
+      return;
+    }
+    if (password.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    const { error } = await supabase.auth.updateUser({ password });
+    
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+    } else {
+      onComplete();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full animate-fade-in">
+        <div className="text-center mb-6">
+          <div className="bg-farm-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-farm-200">
+            <IconLock className="w-8 h-8 text-farm-700" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 font-serif">Defina sua Senha</h2>
+          <p className="text-gray-600 mt-2 text-sm">Bem-vindo à Fazenda São Bento! Para sua segurança, defina uma senha de acesso ao portal.</p>
+        </div>
+        <form onSubmit={handleUpdatePassword} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nova Senha</label>
+            <input
+              type="password"
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Confirme a Senha</label>
+            <input
+              type="password"
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+          </div>
+          {error && <p className="text-red-500 text-sm">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-farm-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-farm-800 transition-colors shadow-lg disabled:opacity-50"
+          >
+            {loading ? 'Salvando...' : 'Definir Senha e Acessar'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const ApprovalPending = ({ onSignOut }: { onSignOut: () => void }) => (
   <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
     <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
@@ -237,6 +312,7 @@ const App: React.FC = () => {
   const [userName, setUserName] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<Page>(Page.HOME);
   const [loading, setLoading] = useState(true);
+  const [showPasswordSetup, setShowPasswordSetup] = useState(false);
 
   // Sync currentPage with URL hash for navigation persistence and back button support
   useEffect(() => {
@@ -306,11 +382,20 @@ const App: React.FC = () => {
       else setLoading(false);
     });
 
+     // Check for recovery link in URL on mount
+    const hash = window.location.hash;
+    if (hash && (hash.includes('type=recovery') || hash.includes('type=invite'))) {
+      setShowPasswordSetup(true);
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (session) {
         if (event === 'SIGNED_IN' && !localStorage.getItem('portal_last_page')) {
           setCurrentPage(Page.HOME);
+        }
+        if (event === 'PASSWORD_RECOVERY') {
+          setShowPasswordSetup(true);
         }
         checkUserInfo(session.user.id);
       } else {
@@ -334,7 +419,7 @@ const App: React.FC = () => {
       // to avoid throwing an error if nothing is found (it just returns an empty array).
       const { data, error } = await supabase
         .from('profiles')
-        .select('approved, role, full_name')
+        .select('approved, role, full_name, member_status')
         .eq('id', userId);
 
       if (error) throw error;
@@ -344,8 +429,13 @@ const App: React.FC = () => {
       const isSuperAdmin = email === 'admin@familiasaobento.com';
 
       if (data && data.length > 0) {
+        let role = data[0].role;
+        // Se for sócio mas estiver inativo ou de licença, atua como visitante
+        if (role === 'member' && (data[0].member_status === 'Inativo' || data[0].member_status === 'Licença')) {
+          role = 'visitor';
+        }
         setIsApproved(data[0].approved === true || isSuperAdmin);
-        setUserRole(isSuperAdmin ? 'admin' : data[0].role);
+        setUserRole(isSuperAdmin ? 'admin' : role);
         setUserName(data[0].full_name || email.split('@')[0] || 'Usuário');
       } else {
         setIsApproved(isSuperAdmin);
@@ -481,7 +571,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout
+     <Layout
       currentPage={currentPage}
       onNavigate={setCurrentPage}
       onLogout={handleSignOut}
@@ -492,6 +582,7 @@ const App: React.FC = () => {
       fullWidth={currentPage === Page.RESERVATIONS || currentPage === Page.ACTIVE_STAYS}
     >
       {renderContent()}
+      {showPasswordSetup && <PasswordSetupModal onComplete={() => setShowPasswordSetup(false)} />}
     </Layout>
   );
 };
