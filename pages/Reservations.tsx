@@ -322,9 +322,10 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
     
     setIsProcessingCheckin(true);
     try {
-      const guests = Array.isArray(selectedResForCheckin.guests_details) && selectedResForCheckin.guests_details.length > 0
-        ? selectedResForCheckin.guests_details 
-        : [{ name: selectedResForCheckin.name || 'Hóspede 1', age: '' }];
+      const guests = Array.from({ length: selectedResForCheckin.num_guests || 1 }).map((_, idx) => {
+        const detail = Array.isArray(selectedResForCheckin.guests_details) ? selectedResForCheckin.guests_details[idx] : null;
+        return detail || { name: idx === 0 ? selectedResForCheckin.name : `Hóspede ${idx + 1}`, age: '' };
+      });
 
       const stayInserts = guests.map((guest: any, idx: number) => {
         const manualCode = wristbandCodes[idx];
@@ -488,19 +489,19 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
         <div className="flex flex-col gap-6 no-print px-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 font-serif flex items-center gap-3 italic">
-                <IconCalendar className="w-8 h-8 md:w-10 md:h-10 text-farm-800" />
-                {isAdmin ? 'Gestão de Ocupação & Reservas' : 'Minhas Reservas'}
+              <h2 className="text-xl md:text-4xl font-bold text-gray-900 font-serif flex items-center gap-2 italic">
+                <IconCalendar className="w-6 h-6 md:w-10 md:h-10 text-farm-800" />
+                {isAdmin ? 'Gestão de Reservas' : 'Minhas Reservas'}
               </h2>
-              <p className="text-gray-500 text-sm md:text-lg mt-1 ml-1">
+              <p className="text-[10px] md:text-lg text-gray-500 mt-1 ml-1 leading-tight">
                 {isAdmin 
-                  ? 'Painel unificado para controle de hóspedes, mapa de ocupação e financeiro.' 
-                  : 'Acompanhe suas reservas na Fazenda São Bento.'}
+                  ? 'Controle de hóspedes, ocupação e financeiro.' 
+                  : 'Acompanhe suas reservas na Fazenda.'}
               </p>
             </div>
 
             {isAdmin && (
-              <div className="bg-white p-1 rounded-2xl flex shadow-sm border border-gray-100 ring-1 ring-gray-50 overflow-x-auto whitespace-nowrap max-w-full custom-scrollbar scrollbar-hide">
+              <div className="bg-gray-100/50 p-1 rounded-2xl flex shadow-inner border border-gray-100 overflow-x-auto whitespace-nowrap max-w-full custom-scrollbar scrollbar-hide">
                 <button onClick={() => setAdminTab('map')} className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 text-xs flex-shrink-0 ${adminTab === 'map' ? 'bg-farm-600 text-white shadow-lg shadow-farm-200' : 'text-gray-500 hover:bg-gray-50'}`}>
                   <IconMap className="w-4 h-4" /> Mapa
                 </button>
@@ -557,19 +558,17 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                   </button>
                 </div>
 
-                <div className="overflow-x-auto custom-scrollbar">
+                <div className="hidden md:block overflow-x-auto custom-scrollbar">
                   <div className="min-w-[1400px] w-full">
+                    {/* ... (existing map content) ... */}
                     <div className="flex bg-gray-50/50">
                       <div className="w-48 flex-shrink-0 p-4 font-black text-[10px] text-gray-400 uppercase tracking-widest border-r border-gray-100 sticky left-0 bg-gray-50 z-30">Acomodação</div>
                       <div className="flex-1 flex overflow-hidden">
-                        {Array.from({ length: new Date(selectedYear, selectedMonth + 1, 0).getDate() }).map((_, i) => {
-                          const isToday = new Date().getDate() === i+1 && new Date().getMonth() === selectedMonth && new Date().getFullYear() === selectedYear;
-                          return (
-                            <div key={i} className={`flex-1 text-center p-3 border-r border-gray-100 text-[11px] font-bold ${isToday ? 'bg-farm-600 text-white shadow-inner' : 'text-gray-500'}`}>
-                              {i + 1}
-                            </div>
-                          );
-                        })}
+                        {Array.from({ length: new Date(selectedYear, selectedMonth + 1, 0).getDate() }).map((_, i) => (
+                          <div key={i} className={`flex-1 text-center p-3 border-r border-gray-100 text-[11px] font-bold ${new Date().getDate() === i+1 && new Date().getMonth() === selectedMonth && new Date().getFullYear() === selectedYear ? 'bg-farm-600 text-white shadow-inner' : 'text-gray-500'}`}>
+                            {i + 1}
+                          </div>
+                        ))}
                       </div>
                     </div>
 
@@ -605,8 +604,8 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                                     return start <= viewEnd && end >= viewStart;
                                   })
                                   .map(r => {
-                                    const start = new Date(r.check_in + 'T00:00:00');
-                                    const end = new Date(r.check_out + 'T00:00:00');
+                                    const start = new Date(r.check_in + 'T12:00:00');
+                                    const end = new Date(r.check_out + 'T12:00:00');
                                     const monthDays = new Date(selectedYear, selectedMonth + 1, 0).getDate();
                                     const startDay = Math.max(1, (start.getMonth() === selectedMonth && start.getFullYear() === selectedYear) ? start.getDate() : 1);
                                     const endDay = Math.min(monthDays, (end.getMonth() === selectedMonth && end.getFullYear() === selectedYear) ? end.getDate() : monthDays);
@@ -616,33 +615,23 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                                     const stay = r.estadias?.[0];
                                     const isActive = stay?.status === 'ativa';
                                     const isFinished = stay?.status === 'finalizada';
-                                    const isCheckinPossible = r.status === 'confirmed' && !isActive && !isFinished;
-
-                                    let barColor = 'bg-yellow-400';
+                                    
+                                    let barColor = r.status === 'confirmed' ? 'bg-green-500' : 'bg-yellow-400';
                                     if (isActive) barColor = 'bg-blue-600 shadow-lg ring-2 ring-blue-100 z-10';
                                     else if (isFinished) barColor = 'bg-gray-400 opacity-60';
-                                    else if (r.status === 'confirmed') barColor = 'bg-green-500';
 
                                     return (
                                       <div
                                         key={r.id}
                                         onClick={() => {
-                                          if ((isActive || isFinished) && stay?.id) {
-                                            setSelectedStayId(stay.id);
-                                            setShowProforma(true);
-                                          } else if (isCheckinPossible) {
-                                            handleStartCheckin(r);
-                                          }
+                                          if ((isActive || isFinished) && stay?.id) { setSelectedStayId(stay.id); setShowProforma(true); } 
+                                          else if (r.status === 'confirmed' && !isActive && !isFinished) { handleStartCheckin(r); }
                                         }}
-                                        className={`absolute top-1.5 bottom-1.5 rounded-lg shadow-sm p-2 text-[9px] font-bold text-white overflow-hidden whitespace-nowrap transition-all hover:z-20 hover:scale-y-105 border border-white/20 ${barColor} ${(isActive || isCheckinPossible || isFinished) ? 'cursor-pointer' : 'cursor-default'}`}
+                                        className={`absolute top-1.5 bottom-1.5 rounded-lg shadow-sm p-2 text-[9px] font-bold text-white overflow-hidden whitespace-nowrap transition-all border border-white/20 ${barColor} cursor-pointer`}
                                         style={{ left: `${left}%`, width: `${width}%` }}
-                                        title={`${r.name || r.profiles?.full_name || 'Hóspede'} (${formatDate(r.check_in)} - ${formatDate(r.check_out)})`}
+                                        title={`${r.name} (${formatDate(r.check_in)} - ${formatDate(r.check_out)})`}
                                       >
-                                        <div className="flex items-center gap-1 overflow-hidden">
-                                          {isActive && <IconZap className="w-2.5 h-2.5 flex-shrink-0" />}
-                                          {isFinished && <IconCheck className="w-2.5 h-2.5 flex-shrink-0" />}
-                                          <span className="truncate">{r.name || r.profiles?.full_name || 'Hóspede'}</span>
-                                        </div>
+                                        <span className="truncate">{r.name || r.profiles?.full_name}</span>
                                       </div>
                                     );
                                   })
@@ -654,6 +643,60 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                       </React.Fragment>
                     ))}
                   </div>
+                </div>
+
+                {/* Mobile Map View - Status Card List */}
+                <div className="md:hidden space-y-4 p-4">
+                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 mb-4">
+                    <p className="text-[10px] text-amber-800 leading-tight">O mapa completo é otimizado para telas maiores. Abaixo você vê o status simplificado de cada acomodação para hoje.</p>
+                  </div>
+                  {accommodationGroups.map(group => (
+                    <div key={group.name} className="space-y-4">
+                      <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-2">{group.name}</h4>
+                      <div className="grid grid-cols-1 gap-3">
+                        {group.units.map(unit => {
+                          const today = new Date().toISOString().split('T')[0];
+                          const reservationsToday = allReservations.filter(r => 
+                            r.accommodation === unit && 
+                            r.check_in <= today && 
+                            r.check_out >= today &&
+                            r.status !== 'rejected' && r.status !== 'canceled'
+                          );
+                          const res = reservationsToday[0];
+                          const stay = res?.estadias?.[0];
+                          
+                          return (
+                            <div key={unit} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between gap-4">
+                               <div className="flex-1">
+                                 <p className="text-sm font-bold text-gray-800">{unit.replace('Casa Grande - ', '')}</p>
+                                 {res ? (
+                                   <p className="text-[10px] text-gray-500 mt-0.5"><strong>{res.name || res.profiles?.full_name}</strong> ({formatDate(res.check_in)} a {formatDate(res.check_out)})</p>
+                                 ) : (
+                                   <p className="text-[10px] text-gray-400 italic mt-0.5">Disponível</p>
+                                 )}
+                               </div>
+                               <div className="flex-shrink-0">
+                                 {res ? (
+                                   <div className="flex flex-col gap-2">
+                                     <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider border ${
+                                       stay?.status === 'ativa' ? 'bg-blue-600 text-white border-blue-500' : 'bg-green-500 text-white border-green-400'
+                                     }`}>
+                                       {stay?.status === 'ativa' ? 'Local' : 'Confirmada'}
+                                     </span>
+                                     {res.status === 'confirmed' && !stay && (
+                                       <button onClick={() => handleStartCheckin(res)} className="bg-farm-600 text-white px-2 py-1 rounded-lg text-[8px] font-black uppercase">Check-in</button>
+                                     )}
+                                   </div>
+                                 ) : (
+                                   <div className="w-16 h-2 bg-gray-200 rounded-full"></div>
+                                 )}
+                               </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -948,7 +991,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
             )}
 
             {adminTab === 'in_house' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 md:gap-6 px-0 md:px-0">
                 {activeStays.length === 0 ? (
                   <div className="col-span-full bg-white p-20 rounded-3xl border border-dashed border-gray-200 text-center">
                     <IconUser className="w-16 h-16 text-gray-100 mx-auto mb-4" />
@@ -1184,7 +1227,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                     <p className="text-sm text-gray-500 mt-2">Período: Próximos {planningRange} dias ({new Date().toLocaleDateString('pt-BR')} até {new Date(Date.now() + (planningRange * 24 * 60 * 60 * 1000)).toLocaleDateString('pt-BR')})</p>
                   </div>
 
-                  <div className="overflow-x-auto">
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left">
                       <thead>
                         <tr className="bg-gray-50 text-gray-500 text-[10px] uppercase tracking-widest font-black border-b border-gray-100">
@@ -1205,10 +1248,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                             const future = new Date();
                             future.setDate(now.getDate() + planningRange);
                             future.setHours(23, 59, 59, 999);
-                            
-                            // Include if it starts within the range OR is already in house
-                            return (checkInDate >= now && checkInDate <= future) || 
-                                   (res.status === 'em_curso');
+                            return (checkInDate >= now && checkInDate <= future) || (res.status === 'em_curso');
                           })
                           .sort((a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime())
                           .map(res => (
@@ -1242,22 +1282,63 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                               </td>
                             </tr>
                           ))}
-                        {allReservations.filter(res => {
-                          const checkInDate = new Date(res.check_in + 'T12:00:00');
-                          const now = new Date();
-                          now.setHours(0,0,0,0);
-                          const future = new Date();
-                          future.setDate(now.getDate() + planningRange);
-                          return (checkInDate >= now && checkInDate <= future) || (res.status === 'em_curso');
-                        }).length === 0 && (
-                          <tr>
-                            <td colSpan={6} className="px-6 py-12 text-center text-gray-400 italic">
-                               Nenhuma reserva planejada para este período.
-                            </td>
-                          </tr>
-                        )}
                       </tbody>
                     </table>
+                  </div>
+
+                  {/* Mobile Planning Cards */}
+                  <div className="md:hidden space-y-4">
+                    {allReservations
+                      .filter(res => {
+                        const checkInDate = new Date(res.check_in + 'T12:00:00');
+                        const now = new Date();
+                        now.setHours(0, 0, 0, 0);
+                        const future = new Date();
+                        future.setDate(now.getDate() + planningRange);
+                        future.setHours(23, 59, 59, 999);
+                        return (checkInDate >= now && checkInDate <= future) || (res.status === 'em_curso');
+                      })
+                      .sort((a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime())
+                      .map(res => (
+                        <div key={res.id} className="bg-gray-50 p-5 rounded-2xl border border-gray-100 space-y-4">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <p className="font-black text-farm-900 text-lg leading-tight">{res.name || res.profiles?.full_name}</p>
+                              <span className={`mt-2 inline-block px-3 py-1 rounded-full text-[10px] font-bold ${res.accommodation === 'A definir' ? 'bg-red-50 text-red-600' : 'bg-white text-farm-700 border border-farm-100'}`}>
+                                {res.accommodation}
+                              </span>
+                            </div>
+                            <div className="bg-white px-3 py-2 rounded-xl text-center shadow-sm border border-gray-100">
+                              <p className="text-[8px] font-black text-gray-400 uppercase">Pax</p>
+                              <p className="text-lg font-black text-gray-800">{res.num_guests}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-white p-3 rounded-xl border border-gray-100">
+                              <p className="text-[8px] font-black text-gray-400 uppercase mb-1">Chegada</p>
+                              <p className="text-xs font-bold text-gray-700">{new Date(res.check_in + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                            </div>
+                            <div className="bg-white p-3 rounded-xl border border-gray-100">
+                              <p className="text-[8px] font-black text-gray-400 uppercase mb-1">Saída</p>
+                              <p className="text-xs font-bold text-gray-700">{new Date(res.check_out + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center pt-2">
+                             <span className={`text-[10px] font-black uppercase tracking-tighter ${
+                               res.status === 'confirmed' ? 'text-green-600' : 
+                               res.status === 'pending' ? 'text-orange-500' : 
+                               res.status === 'em_curso' ? 'text-blue-600' : 'text-gray-400'
+                             }`}>
+                               {res.status === 'confirmed' ? 'Confirmada' : 
+                                res.status === 'pending' ? 'Pendente' : 
+                                res.status === 'em_curso' ? 'Em Curso' : res.status}
+                             </span>
+                             {res.notes && <p className="text-[10px] text-gray-400 italic font-medium truncate max-w-[150px]">{res.notes}</p>}
+                          </div>
+                        </div>
+                      ))}
                   </div>
 
                   <div className="mt-8 bg-farm-50 p-6 rounded-3xl border border-farm-100 flex flex-col md:flex-row gap-8 items-center no-print">
@@ -1479,25 +1560,28 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                 <div className="space-y-4">
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest">Códigos das Pulseiras</label>
                   <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                    {(Array.isArray(selectedResForCheckin.guests_details) ? selectedResForCheckin.guests_details : [null]).map((guest: any, idx: number) => (
-                      <div key={idx} className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs font-bold text-gray-500">{guest?.name || `Hóspede ${idx + 1}`}</span>
-                          <span className="text-[10px] text-gray-400 font-mono">#{idx+1}</span>
+                    {Array.from({ length: selectedResForCheckin.num_guests || 1 }).map((_, idx) => {
+                      const guest = Array.isArray(selectedResForCheckin.guests_details) ? selectedResForCheckin.guests_details[idx] : null;
+                      return (
+                        <div key={idx} className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-bold text-gray-500">{guest?.name || (idx === 0 ? selectedResForCheckin.name : `Hóspede ${idx + 1}`)}</span>
+                            <span className="text-[10px] text-gray-400 font-mono">#{idx+1}</span>
+                          </div>
+                          <input
+                            type="text"
+                            value={wristbandCodes[idx] || ''}
+                            onChange={(e) => {
+                              const newCodes = [...wristbandCodes];
+                              newCodes[idx] = e.target.value;
+                              setWristbandCodes(newCodes);
+                            }}
+                            className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm font-mono text-center"
+                            placeholder="Manual (ou auto)"
+                          />
                         </div>
-                        <input
-                          type="text"
-                          value={wristbandCodes[idx] || ''}
-                          onChange={(e) => {
-                            const newCodes = [...wristbandCodes];
-                            newCodes[idx] = e.target.value;
-                            setWristbandCodes(newCodes);
-                          }}
-                          className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm font-mono text-center"
-                          placeholder="Manual (ou auto)"
-                        />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   <p className="text-[10px] text-gray-400 italic text-center">Campos vazios serão preenchidos automaticamente pelo sistema.</p>
                 </div>
