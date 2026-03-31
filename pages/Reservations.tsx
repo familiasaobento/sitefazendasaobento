@@ -310,7 +310,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const handleStartCheckin = (res: any) => {
     setSelectedResForCheckin(res);
     // Initialize wristband codes with empty strings for all guests
-    const codes = Array.isArray(res.guests_details) 
+    const codes = Array.isArray(res.guests_details) && res.guests_details.length > 0
       ? res.guests_details.map(() => '') 
       : Array(res.num_guests || 1).fill('');
     setWristbandCodes(codes);
@@ -322,7 +322,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
     
     setIsProcessingCheckin(true);
     try {
-      const guests = Array.isArray(selectedResForCheckin.guests_details) 
+      const guests = Array.isArray(selectedResForCheckin.guests_details) && selectedResForCheckin.guests_details.length > 0
         ? selectedResForCheckin.guests_details 
         : [{ name: selectedResForCheckin.name || 'Hóspede 1', age: '' }];
 
@@ -335,7 +335,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
           status: 'ativa',
           codigo_pulseira: finalWristband,
           checkin_at: new Date().toISOString(),
-          hospede_nome: guest.name || `Hóspede ${idx + 1}`,
+          hospede_nome: guest.name || (idx === 0 ? selectedResForCheckin.name : `Hóspede ${idx + 1}`),
           hospede_idade: guest.age ? parseInt(guest.age) : null
         };
       });

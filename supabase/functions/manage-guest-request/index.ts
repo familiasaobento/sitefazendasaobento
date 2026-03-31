@@ -127,6 +127,7 @@ serve(async (req) => {
                     num_guests: request.num_guests,
                     accommodation: accommodation || 'A definir',
                     status: 'confirmed',
+                    guests_details: request.guests_details,
                     notes: `Solicitação via formulário público. Anfitrião: ${request.host_member_name}. Obs: ${request.notes || '-'}`
                 }])
                 .select()
