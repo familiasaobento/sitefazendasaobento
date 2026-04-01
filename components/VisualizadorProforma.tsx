@@ -19,6 +19,24 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
     const [currentPayment, setCurrentPayment] = useState({ method: 'PIX', amount: '', accountId: '' });
     const printRef = React.useRef<HTMLDivElement>(null);
 
+    // Auto-select account based on method
+    useEffect(() => {
+        if (accounts.length === 0) return;
+        
+        let targetAcc = null;
+        if (currentPayment.method === 'PIX' || currentPayment.method === 'Transferência') {
+            // Try to find an account of type 'Banco' or with 'banco' in the name
+            targetAcc = accounts.find(a => a.tipo === 'Banco') || accounts.find(a => a.nome.toLowerCase().includes('banco'));
+        } else if (currentPayment.method === 'Dinheiro') {
+            // Try to find an account of type 'Dinheiro' or with 'caixa' in the name
+            targetAcc = accounts.find(a => a.tipo === 'Dinheiro') || accounts.find(a => a.nome.toLowerCase().includes('caixa'));
+        }
+
+        if (targetAcc && targetAcc.nome !== currentPayment.accountId) {
+            setCurrentPayment(p => ({ ...p, accountId: targetAcc.nome }));
+        }
+    }, [currentPayment.method, accounts]);
+
     useEffect(() => {
         fetchProformaData();
         fetchAccounts();
@@ -297,10 +315,12 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
             const stayIds = stays?.map(s => s.id) || [estadiaId];
 
             // 1. Check out the guests regardless of payment (as requested)
-            await supabase
-                .from('estadias')
-                .update({ status: 'finalizada', checkout_at: new Date().toISOString() })
-                .in('id', stayIds);
+            if (!isFinalizado) {
+                await supabase
+                    .from('estadias')
+                    .update({ status: 'finalizada', checkout_at: new Date().toISOString() })
+                    .in('id', stayIds);
+            }
 
             // 2. Only mark items as paid if fully settled
             if (balance <= 0.05) {
@@ -636,9 +656,11 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
                     </div>
                 </div>
 
-                {isAdmin && !isFinalizado && (
-                    <div className="bg-farm-50/50 p-6 rounded-3xl border border-farm-100 space-y-4 no-print">
-                        <h3 className="font-bold text-farm-900 flex items-center gap-2">🛒 Pagamento e Fechamento</h3>
+                {isAdmin && (!isFinalizado || (summary.totalGeral - summary.totalAlreadyPaid > 0.05)) && (
+                    <div className="bg-farm-50/50 p-6 rounded-3xl border border-farm-100 space-y-4 no-print mt-8">
+                        <h3 className="font-bold text-farm-900 flex items-center gap-2">
+                            {isFinalizado ? '💰 Regularizar Saldo Pendente' : '🛒 Pagamento e Fechamento'}
+                        </h3>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div>
                                 <label className="text-[10px] font-black text-farm-600 uppercase tracking-widest pl-1">Método</label>
@@ -717,10 +739,10 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
                         <IconPrinter className="w-5 h-5 inline mr-2" />
                         {isFinalizado ? 'Imprimir Recibo' : 'Gerar PDF'}
                     </button>
-                    {isAdmin && !isFinalizado && (
+                    {isAdmin && (!isFinalizado || (summary.totalGeral - summary.totalAlreadyPaid > 0.05)) && (
                         <button onClick={handleConfirmPayment} disabled={isProcessing} className="flex-[2] bg-farm-800 text-white font-bold py-3 px-6 rounded-2xl hover:bg-farm-900 disabled:opacity-50">
                             {isProcessing ? <IconLoader className="w-5 h-5 animate-spin inline" /> : <IconCheck className="w-5 h-5 inline mr-2" />}
-                            {payments.reduce((acc, p) => acc + p.amount, 0) < summary.totalGeral - 0.05 ? 'Pagamento Parcial e Checkout' : 'Finalizar Total'}
+                            {isFinalizado ? 'Confirmar Quitação de Saldo' : (payments.reduce((acc, p) => acc + p.amount, 0) < summary.totalGeral - 0.05 ? 'Pagamento Parcial e Checkout' : 'Finalizar Total')}
                         </button>
                     )}
                 </div>

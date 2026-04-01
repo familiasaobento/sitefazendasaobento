@@ -207,8 +207,12 @@ export const VisitorsPage: React.FC = () => {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <p className="text-sm font-mono text-gray-600">{visitor.cpf}</p>
+                                        <td className="px-6 py-4 whitespace-nowrap" title={visitor.cpf}>
+                                            <p className="text-sm font-mono text-gray-600">
+                                                {visitor.cpf && visitor.cpf.replace(/\D/g, '').length === 11 
+                                                    ? visitor.cpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
+                                                    : visitor.cpf}
+                                            </p>
                                             <p className="text-xs text-gray-400 mt-1">{visitor.phone}</p>
                                         </td>
                                         <td className="px-6 py-4">
@@ -285,7 +289,11 @@ export const VisitorsPage: React.FC = () => {
                             </div>
                             <div>
                                 <p className="text-gray-400 font-bold uppercase text-[9px]">CPF</p>
-                                <p className="text-gray-800 font-mono">{visitor.cpf}</p>
+                                <p className="text-gray-800 font-mono">
+                                    {visitor.cpf && visitor.cpf.replace(/\D/g, '').length === 11 
+                                        ? visitor.cpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
+                                        : visitor.cpf}
+                                </p>
                             </div>
                             <div>
                                 <p className="text-gray-400 font-bold uppercase text-[9px]">Telefone</p>

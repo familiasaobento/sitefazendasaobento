@@ -75,6 +75,7 @@ export const PublicGuestReservation: React.FC<PublicGuestReservationProps> = ({ 
         .from('guest_reservations')
         .insert([{
           ...formData,
+          cpf: formData.cpf.replace(/\D/g, ''),
           guests_details: guestsDetails
         }]);
 

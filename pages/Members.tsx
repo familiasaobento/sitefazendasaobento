@@ -181,7 +181,13 @@ export const MembersPage: React.FC = () => {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-bold text-gray-900 truncate">{profile.full_name || 'Sem nome'}</p>
-                                        <p className="text-xs text-gray-400 font-mono">{profile.cpf || 'CPF não informado'}</p>
+                                        <p className="text-xs text-gray-400 font-mono">
+                                            {profile.cpf ? (
+                                                profile.cpf.replace(/\D/g, '').length === 11 
+                                                    ? profile.cpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
+                                                    : profile.cpf
+                                            ) : 'CPF não informado'}
+                                        </p>
                                     </div>
                                 </div>
 
@@ -261,12 +267,12 @@ export const MembersPage: React.FC = () => {
 
                     {/* Desktop Table View (Hidden on Mobile) */}
                     <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden print:hidden hidden md:block">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
+                        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200">
+                            <table className="w-full text-left min-w-[1000px]">
                                 <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
                                     <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
-                                        <th className="px-6 py-4 font-semibold">Usuário</th>
-                                        <th className="px-6 py-4 font-semibold">CPF</th>
+                                        <th className="px-6 py-4 font-semibold w-64">Usuário</th>
+                                        <th className="px-6 py-4 font-semibold w-40">CPF</th>
                                         <th className="px-6 py-4 font-semibold">Contato</th>
                                         <th className="px-6 py-4 font-semibold">E-mail</th>
                                         <th className="px-6 py-4 font-semibold text-right">Ações</th>
@@ -289,8 +295,15 @@ export const MembersPage: React.FC = () => {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-sm text-gray-600 font-mono">
-                                                    {profile.cpf || '—'}
+                                                <td className="px-6 py-4 text-sm text-gray-600 font-mono whitespace-nowrap w-40 min-w-[140px]" title={profile.cpf}>
+                                                    {(() => {
+                                                        if (!profile.cpf) return '—';
+                                                        const digits = profile.cpf.replace(/\D/g, '');
+                                                        if (digits.length === 11) {
+                                                            return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                                                        }
+                                                        return profile.cpf;
+                                                    })()}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="text-sm text-gray-600 flex items-center gap-2">

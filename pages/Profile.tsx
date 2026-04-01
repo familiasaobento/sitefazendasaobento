@@ -226,7 +226,7 @@ export const ProfilePage: React.FC = () => {
                 .from('profiles')
                 .update({
                     full_name: formData.full_name,
-                    cpf: formData.cpf,
+                    cpf: formData.cpf.replace(/\D/g, ''),
                     birth_date: formData.birth_date || null,
                     phone: formData.phone,
                     address: formData.address,

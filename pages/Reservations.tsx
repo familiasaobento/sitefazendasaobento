@@ -188,7 +188,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
         .from('reservations')
         .select(`
           *,
-          profiles:profiles!user_id(full_name),
+          profiles:profiles!user_id(full_name, cpf),
           estadias:estadias!reserva_id(*)
         `)
         .order('check_in', { ascending: true });
@@ -840,9 +840,21 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                                   </button>
                                 </div>
                                 <div className="flex flex-wrap gap-2 items-center">
-                                  <span className="text-[10px] font-mono font-black text-gray-400 bg-gray-50/80 px-2 py-0.5 rounded-md border border-gray-100/50 shadow-sm">{res.cpf || 'Sem CPF'}</span>
+                                  {(() => {
+                                      const cpfValue = res.cpf || (res as any).profiles?.cpf;
+                                      return (
+                                        <span className="text-[10px] font-mono font-black text-gray-400 bg-gray-50/80 px-2 py-0.5 rounded-md border border-gray-100/50 shadow-sm whitespace-nowrap" title={cpfValue}>
+                                          {cpfValue && cpfValue.replace(/\D/g, '').length === 11 
+                                              ? cpfValue.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
+                                              : (cpfValue || 'Sem CPF')}
+                                        </span>
+                                      );
+                                  })()}
                                   {isGuestRequest && <span className="text-amber-600 font-extrabold uppercase text-[8px] tracking-[0.1em] bg-amber-50/50 px-2 py-0.5 rounded-md border border-amber-100/50">Visitante</span>}
                                   {!isGuestRequest && <span className="text-farm-600 font-extrabold uppercase text-[8px] tracking-[0.1em] bg-farm-50/50 px-2 py-0.5 rounded-md border border-farm-100/50">Sócio</span>}
+                                  {res.status === 'em_curso' && res.estadias?.[0]?.status === 'finalizada' && (
+                                    <span className="text-red-600 font-black uppercase text-[8px] tracking-[0.1em] bg-red-50 px-2 py-0.5 rounded-md border border-red-100 animate-pulse">Saldo Devedor</span>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -1002,7 +1014,19 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                                         <IconInfoCircle className="w-4 h-4" />
                                     </button>
                                 </div>
-                                <p className="text-xs font-mono text-gray-400 mt-1">{res.cpf || 'Sem CPF'}</p>
+                                {(() => {
+                                    const cpfValue = res.cpf || (res as any).profiles?.cpf;
+                                    return (
+                                        <p className="text-xs font-mono text-gray-400 mt-1">
+                                            {cpfValue && cpfValue.replace(/\D/g, '').length === 11 
+                                                ? cpfValue.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
+                                                : (cpfValue || 'Sem CPF')}
+                                        </p>
+                                    );
+                                })()}
+                                {res.status === 'em_curso' && res.estadias?.[0]?.status === 'finalizada' && (
+                                     <span className="mt-2 inline-block bg-red-500 text-white text-[8px] px-2 py-0.5 rounded-full font-black animate-pulse uppercase tracking-widest leading-none">Saldo Devedor</span>
+                                 )}
                             </div>
                           </div>
                         </div>
@@ -1180,7 +1204,12 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                               </div>
                               <div>
                                 <p className="font-bold text-gray-800">{res.name || res.profiles?.full_name}</p>
-                                <p className="text-[10px] text-gray-400">ID Estadia: #{res.estadias?.[0]?.id}</p>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-[10px] text-gray-400">ID Estadia: #{res.estadias?.[0]?.id}</p>
+                                    {res.status === 'em_curso' && (
+                                        <span className="text-red-500 font-black text-[9px] uppercase tracking-tighter bg-red-50 px-1.5 py-0.5 rounded border border-red-100">Pagamento Pendente</span>
+                                    )}
+                                </div>
                               </div>
                             </div>
                           </td>
