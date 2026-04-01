@@ -77,12 +77,15 @@ export const VisitorsPage: React.FC = () => {
                     }))
                 };
 
-                if (lastRes && visitorData.host_name === '—') {
-                    visitorData.host_name = lastRes.name || '—';
-                }
-
                 if (lastRes) {
                     const notes = lastRes.notes || '';
+                    
+                    // Prioritize host_name from profile, then from notes regex, then from reservation name (though res.name is usually visitor name)
+                    if (visitorData.host_name === '—') {
+                        const hostMatch = notes.match(/Anfitrião:\s*(.*?)(?:\.|$)/i);
+                        visitorData.host_name = hostMatch ? hostMatch[1].trim() : '—';
+                    }
+
                     if (visitorData.cpf === '—') {
                         const cpfMatch = notes.match(/CPF:\s*(.*)/i);
                         visitorData.cpf = cpfMatch ? cpfMatch[1].trim() : '—';
@@ -227,7 +230,7 @@ export const VisitorsPage: React.FC = () => {
                                                                 <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${h.status === 'confirmed' ? 'bg-green-100 text-green-700' :
                                                                         h.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
                                                                     }`}>
-                                                                    {h.status === 'confirmed' ? 'Visita' : h.status === 'rejected' ? 'Recusada' : 'Pendente'}
+                                                                    {h.status === 'confirmed' ? 'Confirmada' : h.status === 'rejected' ? 'RECUSADA' : 'AGUARDANDO'}
                                                                 </span>
                                                             </div>
                                                         ))}
@@ -314,7 +317,7 @@ export const VisitorsPage: React.FC = () => {
                                             <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${h.status === 'confirmed' ? 'bg-green-100 text-green-700' :
                                                     h.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
                                                 }`}>
-                                                {h.status === 'confirmed' ? 'Visita' : h.status === 'rejected' ? 'Recusada' : 'Pendente'}
+                                                {h.status === 'confirmed' ? 'Confirmada' : h.status === 'rejected' ? 'RECUSADA' : 'AGUARDANDO'}
                                             </span>
                                         </div>
                                     ))}

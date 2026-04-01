@@ -183,16 +183,37 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
             const extras = consumo?.filter(item => !refeicoes.includes(item)) || [];
             const hasUnapproved = consumo?.some(item => !item.aprovado_admin) || false;
 
-            const guestList = reservation.guests_details && Array.isArray(reservation.guests_details) ? reservation.guests_details : [];
+            // Sanitize guest details: handle potential stringified JSON or missing info
+            let guestList: any[] = [];
+            if (reservation.guests_details) {
+                if (Array.isArray(reservation.guests_details)) {
+                    guestList = reservation.guests_details;
+                } else if (typeof reservation.guests_details === 'string') {
+                    try { guestList = JSON.parse(reservation.guests_details); } catch(e) { guestList = []; }
+                }
+            }
+            
             const isSocio = categoriaHospede !== 'visitante';
-            const validGuestAges = guestList
-                .map((g: any) => g.age)
-                .filter((age: any) => age !== '' && age !== null && age !== undefined && !isNaN(Number(age)))
-                .map(Number);
+            
+            // Extract numeric ages even if they have text (e.g. "7 anos")
+            const parseAge = (val: any) => {
+                if (typeof val === 'number') return val;
+                if (!val || typeof val !== 'string') return NaN;
+                const match = val.match(/\d+/);
+                return match ? parseInt(match[0]) : NaN;
+            };
 
+            const validGuestAges = guestList
+                .map((g: any) => parseAge(g.age))
+                .filter((age: number) => !isNaN(age));
+
+            // User specified age rules:
+            // Isento de 0 a 4 completos (uso < 5)
+            // Meia de 5 a 9 completos (uso >= 5 e < 10)
             const totalSeniorSocio = isSocio ? validGuestAges.filter(age => age >= 75).length : 0;
             const totalHalfPriceKids = validGuestAges.filter(age => age >= 5 && age < 10).length;
             const totalFreeKids = validGuestAges.filter(age => age < 5).length;
+            
             const totalAdults = Math.max(0, reservation.num_guests - totalHalfPriceKids - totalFreeKids);
             const regularAdults = Math.max(0, totalAdults - totalSeniorSocio);
 
@@ -204,11 +225,18 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
             const totalTaxas = (categoriaHospede === 'visitante' || isDayUse) ? activeTarifario.taxa_visita * equivalentGuests : 0;
             const totalGeral = totalDiarias + totalRefeicoes + totalExtras + totalTaxas;
 
+            const { data: existingPayments } = await supabase
+                .from('fluxo_caixa')
+                .select('valor')
+                .in('estadia_id', stayIds);
+            
+            const totalAlreadyPaid = existingPayments?.reduce((acc: any, p: any) => acc + (p.valor || 0), 0) || 0;
+
             setData({
                 estadia,
                 reservation,
                 profile,
-                allStays, // Added this
+                allStays,
                 tarifario: activeTarifario,
                 consumo,
                 summary: {
@@ -219,6 +247,7 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
                     totalExtras,
                     totalTaxas,
                     totalGeral,
+                    totalAlreadyPaid,
                     refeicoesList: refeicoes,
                     extrasList: extras,
                     hasUnapproved,
@@ -252,12 +281,13 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
     };
 
     const handleConfirmPayment = async () => {
-        if (payments.length === 0) return alert('Adicione pelo menos um pagamento para encerrar.');
-        
+        // Now we can allow checkout even without NEW payments if there was already partial payment, 
+        // but typically you'd add at least one or it's just a status change.
         setIsProcessing(true);
         try {
-            const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
-            const balance = data.summary.totalGeral - totalPaid;
+            const totalNewPayments = payments.reduce((acc, p) => acc + p.amount, 0);
+            const totalPaidOverall = data.summary.totalAlreadyPaid + totalNewPayments;
+            const balance = data.summary.totalGeral - totalPaidOverall;
             
             const { data: stays } = await supabase
                 .from('estadias')
@@ -266,21 +296,29 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
             
             const stayIds = stays?.map(s => s.id) || [estadiaId];
 
+            // 1. Check out the guests regardless of payment (as requested)
             await supabase
                 .from('estadias')
                 .update({ status: 'finalizada', checkout_at: new Date().toISOString() })
                 .in('id', stayIds);
 
-            await supabase
-                .from('lancamentos_consumo')
-                .update({ pago: true })
-                .in('estadia_id', stayIds);
+            // 2. Only mark items as paid if fully settled
+            if (balance <= 0.05) {
+                await supabase
+                    .from('lancamentos_consumo')
+                    .update({ pago: true })
+                    .in('estadia_id', stayIds);
+            }
 
+            // 3. Update reservation status
+            // If balance remains, keep it in 'em_curso' or maybe a new 'pendente_pagamento' if we had one.
+            // For now, if balanced, it's 'finalizada'. If not, it stays 'em_curso' but with stadias closed.
             await supabase
                 .from('reservations')
                 .update({ status: balance <= 0.05 ? 'finalizada' : 'em_curso' })
                 .eq('id', data.reservation.id);
             
+            // 4. Record the NEW payments made now
             for (const p of payments) {
                 await supabase
                     .from('fluxo_caixa')
@@ -297,12 +335,12 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
             }
 
             alert(balance > 0.05 
-                ? `Check-out realizado! Saldo devedor de R$ ${balance.toLocaleString('pt-BR', {minimumFractionDigits: 2})} registrado.`
-                : 'Pagamento total confirmado! Estadia encerrada com sucesso.');
+                ? `Check-out realizado com sucesso! \n\nAtenção: Resta um saldo devedor de R$ ${balance.toLocaleString('pt-BR', {minimumFractionDigits: 2})}. A reserva continuará listada como pendente até a quitação.`
+                : 'Pagamento total confirmado! Estadia e reserva encerradas com sucesso.');
             
             if (onClose) onClose();
         } catch (err: any) {
-            alert('Erro ao confirmar pagamento: ' + err.message);
+            alert('Erro ao confirmar: ' + err.message);
         } finally {
             setIsProcessing(false);
         }
@@ -447,7 +485,7 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
                         </div>
                         <div>
                             <h2 className="text-4xl font-bold font-serif tracking-tight">
-                                {isFinalizado ? 'Recibo de Quitação' : 'Proforma de Atendimento'}
+                                {isFinalizado && (summary.totalGeral - summary.totalAlreadyPaid <= 0.05) ? 'Recibo de Quitação' : 'Comanda / Extrato de Consumo'}
                             </h2>
                             <div className="flex items-center gap-2 mt-1 text-farm-100/80">
                                 <span className="text-sm font-medium uppercase tracking-widest">Fazenda São Bento</span>
@@ -530,13 +568,23 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
                                 <tr>
                                     <td className="px-6 py-4">
                                         <div className="font-bold text-gray-800">Hospedagem ({reservation.accommodation})</div>
-                                        <div className="text-gray-500 text-xs text-wrap max-w-xs">
-                                            {tarifario.season} • {summary.adults} Adt, {summary.seniors > 0 && `${summary.seniors} Sênior,`} {summary.halfPriceKids > 0 && `${summary.halfPriceKids} Meia,`} {summary.freeKids > 0 && `${summary.freeKids} Isento`}
+                                        <div className="text-[10px] text-gray-500 mt-1 uppercase font-black tracking-widest">
+                                            {tarifario.season} • {summary.numDiarias} Diárias
+                                        </div>
+                                        <div className="mt-3 space-y-1">
+                                            {/* Detailed breakdown per category */}
+                                            {summary.adults > 0 && <div className="text-[10px] flex items-center gap-2"><span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span> <strong>{summary.adults}</strong> Adulto(s) (R$ {tarifario.valor_diaria.toLocaleString('pt-BR')}/dia)</div>}
+                                            {summary.seniors > 0 && <div className="text-[10px] flex items-center gap-2 text-blue-700 font-bold"><span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span> <strong>{summary.seniors}</strong> Sênior(es) (Meia Diária)</div>}
+                                            {summary.halfPriceKids > 0 && <div className="text-[10px] flex items-center gap-2 text-green-700 font-bold"><span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span> <strong>{summary.halfPriceKids}</strong> Criança(s) 5-9a (Meia Diária)</div>}
+                                            {summary.freeKids > 0 && <div className="text-[10px] flex items-center gap-2 text-farm-600 font-bold"><span className="w-1.5 h-1.5 bg-farm-400 rounded-full"></span> <strong>{summary.freeKids}</strong> Criança(s) 0-4a (Isento)</div>}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-center">R$ {tarifario.valor_diaria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                    <td className="px-6 py-4 text-center">{summary.numDiarias}d x {summary.equivalentGuests}p</td>
-                                    <td className="px-6 py-4 text-right font-bold text-gray-800">R$ {summary.totalDiarias.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-4 text-center align-top">R$ {tarifario.valor_diaria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-6 py-4 text-center align-top font-mono text-[11px]">
+                                        {summary.numDiarias}d x {summary.equivalentGuests}p
+                                        <p className="text-[9px] text-gray-400 mt-1 italic">(Units equivalentes)</p>
+                                    </td>
+                                    <td className="px-6 py-4 text-right font-bold text-gray-800 align-top">R$ {summary.totalDiarias.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                                 </tr>
 
                                 {(isFinalizado ? groupedExtras : consumo).map((item: any) => (
@@ -568,8 +616,20 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
                             </tbody>
                             <tfoot className="bg-farm-50">
                                 <tr>
-                                    <td colSpan={3} className="px-6 py-6 text-right font-bold text-farm-900 text-lg">Total a Pagar:</td>
-                                    <td className="px-6 py-6 text-right font-bold text-farm-900 text-2xl">R$ {summary.totalGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                    <td colSpan={3} className="px-6 py-4 text-right font-bold text-gray-400 uppercase text-[10px] tracking-widest">Valor Total:</td>
+                                    <td className="px-6 py-4 text-right font-bold text-gray-800 text-lg">R$ {summary.totalGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                </tr>
+                                {summary.totalAlreadyPaid > 0 && (
+                                    <tr>
+                                        <td colSpan={3} className="px-6 py-4 text-right font-bold text-green-600 uppercase text-[10px] tracking-widest">Valor Pago:</td>
+                                        <td className="px-6 py-4 text-right font-bold text-green-600 text-lg">- R$ {summary.totalAlreadyPaid.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                    </tr>
+                                )}
+                                <tr className="bg-farm-600 text-white">
+                                    <td colSpan={3} className="px-6 py-4 text-right font-black uppercase text-xs tracking-widest leading-none">Saldo a Pagar:</td>
+                                    <td className="px-6 py-4 text-right font-black text-2xl leading-none italic">
+                                        R$ {Math.max(0, summary.totalGeral - summary.totalAlreadyPaid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </td>
                                 </tr>
                             </tfoot>
                         </table>

@@ -113,6 +113,8 @@ serve(async (req) => {
                     role: 'visitor',
                     cpf: request.cpf,
                     phone: request.phone,
+                    birth_date: request.birth_date,
+                    host_name: request.host_member_name,
                     approved: true
                 })
 

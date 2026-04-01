@@ -15,6 +15,7 @@ interface Stay {
         profiles: {
             full_name: string;
             role: string;
+            cpf?: string;
         }
     }
 }
@@ -64,7 +65,13 @@ export const PDVPage: React.FC = () => {
         return null;
     };
 
-    const isRestaurante = operatingPoint === 'Restaurante';
+    const isRestaurante = (operatingPoint || '').toLowerCase().includes('restaurante') || 
+                          (operatingPoint || '').toLowerCase().includes('refeitório') || 
+                          (operatingPoint || '').toLowerCase().includes('refeitorio') ||
+                          products.some(p => p.category === 'Refeições');
+
+    const isEscritorio = (operatingPoint || '').toLowerCase().includes('escritório') || 
+                         (operatingPoint || '').toLowerCase().includes('escritorio');
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -83,7 +90,7 @@ export const PDVPage: React.FC = () => {
                             accommodation,
                             check_in,
                             name,
-                            profiles:profiles!user_id (full_name, role)
+                            profiles:profiles!user_id (full_name, role, cpf)
                         )
                     `)
                     .eq('status', 'ativa')
@@ -507,7 +514,7 @@ export const PDVPage: React.FC = () => {
                                     <IconUser className="w-6 h-6 group-hover:scale-110 transition-transform" />
                                     Buscar Hóspede
                                 </button>
-                                {operatingPoint === 'Escritório' && (
+                                {isEscritorio && (
                                     <button
                                         onClick={() => setIsAvulsa(true)}
                                         className="w-full py-4 bg-amber-500 text-white rounded-2xl shadow-sm flex items-center justify-center gap-3 hover:bg-amber-600 transition-all font-bold border-b-4 border-amber-700 active:border-b-0 active:translate-y-1"
@@ -528,62 +535,145 @@ export const PDVPage: React.FC = () => {
                 <div className="flex-1 flex flex-col max-w-2xl w-full mx-auto animate-fade-in">
                     <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6 space-y-6">
                         <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-                            <h2 className="text-xl font-bold text-gray-800">Selecione o Hóspede</h2>
-                            <button onClick={() => setShowManualSearch(false)} className="text-gray-400 hover:text-gray-600 font-bold text-sm bg-gray-100 px-3 py-1 rounded-full">
+                            <h2 className="text-xl font-bold text-gray-800">
+                                {isRestaurante ? 'Identificação por CPF' : 'Selecione o Hóspede'}
+                            </h2>
+                            <button onClick={() => {
+                                setShowManualSearch(false);
+                                setSearchQuery('');
+                            }} className="text-gray-400 hover:text-gray-600 font-bold text-sm bg-gray-100 px-3 py-1 rounded-full">
                                 Voltar
                             </button>
                         </div>
 
-                        <div className="relative">
-                            <input
-                                type="text"
-                                placeholder="Buscar por nome ou pulseira..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full px-5 py-4 pl-12 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-farm-500 focus:ring-4 focus:ring-farm-100 transition-all outline-none text-lg font-medium"
-                            />
-                            <svg className="w-6 h-6 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                        </div>
-
-                        <div className="max-h-96 overflow-y-auto space-y-3 custom-scrollbar pr-2">
-                            {activeStaysList
-                                .filter(s => {
-                                    const name = s.reservations?.name || s.reservations?.profiles?.full_name || '';
-                                    const wristband = s.codigo_pulseira || '';
-                                    return name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                        wristband.toLowerCase().includes(searchQuery.toLowerCase());
-                                })
-                                .map(s => (
-                                    <button
-                                        key={s.id}
-                                        onClick={() => {
-                                            setActiveStay(s);
-                                            setSearchQuery('');
-                                            setShowManualSearch(false);
+                        {isRestaurante ? (
+                            <div className="space-y-6">
+                                <div className="bg-farm-50 p-4 rounded-2xl flex items-center gap-3 border border-farm-100">
+                                    <IconZap className="w-5 h-5 text-farm-600" />
+                                    <p className="text-sm text-farm-800">Digite o CPF do titular ou dependente para lançar a refeição.</p>
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        placeholder="000.000.000-00"
+                                        value={searchQuery}
+                                        onChange={(e) => {
+                                            const val = e.target.value.replace(/\D/g, '');
+                                            if (val.length <= 11) setSearchQuery(val);
                                         }}
-                                        className="w-full text-left p-4 rounded-2xl border border-gray-100 hover:border-farm-300 hover:bg-farm-50 transition-all flex items-center justify-between group"
-                                    >
-                                        <div>
-                                            <p className="font-bold text-gray-800 text-lg">{s.reservations?.name || s.reservations?.profiles?.full_name || 'Usuário Indefinido'}</p>
-                                            <p className="text-sm text-gray-500 font-medium mt-1">
-                                                {s.reservations?.accommodation} • Code: <span className="text-farm-600 bg-farm-100 px-2 py-0.5 rounded-md text-xs">{s.codigo_pulseira}</span>
-                                            </p>
+                                        className="w-full px-5 py-6 bg-gray-50 border-2 border-farm-100 rounded-2xl focus:border-farm-500 transition-all outline-none text-3xl font-black tracking-widest text-center"
+                                        autoFocus
+                                    />
+                                    {searchQuery.length === 11 && (
+                                        <div className="mt-6 animate-fade-in">
+                                            {activeStaysList.find(s => s.reservations?.profiles?.cpf?.replace(/\D/g, '') === searchQuery) ? (
+                                                (() => {
+                                                    const s = activeStaysList.find(s => s.reservations?.profiles?.cpf?.replace(/\D/g, '') === searchQuery)!;
+                                                    return (
+                                                        <div className="bg-white p-6 rounded-3xl border-2 border-green-500 shadow-xl space-y-4">
+                                                            <div className="text-center">
+                                                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Hóspede Encontrado</p>
+                                                                <h3 className="text-2xl font-black text-farm-900">{s.reservations?.profiles?.full_name}</h3>
+                                                                <p className="text-sm font-medium text-farm-600 bg-farm-50 inline-block px-3 py-1 rounded-full mt-2">
+                                                                    {s.reservations?.accommodation}
+                                                                </p>
+                                                            </div>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    const mealName = getCurrentMeal();
+                                                                    if (!mealName) return alert('Fora do horário de refeições');
+                                                                    
+                                                                    setLoading(true);
+                                                                    const { count } = await supabase
+                                                                        .from('lancamentos_consumo')
+                                                                        .select('*', { count: 'exact', head: true })
+                                                                        .eq('estadia_id', s.id)
+                                                                        .eq('nome_item_snapshot', mealName)
+                                                                        .gte('created_at', new Date().toISOString().split('T')[0]);
+                                                                    
+                                                                    if (count && count > 0) {
+                                                                        await handleLaunchConsumption(mealName, 1, 0, s);
+                                                                    } else {
+                                                                        await handleLaunchConsumption(mealName, 1, undefined, s);
+                                                                    }
+                                                                    
+                                                                    setSearchQuery('');
+                                                                    setShowManualSearch(false);
+                                                                    setLoading(false);
+                                                                }}
+                                                                className="w-full bg-green-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-lg shadow-lg hover:bg-green-700 active:scale-95 transition-all"
+                                                            >
+                                                                Confirmar Refeição
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })()
+                                            ) : (
+                                                <div className="bg-red-50 p-6 rounded-3xl border border-red-100 text-center">
+                                                    <p className="text-red-600 font-bold">Hóspede não encontrado com este CPF ou sem estadia ativa.</p>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-400 group-hover:text-farm-600 group-hover:border-farm-300 transition-colors shadow-sm">
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                                        </div>
-                                    </button>
-                                ))
-                            }
-                            {activeStaysList.filter(s =>
-                                (s.reservations?.name || s.reservations?.profiles?.full_name)?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                s.codigo_pulseira.toLowerCase().includes(searchQuery.toLowerCase())
-                            ).length === 0 && (
-                                    <div className="text-center py-10">
-                                        <p className="text-gray-500 font-medium text-lg">Nenhum hóspede ativo encontrado.</p>
-                                    </div>
-                                )}
-                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar por nome ou pulseira..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-full px-5 py-4 pl-12 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-farm-500 focus:ring-4 focus:ring-farm-100 transition-all outline-none text-lg font-medium"
+                                    />
+                                    <svg className="w-6 h-6 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                </div>
+
+                                <div className="max-h-96 overflow-y-auto space-y-3 custom-scrollbar pr-2">
+                                    {activeStaysList
+                                        .filter(s => {
+                                            const name = s.reservations?.name || s.reservations?.profiles?.full_name || '';
+                                            const wristband = s.codigo_pulseira || '';
+                                            const cpf = s.reservations?.profiles?.cpf || '';
+                                            return name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                                wristband.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                                cpf.includes(searchQuery);
+                                        })
+                                        .map(s => (
+                                            <button
+                                                key={s.id}
+                                                onClick={() => {
+                                                    setActiveStay(s);
+                                                    setSearchQuery('');
+                                                    setShowManualSearch(false);
+                                                }}
+                                                className="w-full text-left p-4 rounded-2xl border border-gray-100 hover:border-farm-300 hover:bg-farm-50 transition-all flex items-center justify-between group"
+                                            >
+                                                <div>
+                                                    <p className="font-bold text-gray-800 text-lg">{s.reservations?.name || s.reservations?.profiles?.full_name || 'Usuário Indefinido'}</p>
+                                                    <p className="text-sm text-gray-500 font-medium mt-1">
+                                                        {s.reservations?.accommodation} • Code: <span className="text-farm-600 bg-farm-100 px-2 py-0.5 rounded-md text-xs">{s.codigo_pulseira}</span>
+                                                    </p>
+                                                </div>
+                                                <div className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-400 group-hover:text-farm-600 group-hover:border-farm-300 transition-colors shadow-sm">
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                                                </div>
+                                            </button>
+                                        ))
+                                    }
+                                    {activeStaysList.filter(s =>
+                                        (s.reservations?.name || s.reservations?.profiles?.full_name)?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                        s.codigo_pulseira.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                        (s.reservations?.profiles?.cpf || '').includes(searchQuery)
+                                    ).length === 0 && (
+                                            <div className="text-center py-10">
+                                                <p className="text-gray-500 font-medium text-lg">Nenhum hóspede ativo encontrado.</p>
+                                            </div>
+                                        )}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
@@ -609,7 +699,7 @@ export const PDVPage: React.FC = () => {
                             className="mt-4 w-full py-4 bg-white text-farm-700 border-2 border-farm-200 rounded-2xl shadow-sm flex items-center justify-center gap-3 hover:bg-farm-50 transition-all font-bold"
                         >
                             <IconUser className="w-6 h-6 text-farm-600" />
-                            Esqueci o QR Code (Buscar Nome)
+                            {isRestaurante ? 'Esqueci o QR Code (Entrar CPF)' : 'Esqueci o QR Code (Buscar Nome)'}
                         </button>
                     )}
                     {!isRestaurante && (

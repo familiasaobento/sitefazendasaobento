@@ -4,13 +4,17 @@ import { Page } from '../types';
 import { 
   IconCalendar, IconHome, IconUser, IconMail, IconCheck, IconX,
   IconLoader, IconPrinter, IconMap, IconList, IconZap,
-  IconFileText, IconPhone, IconClock, IconSearch
+  IconFileText, IconPhone, IconClock, IconSearch, IconInfoCircle
 } from '../components/Icons';
 import { VisualizadorProforma } from '../components/VisualizadorProforma';
 
 interface Profile {
   full_name: string;
   avatar_url?: string;
+  role?: string;
+  cpf?: string;
+  phone?: string;
+  dependents?: any[];
 }
 
 interface Reservation {
@@ -88,6 +92,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const [selectedResForCheckin, setSelectedResForCheckin] = useState<any>(null);
   const [wristbandCodes, setWristbandCodes] = useState<string[]>([]);
   const [isProcessingCheckin, setIsProcessingCheckin] = useState(false);
+  const [checkinGuests, setCheckinGuests] = useState<any[]>([]);
 
   // Form States
   const [name, setName] = useState('');
@@ -107,6 +112,10 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const [selectedRoomsForApproval, setSelectedRoomsForApproval] = useState<Record<number, string>>({});
   const [guestRequests, setGuestRequests] = useState<any[]>([]);
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+  const [viewingResDetails, setViewingResDetails] = useState<any | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [userDependents, setUserDependents] = useState<any[]>([]);
+  const [accommodationPreference, setAccommodationPreference] = useState<'house' | 'guest'>('guest');
 
   useEffect(() => {
     checkUser();
@@ -118,20 +127,24 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
       setAuthEmail(user.email || '');
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role, full_name, cpf, phone')
+        .select('role, full_name, cpf, phone, dependents')
         .eq('id', user.id)
         .single();
       
       const adminRoles = ['admin', 'site_admin', 'finance_manager', 'finance', 'master_cook'];
       const approvalRoles = ['admin', 'site_admin', 'finance_manager'];
       
-      const userRole = profile?.role || (isVisitorProp ? 'visitor' : 'member');
+      const userRole = (profile as any)?.role || (isVisitorProp ? 'visitor' : 'member');
       const isUserVisitor = userRole === 'visitor';
       const isUserMember = userRole === 'member';
       
       setIsVisitor(isUserVisitor);
       setIsMember(isUserMember);
       setCanApprove(profile && approvalRoles.includes(profile.role));
+
+      if (profile?.dependents) {
+        setUserDependents(profile.dependents);
+      }
 
       // Check if profile is complete (CPF and Phone are required for visitors)
       if (isUserVisitor && (!profile?.cpf || !profile?.phone)) {
@@ -191,6 +204,11 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
       console.error('Erro ao buscar todas as reservas:', err);
     }
   };
+  
+  const handleViewDetails = (res: any) => {
+    setViewingResDetails(res);
+    setShowDetailsModal(true);
+  };
 
   const fetchGuestRequests = async () => {
     try {
@@ -237,13 +255,19 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
         if (error) throw error;
         alert('Reserva aprovada! O visitante recebeu o voucher por e-mail.');
       } else {
+        const reason = window.prompt('Por que esta solicitação está sendo recusada?');
+        if (reason === null) return; // Cancelled
+
         const { error } = await supabase
           .from('guest_reservations')
-          .update({ status: 'rejected' })
+          .update({ 
+            status: 'rejected',
+            notes: (currentRequest?.notes ? currentRequest.notes + '\n\n' : '') + 'MOTIVO DA RECUSA: ' + reason
+          })
           .eq('id', requestId);
 
         if (error) throw error;
-        alert('Solicitação recusada.');
+        alert('Solicitação recusada!');
       }
       
       await fetchGuestRequests();
@@ -257,11 +281,21 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
 
   const handleUpdateStatus = async (id: number, newStatus: string, finalAccommodation?: string) => {
     try {
+      let extraUpdate = {};
+      if (newStatus === 'rejected') {
+          const reason = window.prompt('Por que esta reserva está sendo recusada?');
+          if (reason === null) return; // Cancelled
+          
+          const currentRes = allReservations.find(r => r.id === id);
+          extraUpdate = { notes: (currentRes?.notes ? currentRes.notes + '\n\n' : '') + 'MOTIVO DA RECUSA: ' + reason };
+      }
+
       const { error } = await supabase
         .from('reservations')
         .update({ 
           status: newStatus,
-          ...(finalAccommodation && { accommodation: finalAccommodation })
+          ...(finalAccommodation && { accommodation: finalAccommodation }),
+          ...extraUpdate
         })
         .eq('id', id);
 
@@ -276,16 +310,51 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   };
 
   const handleDeleteReservation = async (id: number) => {
-    const res = allReservations.find(r => r.id === id);
-    if (res?.estadias?.length > 0) {
-      alert('Não é possível excluir esta reserva porque ela já possui uma estadia (ativa ou encerrada) vinculada. Para cancelar, altere o status para "Cancelada" ou "Recusada".');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    if (profile?.role !== 'admin' && profile?.role !== 'site_admin') {
+      alert('Acesso negado: Somente um Administrador Geral tem permissão para apagar registros permanentemente.');
       return;
     }
 
-    if (!window.confirm('Tem certeza que deseja excluir esta reserva permanentemente?')) return;
+    const res = allReservations.find(r => r.id === id);
+    if (!res) return;
+
+    if (!window.confirm('🚨 AVISO CRÍTICO DE EXCLUSÃO 🚨\n\nEsta ação apagará IRREVERSIVELMENTE:\n1. A reserva e os dados dos hóspedes\n2. Todo o histórico de consumo (restaurante, produtos)\n3. TODOS os registros financeiros (pagamentos e entradas no caixa)\n\nIsso AFETARÁ o seu fechamento financeiro mensal. Deseja realmente prosseguir?')) return;
     
     setLoading(true);
     try {
+      // 1. Get all stay IDs for this reservation to delete associated records
+      const { data: stays } = await supabase
+        .from('estadias')
+        .select('id')
+        .eq('reserva_id', id);
+      
+      const stayIds = stays?.map(s => s.id) || [];
+
+      if (stayIds.length > 0) {
+        // 2. Delete consumption logs
+        await supabase
+          .from('lancamentos_consumo')
+          .delete()
+          .in('estadia_id', stayIds);
+
+        // 3. Delete financial records (fluxo_caixa)
+        await supabase
+          .from('fluxo_caixa')
+          .delete()
+          .in('estadia_id', stayIds);
+
+        // 4. Delete stays (estadias)
+        await supabase
+          .from('estadias')
+          .delete()
+          .in('id', stayIds);
+      }
+
+      // 5. Finally, delete the reservation
       const { error } = await supabase
         .from('reservations')
         .delete()
@@ -298,7 +367,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
         fetchReservations()
       ]);
       
-      alert('Reserva excluída com sucesso!');
+      alert('Reserva e todos os registros vinculados foram apagados com sucesso!');
     } catch (err: any) {
       console.error('Erro ao excluir:', err);
       alert('Erro ao excluir reserva: ' + (err.message || 'Erro desconhecido ao tentar excluir.'));
@@ -309,11 +378,15 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
 
   const handleStartCheckin = (res: any) => {
     setSelectedResForCheckin(res);
-    // Initialize wristband codes with empty strings for all guests
-    const codes = Array.isArray(res.guests_details) && res.guests_details.length > 0
-      ? res.guests_details.map(() => '') 
-      : Array(res.num_guests || 1).fill('');
-    setWristbandCodes(codes);
+    setWristbandCodes(new Array(res.num_guests || 1).fill(''));
+    // Initialize guests details
+    const existing = res.guests_details || [];
+    const initialGuests = Array.from({ length: res.num_guests || 1 }).map((_, i) => {
+        if (existing[i]) return { ...existing[i] };
+        if (i === 0) return { name: res.name || res.profiles?.full_name, age: '' };
+        return { name: '', age: '' };
+    });
+    setCheckinGuests(initialGuests);
     setShowCheckinModal(true);
   };
 
@@ -347,9 +420,13 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
 
       if (stayError) throw stayError;
 
+      // Update the reservation with the potentially edited guest details and set status
       const { error: resError } = await supabase
         .from('reservations')
-        .update({ status: 'em_curso' })
+        .update({ 
+          status: 'em_curso',
+          guests_details: checkinGuests
+        })
         .eq('id', selectedResForCheckin.id);
 
       if (resError) throw resError;
@@ -386,7 +463,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
           check_in: checkIn,
           check_out: checkOut,
           num_guests: numGuests,
-          accommodation: canApprove ? accommodation : 'A definir',
+          accommodation: (canApprove || accommodation === 'Casa de Sócio') ? accommodation : 'A definir',
           status: canApprove ? 'confirmed' : 'pending',
           notes,
           guests_details: guestsDetails
@@ -431,6 +508,31 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const handleGuestDetailChange = (index: number, field: string, value: string) => {
     const newDetails = [...guestsDetails];
     newDetails[index] = { ...newDetails[index], [field]: value };
+    setGuestsDetails(newDetails);
+  };
+
+  const handleQuickAddDependent = (dependent: any) => {
+    // Check if already added
+    if (guestsDetails.some(g => g.name === dependent.name)) return;
+
+    const newDetails = [...guestsDetails];
+    // Find first empty slot or add new
+    const emptyIdx = newDetails.findIndex((g, i) => i > 0 && !g.name);
+    
+    // Calculate age from birthDate (YYYY-MM-DD)
+    let age = '';
+    if (dependent.birthDate) {
+      const birth = new Date(dependent.birthDate);
+      const today = new Date();
+      age = (today.getFullYear() - birth.getFullYear()).toString();
+    }
+
+    if (emptyIdx !== -1) {
+      newDetails[emptyIdx] = { name: dependent.name, age };
+    } else {
+      newDetails.push({ name: dependent.name, age });
+      setNumGuests(prev => prev + 1);
+    }
     setGuestsDetails(newDetails);
   };
 
@@ -705,59 +807,71 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
               <div className="bg-transparent shadow-none border-none md:bg-white md:rounded-3xl md:shadow-xl md:border md:border-gray-100 md:overflow-hidden space-y-4 md:space-y-0">
                 <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200 hidden md:block">
                   <table className="w-full text-left text-sm min-w-[1200px]">
-                    <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
+                    <thead className="bg-gray-50/50 backdrop-blur-md border-b border-gray-100 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
                       <tr>
-                        <th className="px-8 py-5 font-black text-gray-500 text-[10px] w-64">Sócio / Hóspede</th>
-                        <th className="px-8 py-5 font-black text-gray-500 text-[10px] w-72">Acomodação Designada</th>
-                        <th className="px-8 py-5 font-black text-gray-500 text-[10px] w-48">Período Estadia</th>
-                        <th className="px-8 py-5 font-black text-gray-500 text-[10px] w-32">Status</th>
-                        <th className="px-8 py-5 no-print text-center font-black text-gray-500 text-[10px] w-64">Ações Disponíveis</th>
+                        <th className="px-10 py-6 w-80">Sócio / Hóspede</th>
+                        <th className="px-8 py-6 w-80">Acomodação</th>
+                        <th className="px-8 py-6 w-64">Período</th>
+                        <th className="px-8 py-6 w-40">Status</th>
+                        <th className="px-10 py-6 no-print text-right w-80">Ações Administrativas</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {combinedListReservations.map((res) => {
                         const isGuestRequest = (res as any).isGuestRequest;
                         return (
-                        <tr key={res.id} className={`hover:bg-gray-50/50 transition-colors border-b border-gray-50 ${isGuestRequest ? 'bg-amber-50/20 border-l-4 border-l-amber-400' : ''}`}>
-                          <td className="px-10 py-6">
-                            <div className="flex items-center gap-4">
-                              <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs ring-2 ring-white shadow-sm ${isGuestRequest ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
-                                {isGuestRequest ? <IconMail className="w-5 h-5" /> : (res.name?.[0] || res.full_name?.[0] || res.profiles?.full_name?.[0] || 'U')}
+                        <tr key={res.id} className={`group hover:bg-farm-50/30 transition-all duration-300 border-b border-gray-50/80 ${isGuestRequest ? 'bg-amber-50/10' : ''}`}>
+                          <td className="px-10 py-8">
+                            <div className="flex items-center gap-6">
+                              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-lg ring-4 ring-white shadow-lg shadow-gray-200/50 transition-transform group-hover:scale-105 duration-300 ${isGuestRequest ? 'bg-gradient-to-br from-amber-100 to-amber-200 text-amber-700' : 'bg-gradient-to-br from-gray-50 to-gray-100 text-gray-400'}`}>
+                                {isGuestRequest ? <IconMail className="w-7 h-7" /> : (res.name?.[0] || res.full_name?.[0] || res.profiles?.full_name?.[0] || 'U')}
                               </div>
-                              <div>
-                                <p className="font-bold text-gray-900 leading-tight">{res.name || res.full_name || res.profiles?.full_name || 'Usuário'}</p>
-                                <div className="flex gap-2 text-[10px] items-center mt-0.5">
-                                  <span className="text-gray-400 font-mono">{res.cpf || 'Sem CPF'}</span>
-                                  {isGuestRequest && (res as any).birth_date && <span className="bg-farm-50 text-farm-600 px-1 rounded font-bold text-[9px] border border-farm-100">{new Date((res as any).birth_date).toLocaleDateString('pt-BR')}</span>}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-3 mb-1">
+                                  <p className="font-extrabold text-gray-900 text-lg tracking-tight truncate max-w-[180px]">
+                                    {res.name || res.full_name || res.profiles?.full_name || 'Usuário'}
+                                  </p>
+                                  <button 
+                                    onClick={() => handleViewDetails(res)} 
+                                    className="w-8 h-8 rounded-xl flex items-center justify-center bg-white text-farm-600 hover:bg-farm-600 hover:text-white hover:scale-110 active:scale-95 transition-all shadow-md shadow-farm-100 border border-farm-100 group/info"
+                                    title="Ver detalhes completos"
+                                  >
+                                    <IconInfoCircle className="w-4 h-4 transition-transform duration-500" />
+                                  </button>
                                 </div>
-                                {isGuestRequest && <p className="text-[9px] text-amber-600 mt-1 italic font-medium">Anfitrião: {(res as any).host_member_name}</p>}
+                                <div className="flex flex-wrap gap-2 items-center">
+                                  <span className="text-[10px] font-mono font-black text-gray-400 bg-gray-50/80 px-2 py-0.5 rounded-md border border-gray-100/50 shadow-sm">{res.cpf || 'Sem CPF'}</span>
+                                  {isGuestRequest && <span className="text-amber-600 font-extrabold uppercase text-[8px] tracking-[0.1em] bg-amber-50/50 px-2 py-0.5 rounded-md border border-amber-100/50">Visitante</span>}
+                                  {!isGuestRequest && <span className="text-farm-600 font-extrabold uppercase text-[8px] tracking-[0.1em] bg-farm-50/50 px-2 py-0.5 rounded-md border border-farm-100/50">Sócio</span>}
+                                </div>
                               </div>
                             </div>
                           </td>
-                          <td className="px-8 py-6">
+                          <td className="px-8 py-8">
                             {res.status === 'pending' || isGuestRequest ? (
-                              <div className={`p-3 rounded-2xl border ${isGuestRequest ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'}`}>
-                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                                  {isGuestRequest ? `Pretende: ${(res as any).preferred_accommodation || 'S/ Pref'}` : 'Nova Reserva'}
+                              <div className={`p-4 rounded-2xl border-2 transition-all duration-300 shadow-lg ${isGuestRequest ? 'bg-white border-amber-200/50 shadow-amber-100/20' : 'bg-white border-gray-100 shadow-gray-100/20'}`}>
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 px-1">
+                                  {isGuestRequest ? `Pretende: ${(res as any).preferred_accommodation || 'S/ Pref'}` : 'Designação Necessária'}
                                 </p>
                                 <select 
                                   value={selectedRoomsForApproval[res.id] || ''} 
                                   onChange={(e) => setSelectedRoomsForApproval(prev => ({ ...prev, [res.id]: e.target.value }))}
-                                  className="w-full text-xs p-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-farm-500 focus:border-transparent transition-all shadow-sm"
+                                  className="w-full text-xs p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-farm-500/10 focus:bg-white focus:border-farm-500 transition-all font-bold text-gray-700"
                                 >
                                   <option value="">Atribuir Local...</option>
                                   {accommodationGroups.map(group => (
-                                    <optgroup key={group.name} label={group.name}>
-                                      {group.units.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                                    <optgroup key={group.name} label={group.name} className="font-black text-black">
+                                      {group.units.map(unit => <option key={unit} value={unit} className="font-medium text-gray-600">{unit}</option>)}
                                       {group.name === 'Casas de Sócios' && group.units.length === 0 && <option value="Casa de Sócio">Casa de Sócio</option>}
                                     </optgroup>
                                   ))}
                                 </select>
                               </div>
                             ) : (
-                              <span className="px-4 py-2 rounded-xl text-xs font-bold bg-gray-50 text-gray-600 border border-gray-100">
+                              <div className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black bg-gradient-to-r from-gray-50 to-white text-gray-700 border-2 border-gray-100/50 shadow-sm">
+                                <IconHome className="w-4 h-4 text-farm-500" />
                                 {res.accommodation}
-                              </span>
+                              </div>
                             )}
                           </td>
                           <td className="px-6 py-6">
@@ -787,77 +901,78 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                               {res.estadias?.[0]?.status === 'ativa' ? 'Hóspede Local' :
                                res.estadias?.[0]?.status === 'finalizada' ? 'Encerrada' :
                                res.status === 'confirmed' ? 'Confirmada' : 
-                               isGuestRequest ? 'AGUARDANDO' : 'PENDENTE'}
+                               res.status === 'rejected' ? 'RECUSADA' :
+                               'AGUARDANDO'}
                             </span>
                           </td>
-                          <td className="px-8 py-6 no-print text-center">
-                             <div className="flex items-center justify-center gap-2">
+                          <td className="px-10 py-8 no-print text-right">
+                             <div className="flex items-center justify-end gap-3">
                                {isGuestRequest ? (
-                                  <div className="flex gap-2">
-                                    <button 
-                                      onClick={() => handleActionGuestRequest(res.id, 'approve', res)}
-                                      disabled={processingRequestId === res.id}
-                                      className="bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-green-700 shadow-md shadow-green-100 transition-all flex items-center gap-1.5 disabled:opacity-50"
-                                    >
-                                      {processingRequestId === res.id ? <IconLoader className="w-3 h-3 animate-spin" /> : <IconCheck className="w-4 h-4" />} Aprovar
-                                    </button>
-                                    <button 
-                                      onClick={() => handleActionGuestRequest(res.id, 'reject', res)}
-                                      disabled={processingRequestId === res.id}
-                                      className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-100 transition-all flex items-center gap-1.5"
-                                    >
-                                      <IconX className="w-4 h-4" /> Recusar
-                                    </button>
-                                  </div>
-                               ) : res.status === 'pending' ? (
-                                  <div className="flex gap-2">
-                                    {canApprove ? (
-                                      <>
-                                        <button 
-                                          onClick={() => {
-                                            const room = selectedRoomsForApproval[res.id];
-                                            if (!room) return alert('Por favor, atribua uma acomodação antes de aprovar.');
-                                            handleUpdateStatus(res.id, 'confirmed', room);
-                                          }} 
-                                          className="bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-green-700 shadow-md shadow-green-100 transition-all flex items-center gap-1.5"
-                                        >
-                                          <IconCheck className="w-4 h-4" /> Aprovar
-                                        </button>
-                                        <button 
-                                          onClick={() => handleUpdateStatus(res.id, 'rejected')} 
-                                          className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-100 transition-all"
-                                        >
-                                          Negar
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <span className="text-xs text-amber-600 font-bold bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100 italic">Pendente</span>
-                                    )}
-                                  </div>
-                               ) : (
-                                 <div className="flex gap-2">
-                                   {(res.estadias?.[0]?.status === 'ativa' || res.estadias?.[0]?.status === 'finalizada') && (
+                                   <div className="flex items-center gap-3">
                                      <button 
-                                       onClick={() => handleViewProforma(res.estadias[0].id)} 
-                                       className={`${res.estadias[0].status === 'ativa' ? 'bg-blue-600' : 'bg-farm-700'} text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-2 hover:opacity-90 shadow-sm transition-all`} 
-                                       title={res.estadias[0].status === 'ativa' ? "Ver Conta / Consumo" : "Ver Recibo Final"}
+                                       onClick={() => handleActionGuestRequest(res.id, 'approve', res)}
+                                       disabled={processingRequestId === res.id}
+                                       className="bg-green-600 text-white px-8 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] hover:bg-green-700 hover:-translate-y-0.5 active:translate-y-0 shadow-xl shadow-green-100 transition-all flex items-center gap-2 disabled:opacity-50"
                                      >
-                                       <IconFileText className="w-4 h-4" /> 
-                                       {res.estadias[0].status === 'ativa' ? 'Gestão Financeira' : 'Ver Recibo'}
+                                       {processingRequestId === res.id ? <IconLoader className="w-3.5 h-3.5 animate-spin" /> : <IconCheck className="w-4 h-4" />} Aprovar
                                      </button>
-                                   )}
-                                   
-                                   {res.status === 'confirmed' && !res.estadias?.[0]?.status && (
-                                     <button onClick={() => handleStartCheckin(res)} className="bg-farm-600 text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-farm-700 shadow-sm transition-all">
-                                       <IconZap className="w-4 h-4" /> Dar Check-in
+                                     <button 
+                                       onClick={() => handleActionGuestRequest(res.id, 'reject', res)}
+                                       disabled={processingRequestId === res.id}
+                                       className="bg-white text-red-500 px-6 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] hover:bg-red-50 hover:text-red-700 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-2 border-2 border-red-100 shadow-lg shadow-red-50/50"
+                                     >
+                                       <IconX className="w-4 h-4" /> Recusar
                                      </button>
-                                   )}
-                                 </div>
-                               )}
+                                   </div>
+                               ) : res.status === 'pending' ? (
+                                   <div className="flex items-center gap-3">
+                                     {canApprove ? (
+                                       <>
+                                         <button 
+                                           onClick={() => {
+                                             const room = selectedRoomsForApproval[res.id];
+                                             if (!room) return alert('Por favor, atribua uma acomodação antes de aprovar.');
+                                             handleUpdateStatus(res.id, 'confirmed', room);
+                                           }} 
+                                           className="bg-green-600 text-white px-8 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] hover:bg-green-700 hover:-translate-y-0.5 active:translate-y-0 shadow-xl shadow-green-100 transition-all flex items-center gap-2"
+                                         >
+                                           <IconCheck className="w-4 h-4" /> Aprovar
+                                         </button>
+                                         <button 
+                                           onClick={() => handleUpdateStatus(res.id, 'rejected')} 
+                                           className="bg-white text-red-400 px-6 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] hover:bg-red-50 hover:text-red-600 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-2 border-2 border-red-50"
+                                         >
+                                           <IconX className="w-3.5 h-3.5" /> Recusar
+                                         </button>
+                                       </>
+                                     ) : (
+                                       <span className="text-[10px] text-amber-500 font-black uppercase tracking-widest bg-amber-50 px-5 py-3 rounded-2xl border-2 border-amber-100/50 italic">AGUARDANDO</span>
+                                     )}
+                                   </div>
+                                ) : (
+                                  <div className="flex items-center gap-3">
+                                     {(res.estadias?.[0]?.status === 'ativa' || res.estadias?.[0]?.status === 'finalizada') && (
+                                       <button 
+                                         onClick={() => handleViewProforma(res.estadias[0].id)} 
+                                         className={`${res.estadias[0].status === 'ativa' ? 'bg-blue-600 shadow-blue-100' : 'bg-farm-700 shadow-farm-100'} text-white font-black px-6 py-3.5 rounded-2xl text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:opacity-90 hover:-translate-y-0.5 active:translate-y-0 shadow-xl transition-all`} 
+                                         title={res.estadias[0].status === 'ativa' ? "Ver Conta / Consumo" : "Ver Recibo Final"}
+                                       >
+                                         <IconFileText className="w-4 h-4" /> 
+                                         {res.estadias[0].status === 'ativa' ? 'Financeiro' : 'Recibo'}
+                                       </button>
+                                     )}
+                                     
+                                     {res.status === 'confirmed' && !res.estadias?.[0]?.status && (
+                                       <button onClick={() => handleStartCheckin(res)} className="bg-farm-600 text-white font-black px-8 py-3.5 rounded-2xl text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-farm-700 hover:-translate-y-0.5 active:translate-y-0 shadow-xl shadow-farm-100 transition-all">
+                                         <IconZap className="w-4 h-4" /> Check-in
+                                       </button>
+                                     )}
 
-                               <button onClick={() => isGuestRequest ? handleActionGuestRequest(res.id, 'reject', res) : handleDeleteReservation(res.id)} className="p-2 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all ml-2" title="Excluir Permanentemente">
-                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                               </button>
+                                     <button onClick={() => isGuestRequest ? handleActionGuestRequest(res.id, 'reject', res) : handleDeleteReservation(res.id)} className="w-12 h-12 flex items-center justify-center text-red-200 hover:text-red-500 hover:bg-red-50 hover:scale-110 active:scale-95 rounded-2xl transition-all ml-2" title="Excluir Permanentemente">
+                                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                     </button>
+                                  </div>
+                                )}
                              </div>
                           </td>
                         </tr>
@@ -873,16 +988,22 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                     return (
                       <div key={res.id} className={`bg-white p-5 rounded-2xl shadow-sm border ${isGuestRequest ? 'border-amber-300' : 'border-gray-100'} space-y-4`}>
                         <div className="flex items-start justify-between border-b pb-4 border-gray-50">
-                          <div>
-                            <p className="font-bold text-gray-900 text-lg leading-tight">{res.name || res.full_name || res.profiles?.full_name || 'Usuário'}</p>
-                            <div className="flex gap-2 text-xs items-center mt-2">
-                              <span className="text-gray-500 font-mono bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{res.cpf || 'Sem CPF'}</span>
-                              {isGuestRequest && (res as any).birth_date && <span className="bg-farm-50 text-farm-600 px-2 py-0.5 rounded font-bold text-xs border border-farm-100">{new Date((res as any).birth_date).toLocaleDateString('pt-BR')}</span>}
+                          <div className="flex items-center gap-4">
+                            <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl ring-4 ring-white shadow-md ${isGuestRequest ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                              {isGuestRequest ? <IconMail className="w-7 h-7" /> : (res.name?.[0] || 'U')}
                             </div>
-                            {isGuestRequest && <p className="text-xs text-amber-600 mt-2 italic font-medium">Anfitrião: {(res as any).host_member_name}</p>}
-                          </div>
-                          <div className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-lg ring-4 ring-white shadow-sm ${isGuestRequest ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {isGuestRequest ? <IconMail className="w-6 h-6" /> : (res.name?.[0] || res.full_name?.[0] || res.profiles?.full_name?.[0] || 'U')}
+                            <div>
+                                <div className="flex items-center gap-2.5">
+                                    <p className="font-extrabold text-gray-900 text-lg leading-tight">{res.name || 'Usuário'}</p>
+                                    <button 
+                                        onClick={() => handleViewDetails(res)} 
+                                        className="w-8 h-8 rounded-xl flex items-center justify-center bg-farm-50 text-farm-600 border border-farm-100 shadow-sm"
+                                    >
+                                        <IconInfoCircle className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <p className="text-xs font-mono text-gray-400 mt-1">{res.cpf || 'Sem CPF'}</p>
+                            </div>
                           </div>
                         </div>
 
@@ -916,7 +1037,8 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                             {res.estadias?.[0]?.status === 'ativa' ? 'Hóspede Local' :
                              res.estadias?.[0]?.status === 'finalizada' ? 'Encerrada' :
                              res.status === 'confirmed' ? 'Confirmada' : 
-                             isGuestRequest ? 'AGUARDANDO APROVAÇÃO' : 'PENDENTE'}
+                             res.status === 'rejected' ? 'RECUSADA' :
+                             'AGUARDANDO'}
                           </span>
                         </div>
 
@@ -951,9 +1073,9 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                                     canApprove ? (
                                       <>
                                         <button onClick={() => { const rm = selectedRoomsForApproval[res.id]; if(!rm) return alert('Atribua local'); handleUpdateStatus(res.id, 'confirmed', rm); }} className="flex-1 bg-green-600 text-white py-3 rounded-lg text-sm font-bold flex justify-center items-center shadow-lg shadow-green-100 active:scale-95 transition-all">Aprovar</button>
-                                        <button onClick={() => handleUpdateStatus(res.id, 'rejected')} className="flex-1 bg-red-50 text-red-600 py-3 rounded-lg text-sm font-bold flex justify-center items-center active:scale-95 transition-all border border-red-100">Negar</button>
+                                        <button onClick={() => handleUpdateStatus(res.id, 'rejected')} className="flex-1 bg-red-50 text-red-600 py-3 rounded-lg text-sm font-bold flex justify-center items-center active:scale-95 transition-all border border-red-100">Recusar</button>
                                       </>
-                                    ) : <span className="text-sm text-amber-600 font-bold w-full text-center py-2">Aguardando Avaliação</span>
+                                    ) : <span className="text-sm text-amber-600 font-bold w-full text-center py-2">AGUARDANDO</span>
                                   )}
                                 </div>
                               </div>
@@ -1372,7 +1494,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                 <div className="bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
                   <IconUser className="w-8 h-8 text-amber-600" />
                 </div>
-                <h3 className="text-2xl font-bold text-amber-900 font-serif mb-3">Complete seu Cadastro</h3>
+                <h3 className="text-xl font-bold text-amber-900 font-serif mb-3">Complete seu Cadastro</h3>
                 <p className="text-amber-700 mb-8 max-w-md mx-auto leading-relaxed">
                   Para solicitar reservas na Fazenda São Bento, precisamos que você complete seu cadastro com <strong>CPF</strong> e <strong>Telefone</strong> primeiro. Isso ajuda na sua identificação e segurança.
                 </p>
@@ -1390,7 +1512,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
               <div className="max-w-2xl mx-auto">
                 {submitted ? (
                   <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-8 rounded-2xl text-center shadow-sm animate-fade-in">
-                    <p className="font-bold text-xl mb-2">Solicitação Enviada!</p>
+                    <p className="font-bold text-lg mb-2">Solicitação Enviada!</p>
                     <p>Sua solicitação de reserva foi enviada para análise da administração. <br /> Você será avisado em breve sobre a confirmação.</p>
                   </div>
                 ) : (
@@ -1402,14 +1524,14 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                         <label className="block text-sm font-bold text-gray-700">{isVisitor ? 'Nome do sócio anfitrião' : 'Nome do Sócio Principal'}</label>
                         <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" />
                       </div>
-                      <div className="grid grid-cols-2 gap-6">
+                      <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
-                          <label className="block text-sm font-bold text-gray-700">Chegada</label>
-                          <input type="date" required value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" />
+                          <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wider">Chegada</label>
+                          <input type="date" required value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all text-sm font-bold" />
                         </div>
                         <div className="space-y-1">
-                          <label className="block text-sm font-bold text-gray-700">Saída</label>
-                          <input type="date" required value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" />
+                          <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wider">Saída</label>
+                          <input type="date" required value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all text-sm font-bold" />
                         </div>
                       </div>
 
@@ -1419,17 +1541,39 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                       </div>
 
                       {numGuests > 1 && (
-                        <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 animate-fade-in">
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Detalhes dos Hóspedes Adicionais</p>
+                        <div className="space-y-4 p-5 bg-gray-50 rounded-2xl border border-gray-100 animate-fade-in shadow-inner">
+                          <div className="flex justify-between items-center mb-2 px-1">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Detalhes dos Hóspedes</p>
+                          </div>
+
+                          {isMember && userDependents.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                {userDependents.map((dep, idx) => (
+                                    <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => handleQuickAddDependent(dep)}
+                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1.5 ${
+                                            guestsDetails.some(g => g.name === dep.name)
+                                            ? 'bg-farm-600 text-white border-farm-600 shadow-sm shadow-farm-100'
+                                            : 'bg-white text-farm-600 border-farm-100 hover:bg-farm-50'
+                                        }`}
+                                    >
+                                        <IconUser className="w-3 h-3" /> {dep.name}
+                                    </button>
+                                ))}
+                            </div>
+                          )}
+
                           {guestsDetails.slice(1).map((_, i) => (
-                            <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-gray-100 last:border-0 last:pb-0">
+                            <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-3 border-b border-gray-200 last:border-0 last:pb-0">
                               <input
                                 type="text"
                                 placeholder={`Nome do Hóspede ${i + 2}`}
                                 required
                                 value={guestsDetails[i + 1].name}
                                 onChange={(e) => handleGuestDetailChange(i + 1, 'name', e.target.value)}
-                                className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-farm-500 outline-none"
+                                className="px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-farm-500 outline-none font-medium"
                               />
                               <input
                                 type="number"
@@ -1437,11 +1581,43 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                                 required
                                 value={guestsDetails[i + 1].age}
                                 onChange={(e) => handleGuestDetailChange(i + 1, 'age', e.target.value)}
-                                className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-farm-500 outline-none"
+                                className="px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-farm-500 outline-none font-medium"
                               />
                             </div>
                           ))}
                         </div>
+                      )}
+
+                      {isMember && (
+                          <div className="p-5 bg-gradient-to-br from-farm-50/50 to-white border border-farm-100 rounded-2xl space-y-4 shadow-sm">
+                            <p className="text-[10px] font-black text-farm-600 uppercase tracking-[0.2em] px-1 border-b border-farm-100 pb-2 mb-1">Local da Hospedagem</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => { setAccommodationPreference('house'); setAccommodation('Casa de Sócio'); }}
+                                    className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${
+                                        accommodationPreference === 'house'
+                                        ? 'bg-farm-600 text-white border-farm-600 shadow-lg shadow-farm-100'
+                                        : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <IconHome className={`w-6 h-6 ${accommodationPreference === 'house' ? 'text-white' : 'text-gray-300'}`} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-center">Sua Própria Casa</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setAccommodationPreference('guest'); setAccommodation('A definir'); }}
+                                    className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${
+                                        accommodationPreference === 'guest'
+                                        ? 'bg-farm-600 text-white border-farm-600 shadow-lg shadow-farm-100'
+                                        : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <IconZap className={`w-6 h-6 ${accommodationPreference === 'guest' ? 'text-white' : 'text-gray-300'}`} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-center">Casa Grande / Chalé</span>
+                                </button>
+                            </div>
+                          </div>
                       )}
 
                       {/* Local de Hospedagem - Admin chooses later, only shown if user is admin now or if it's already set.
@@ -1482,14 +1658,16 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                   {reservations.map(res => (
                     <div key={res.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative group overflow-hidden">
                       <div className={`absolute top-0 right-0 px-4 py-1.5 rounded-bl-xl text-[10px] font-black uppercase tracking-widest ${
-                        (res.status === 'confirmed' || res.status === 'em_curso') ? 'bg-green-100 text-green-700' : 
+                        (res.status === 'confirmed' || res.status === 'em_curso') ? 
+                          (res.estadias?.[0]?.status === 'finalizada' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700') : 
                         res.status === 'rejected' ? 'bg-red-100 text-red-700' : 
                         res.status === 'finalizada' ? 'bg-gray-100 text-gray-700' : 'bg-yellow-100 text-yellow-700'
                       }`}>
                         {res.status === 'confirmed' ? 'Confirmada' : 
-                         res.status === 'em_curso' ? 'Em Andamento' : 
+                         res.status === 'em_curso' ? 
+                           (res.estadias?.[0]?.status === 'finalizada' ? 'Pagamento Pendente' : 'Em Andamento') : 
                          res.status === 'finalizada' ? 'Encerrada' :
-                         res.status === 'rejected' ? 'Negada' : 'Aguardando'}
+                         res.status === 'rejected' ? 'RECUSADA' : 'AGUARDANDO'}
                       </div>
                       <h4 className="font-bold text-gray-800 text-lg mb-2">{res.accommodation}</h4>
                       <div className="space-y-2 text-sm text-gray-500">
@@ -1561,13 +1739,42 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest">Códigos das Pulseiras</label>
                   <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
                     {Array.from({ length: selectedResForCheckin.num_guests || 1 }).map((_, idx) => {
-                      const guest = Array.isArray(selectedResForCheckin.guests_details) ? selectedResForCheckin.guests_details[idx] : null;
+                      const guest = checkinGuests[idx] || { name: '', age: '' };
                       return (
-                        <div key={idx} className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs font-bold text-gray-500">{guest?.name || (idx === 0 ? selectedResForCheckin.name : `Hóspede ${idx + 1}`)}</span>
-                            <span className="text-[10px] text-gray-400 font-mono">#{idx+1}</span>
+                        <div key={idx} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-3">
+                          <div className="flex justify-between items-center px-1">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Hóspede #{idx+1}</span>
+                            <span className="text-[10px] text-gray-400 font-mono">Pulseira</span>
                           </div>
+                          
+                          <div className="grid grid-cols-2 gap-3">
+                            <input
+                              type="text"
+                              value={guest.name || ''}
+                              onChange={(e) => {
+                                const newGuests = [...checkinGuests];
+                                newGuests[idx] = { ...newGuests[idx], name: e.target.value };
+                                setCheckinGuests(newGuests);
+                              }}
+                              className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-farm-500 outline-none"
+                              placeholder="Nome"
+                            />
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={guest.age || ''}
+                                onChange={(e) => {
+                                  const newGuests = [...checkinGuests];
+                                  newGuests[idx] = { ...newGuests[idx], age: e.target.value };
+                                  setCheckinGuests(newGuests);
+                                }}
+                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-farm-500 outline-none pr-8"
+                                placeholder="Idade"
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-gray-300 font-bold">ANOS</span>
+                            </div>
+                          </div>
+
                           <input
                             type="text"
                             value={wristbandCodes[idx] || ''}
@@ -1576,8 +1783,8 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                               newCodes[idx] = e.target.value;
                               setWristbandCodes(newCodes);
                             }}
-                            className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm font-mono text-center"
-                            placeholder="Manual (ou auto)"
+                            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-xs font-mono text-center placeholder:font-sans placeholder:text-gray-300"
+                            placeholder="Código da Pulseira (Ex: 0101)"
                           />
                         </div>
                       );
@@ -1606,7 +1813,116 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
             </div>
           </div>
         )}
-      </div>
+        {/* Details Modal */}
+      {showDetailsModal && viewingResDetails && (
+        <div className="fixed inset-0 z-[100] overflow-y-auto no-print">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowDetailsModal(false)}></div>
+            <div className="flex min-h-full items-center justify-center p-4">
+                <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl relative z-10 animate-fade-in border border-gray-100">
+                    <header className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-xl sticky top-0 z-20">
+                        <div>
+                            <p className="text-[9px] text-farm-600 font-black uppercase tracking-[0.2em] mb-1 px-1">Ficha Técnica</p>
+                            <h3 className="text-xl font-black text-gray-900 tracking-tight">Detalhes do Pedido</h3>
+                        </div>
+                        <button onClick={() => setShowDetailsModal(false)} className="text-gray-400 hover:text-red-500 p-3 bg-gray-50 rounded-2xl hover:rotate-90 transition-all duration-300 border border-gray-100 shadow-inner">
+                            <IconX className="w-6 h-6" />
+                        </button>
+                    </header>
+                    
+                    <div className="p-8 space-y-8 max-h-[70vh] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200">
+                        <div className="flex items-center gap-6 bg-gradient-to-br from-gray-50 to-white p-6 rounded-3xl border-2 border-gray-100 shadow-xl shadow-gray-50/50">
+                            <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center text-farm-600 text-2xl font-black border-4 border-gray-50">
+                                {viewingResDetails.name?.[0] || viewingResDetails.full_name?.[0] || viewingResDetails.profiles?.full_name?.[0] || 'U'}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h4 className="text-xl font-black text-gray-900 tracking-tight mb-1 truncate">{viewingResDetails.name || viewingResDetails.full_name || viewingResDetails.profiles?.full_name}</h4>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs text-gray-400 font-mono bg-white px-2 py-0.5 rounded-lg border border-gray-100 shadow-inner">{viewingResDetails.cpf || 'Sem CPF'}</span>
+                                    {viewingResDetails.isGuestRequest && viewingResDetails.birth_date && (
+                                        <span className="text-xs font-black text-farm-600/60 uppercase tracking-widest">{new Date(viewingResDetails.birth_date).toLocaleDateString('pt-BR')}</span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="p-5 bg-white border-2 border-gray-50 rounded-2xl shadow-lg shadow-gray-50/30">
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Check-in / Out</p>
+                                <div className="flex items-center gap-2 text-gray-800 font-black text-base">
+                                    <IconCalendar className="w-4 h-4 text-farm-500" />
+                                    {formatDate(viewingResDetails.check_in)} — {formatDate(viewingResDetails.check_out)}
+                                </div>
+                            </div>
+                            <div className="p-5 bg-white border-2 border-gray-50 rounded-2xl shadow-lg shadow-gray-50/30">
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Acomodação</p>
+                                <div className="flex items-center gap-2 text-farm-600 font-black text-base uppercase tracking-tight">
+                                    <IconHome className="w-4 h-4" />
+                                    {viewingResDetails.isGuestRequest ? (viewingResDetails.preferred_accommodation || 'Indefinida') : viewingResDetails.accommodation}
+                                </div>
+                            </div>
+                        </div>
+
+                        {viewingResDetails.isGuestRequest && viewingResDetails.host_member_name && (
+                            <div className="p-6 bg-gradient-to-r from-amber-50 to-white border-2 border-amber-100 rounded-3xl shadow-xl shadow-amber-50/20 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <IconUser className="w-16 h-16" />
+                                </div>
+                                <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-2">Sócio Responsável</p>
+                                <p className="text-xl font-black text-amber-900 tracking-tight italic">"{viewingResDetails.host_member_name}"</p>
+                            </div>
+                        )}
+
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-end px-1">
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2">
+                                    <IconUser className="w-3 h-3 text-farm-500" /> Grupo / Hóspedes ({viewingResDetails.num_guests})
+                                </p>
+                            </div>
+                            <div className="grid gap-2">
+                                <div className="p-4 bg-farm-50/20 rounded-xl border-dashed border-2 border-farm-100 flex justify-between items-center group">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center font-bold text-[10px] text-farm-600 shadow-sm border border-farm-100">1</div>
+                                        <span className="text-[13px] font-black text-gray-800">{viewingResDetails.name || viewingResDetails.full_name || viewingResDetails.profiles?.full_name}</span>
+                                    </div>
+                                    <span className="text-[8px] bg-farm-600 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-widest shadow-lg shadow-farm-100">Titular</span>
+                                </div>
+                                {viewingResDetails.guests_details?.filter((g: any) => {
+                                    if (!g.name || g.name.trim() === "") return false;
+                                    const titularName = (viewingResDetails.name || viewingResDetails.full_name || viewingResDetails.profiles?.full_name || "").toLowerCase();
+                                    return g.name.toLowerCase() !== titularName;
+                                }).map((guest: any, idx: number) => (
+                                    <div key={idx} className="p-4 bg-white rounded-xl border border-gray-50 flex justify-between items-center group hover:bg-gray-50 transition-all">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center font-bold text-[9px] text-gray-400 group-hover:text-farm-600 group-hover:bg-farm-50">{idx + 2}</div>
+                                            <span className="text-[13px] font-bold text-gray-600 group-hover:text-gray-900 transition-colors">{guest.name}</span>
+                                        </div>
+                                        <span className="text-[9px] font-black text-farm-500 bg-farm-50 px-2 py-1 rounded-lg border border-farm-100">{guest.age} anos</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {viewingResDetails.notes && (
+                            <div className="bg-gray-900 rounded-[1.5rem] p-6 relative overflow-hidden shadow-2xl">
+                                <div className="absolute top-0 right-0 p-6 opacity-10">
+                                    <IconFileText className="w-16 h-16 text-white" />
+                                </div>
+                                <p className="text-[9px] font-black text-farm-400 uppercase tracking-[0.3em] mb-3">Notas & Observações</p>
+                                <p className="text-base text-gray-300 font-medium italic leading-relaxed relative z-10">"{viewingResDetails.notes}"</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <footer className="px-10 py-8 bg-white border-t border-gray-100 flex justify-center sticky bottom-0 z-20">
+                        <button onClick={() => setShowDetailsModal(false)} className="w-full bg-gray-900 text-white px-10 py-5 rounded-2xl text-sm font-black uppercase tracking-[0.2em] hover:bg-farm-600 hover:scale-[1.02] active:scale-95 transition-all shadow-2xl shadow-gray-200">
+                            Confirmar Leitura
+                        </button>
+                    </footer>
+                </div>
+            </div>
+        </div>
+      )}
+    </div>
   );
 };
 
