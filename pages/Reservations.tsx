@@ -45,6 +45,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [allReservations, setAllReservations] = useState<any[]>([]);
   const [fetching, setFetching] = useState(true);
+  const [isAutoApproved, setIsAutoApproved] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
   const [adminTab, setAdminTab] = useState<'list' | 'map' | 'form' | 'in_house' | 'history' | 'planning' | 'guest_requests'>('map');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -382,8 +383,11 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
     // Initialize guests details
     const existing = res.guests_details || [];
     const initialGuests = Array.from({ length: res.num_guests || 1 }).map((_, i) => {
-        if (existing[i]) return { ...existing[i] };
-        if (i === 0) return { name: res.name || res.profiles?.full_name, age: '' };
+        if (existing[i] && existing[i].name) return { ...existing[i] };
+        if (i === 0) {
+            const titularName = res.name || res.profiles?.full_name || res.profiles?.[0]?.full_name;
+            return { name: titularName || '', age: '' };
+        }
         return { name: '', age: '' };
     });
     setCheckinGuests(initialGuests);
@@ -455,6 +459,9 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado');
 
+      const autoApprove = (canApprove || (isMember && accommodation === 'Casa de Sócio'));
+      setIsAutoApproved(autoApprove);
+
       const { error } = await supabase
         .from('reservations')
         .insert([{
@@ -464,7 +471,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
           check_out: checkOut,
           num_guests: numGuests,
           accommodation: (canApprove || accommodation === 'Casa de Sócio') ? accommodation : 'A definir',
-          status: canApprove ? 'confirmed' : 'pending',
+          status: autoApprove ? 'confirmed' : 'pending',
           notes,
           guests_details: guestsDetails
         }]);
@@ -1541,8 +1548,12 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
               <div className="max-w-2xl mx-auto">
                 {submitted ? (
                   <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-8 rounded-2xl text-center shadow-sm animate-fade-in">
-                    <p className="font-bold text-lg mb-2">Solicitação Enviada!</p>
-                    <p>Sua solicitação de reserva foi enviada para análise da administração. <br /> Você será avisado em breve sobre a confirmação.</p>
+                    <p className="font-bold text-lg mb-2">{isAutoApproved ? 'Reserva Confirmada!' : 'Solicitação Enviada!'}</p>
+                    <p>
+                        {isAutoApproved 
+                            ? 'Sua reserva para sua residência foi registrada com sucesso. No dia da chegada, basta realizar o check-in no portal.' 
+                            : 'Sua solicitação de reserva foi enviada para análise da administração. Você será avisado em breve sobre a confirmação.'}
+                    </p>
                   </div>
                 ) : (
                   <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100">
