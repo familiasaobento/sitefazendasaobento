@@ -21,6 +21,13 @@ interface CashFlowEntry {
     documento_anexo_url: string | null;
     meio_pagamento: 'Dinheiro' | 'Banco';
     conta_origem: string;
+    forma_pagamento?: string;
+    observacoes?: string;
+    data_documento?: string | null;
+    data_vencimento?: string | null;
+    tags?: string | null;
+    parcela_atual?: number;
+    total_parcelas?: number;
 }
 
 interface FinanceContact {
@@ -62,6 +69,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
     const [showForm, setShowForm] = useState(false);
     const [entryMode, setEntryMode] = useState<'manual' | 'ocr'>('manual');
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [isOcrProcessing, setIsOcrProcessing] = useState(false);
     const [showReconciliation, setShowReconciliation] = useState(false);
 
@@ -96,7 +104,14 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         descricao: '',
         cnpj_fornecedor: '',
         meio_pagamento: 'Banco' as 'Dinheiro' | 'Banco',
-        conta_origem: ''
+        conta_origem: '',
+        forma_pagamento: 'PIX',
+        observacoes: '',
+        data_documento: '',
+        data_vencimento: '',
+        tags: '',
+        is_parcelado: false,
+        parcelas: 1
     };
 
     const [formData, setFormData] = useState(defaultFormData);
@@ -187,7 +202,14 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             descricao: entry.descricao || '',
             cnpj_fornecedor: entry.cnpj_fornecedor || '',
             meio_pagamento: entry.meio_pagamento || 'Banco',
-            conta_origem: entry.conta_origem || ''
+            conta_origem: entry.conta_origem || '',
+            forma_pagamento: entry.forma_pagamento || 'PIX',
+            observacoes: entry.observacoes || '',
+            data_documento: entry.data_documento || '',
+            data_vencimento: entry.data_vencimento || '',
+            tags: entry.tags || '',
+            is_parcelado: false,
+            parcelas: 1
         });
         setShowForm(true);
         setEntryMode('manual');
@@ -199,6 +221,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         setEditingEntry(null);
         setFormData(defaultFormData);
         setSelectedFile(null);
+        setPreviewUrl(null);
         setSaveToContacts(false);
         setTempContact({ nome: '', identificador: '', banco: '', agencia: '', conta: '', chave_pix: '' });
     };
@@ -218,6 +241,12 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         if (!e.target.files || e.target.files.length === 0) return;
         const file = e.target.files[0];
         setSelectedFile(file);
+
+        if (file.type.startsWith('image/')) {
+            setPreviewUrl(URL.createObjectURL(file));
+        } else {
+            setPreviewUrl(null);
+        }
 
         if (entryMode === 'ocr') {
             setIsOcrProcessing(true);
@@ -321,27 +350,59 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                 }
             }
 
-            const payload = {
+            const basePayload = {
                 tipo: formData.tipo,
                 categoria: formData.categoria,
-                valor: parseFloat(formData.valor.toString().replace(',', '.')),
                 data_pagamento: formData.data_pagamento,
                 descricao: formData.descricao,
                 cnpj_fornecedor: finalCnpj === 'NEW_MANUAL' ? '' : (finalCnpj || null),
                 documento_anexo_url,
                 meio_pagamento: formData.meio_pagamento,
-                conta_origem: formData.conta_origem
+                conta_origem: formData.conta_origem,
+                forma_pagamento: formData.forma_pagamento,
+                observacoes: formData.observacoes,
+                data_documento: formData.data_documento || null,
+                data_vencimento: formData.data_vencimento || null,
+                tags: formData.tags || null
             };
+
+            const payloads = [];
+            if (!editingEntry && formData.is_parcelado && formData.parcelas > 1) {
+                const baseValue = parseFloat(formData.valor.toString().replace(',', '.')) / formData.parcelas;
+                let currentDate = new Date(formData.data_pagamento + 'T12:00:00');
+                let currentVc = formData.data_vencimento ? new Date(formData.data_vencimento + 'T12:00:00') : null;
+                
+                for (let i = 1; i <= formData.parcelas; i++) {
+                    payloads.push({
+                        ...basePayload,
+                        valor: baseValue,
+                        descricao: `${formData.descricao} (Parcela ${i}/${formData.parcelas})`,
+                        parcela_atual: i,
+                        total_parcelas: formData.parcelas,
+                        data_pagamento: currentDate.toISOString().split('T')[0],
+                        data_vencimento: currentVc ? currentVc.toISOString().split('T')[0] : null
+                    });
+                    currentDate.setMonth(currentDate.getMonth() + 1);
+                    if (currentVc) currentVc.setMonth(currentVc.getMonth() + 1);
+                }
+            } else {
+                payloads.push({
+                    ...basePayload,
+                    valor: parseFloat(formData.valor.toString().replace(',', '.')),
+                    parcela_atual: editingEntry?.parcela_atual || 1,
+                    total_parcelas: editingEntry?.total_parcelas || 1
+                });
+            }
 
             if (editingEntry) {
                 const { error } = await supabase
                     .from('fluxo_caixa')
-                    .update(payload)
+                    .update(payloads[0])
                     .eq('id', editingEntry.id);
                 if (error) throw error;
                 alert('Lançamento atualizado com sucesso!');
             } else {
-                const { error } = await supabase.from('fluxo_caixa').insert([payload]);
+                const { error } = await supabase.from('fluxo_caixa').insert(payloads);
                 if (error) throw error;
             }
 
@@ -423,9 +484,10 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
 
                             <div className="mb-8">
                                 <label className="block text-sm font-bold text-gray-700 mb-2">{entryMode === 'ocr' ? 'Tirar Foto ou Upload da Nota Fiscal' : 'Anexar Comprovante (Opcional)'}</label>
-                                <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${isOcrProcessing ? 'bg-blue-50 border-blue-200' : selectedFile ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-300 hover:bg-gray-100'}`}>
-                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                        {isOcrProcessing ? (<><IconLoader className="w-10 h-10 text-blue-600 animate-spin mb-3" /><span className="text-blue-700 font-bold">Processando OCR...</span></>) : selectedFile ? (<span className="text-green-700 font-bold flex flex-col items-center gap-2"><IconCheck className="w-8 h-8 bg-green-200 rounded-full p-1" />{selectedFile.name}</span>) : (<><p className="mb-1 text-sm text-gray-500"><span className="font-semibold text-farm-700">Clique para selecionar arquivo</span></p></>)}
+                                <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer transition-all relative overflow-hidden ${isOcrProcessing ? 'bg-blue-50 border-blue-200' : selectedFile ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-300 hover:bg-gray-100'}`}>
+                                    {previewUrl && <img src={previewUrl} className="absolute inset-0 w-full h-full object-cover opacity-20 filter blur-sm" alt="Preview" />}
+                                    <div className="flex flex-col items-center justify-center pt-5 pb-6 relative z-10">
+                                        {isOcrProcessing ? (<><IconLoader className="w-10 h-10 text-blue-600 animate-spin mb-3" /><span className="text-blue-700 font-bold">Processando OCR...</span></>) : selectedFile ? (<span className="text-green-700 font-bold flex flex-col items-center gap-2"><IconCheck className="w-8 h-8 bg-green-200 rounded-full p-1 shadow-sm" />{selectedFile.name}</span>) : (<><p className="mb-1 text-sm text-gray-500"><span className="font-semibold text-farm-700">Clique para selecionar arquivo</span></p></>)}
                                     </div>
                                     <input type="file" className="hidden" accept=".pdf,image/*" onChange={handleFileChange} />
                                 </label>
@@ -439,20 +501,62 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                         <button type="button" onClick={() => setFormData({ ...formData, tipo: 'saida' })} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${formData.tipo === 'saida' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}>Saída</button>
                                     </div>
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Forma</label>
+                                    <select required value={formData.forma_pagamento} onChange={e => {
+                                        const val = e.target.value;
+                                        const isDin = val === 'Dinheiro';
+                                        const accs = accounts.filter(a => isDin ? a.tipo === 'Dinheiro' : a.tipo === 'Banco');
+                                        const firstAcc = accs.length > 0 ? accs[0].nome : '';
+                                        setFormData({
+                                            ...formData,
+                                            forma_pagamento: val,
+                                            meio_pagamento: isDin ? 'Dinheiro' : 'Banco',
+                                            conta_origem: firstAcc
+                                        });
+                                    }} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white font-medium">
+                                        <option value="PIX">PIX</option>
+                                        <option value="Transferência">Transferência Bancária</option>
+                                        <option value="Boleto">Boleto</option>
+                                        <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                        <option value="Cartão de Débito">Cartão de Débito</option>
+                                        <option value="Dinheiro">Dinheiro Físico / Caixa</option>
+                                        <option value="Outros">Outros</option>
+                                    </select>
+                                </div>
                                 <div className="lg:col-span-1">
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">Conta / Origem</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Conta / Caixa</label>
                                     <select required value={formData.conta_origem} onChange={e => {
                                         const acc = accounts.find(a => a.nome === e.target.value);
                                         setFormData({ ...formData, conta_origem: e.target.value, meio_pagamento: acc?.tipo || 'Banco' });
                                     }} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white font-medium">
-                                        <option value="">Selecione a conta...</option>
-                                        {accounts.map(acc => (
+                                        <option value="">Selecione...</option>
+                                        {accounts.filter(a => formData.forma_pagamento === 'Dinheiro' ? a.tipo === 'Dinheiro' : a.tipo === 'Banco').map(acc => (
                                             <option key={acc.id} value={acc.nome}>{acc.tipo === 'Banco' ? '🏦' : '💵'} {acc.nome}</option>
                                         ))}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">Fornecedor</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Categoria</label>
+                                    <select value={formData.categoria} onChange={e => setFormData({ ...formData, categoria: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white">
+                                        {(formData.tipo === 'entrada' ? groupsReceita : groupsDespesa).map(g => (
+                                            <optgroup key={g.groupName} label={g.groupName}>
+                                                {g.items.map(i => <option key={i} value={i}>{i}</option>)}
+                                            </optgroup>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Valor (R$)</label>
+                                    <input type="number" step="0.01" required value={formData.valor} onChange={e => setFormData({ ...formData, valor: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none font-mono text-lg text-farm-800" placeholder="0.00" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Data</label>
+                                    <input type="date" required value={formData.data_pagamento} onChange={e => setFormData({ ...formData, data_pagamento: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none" />
+                                </div>
+                                <div className="md:col-span-2 lg:col-span-2">
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Fornecedor / Origem</label>
                                     <select value={formData.cnpj_fornecedor === 'NEW_MANUAL' ? 'outro' : (formData.cnpj_fornecedor || '')} onChange={e => setFormData({ ...formData, cnpj_fornecedor: e.target.value === 'outro' ? 'NEW_MANUAL' : e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white font-medium">
                                         <option value="">NÃO INFORMADO</option>
                                         {Object.values(contacts).map((contact: any) => (<option key={contact.identificador} value={contact.identificador}>{contact.nome_fantasia || contact.nome}</option>))}
@@ -461,7 +565,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                 </div>
 
                                 {formData.cnpj_fornecedor === 'NEW_MANUAL' && (
-                                    <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 bg-amber-50 p-4 rounded-2xl border border-amber-100 animate-fade-in">
+                                    <div className="md:col-span-2 lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-amber-50 p-4 rounded-2xl border border-amber-100 animate-fade-in">
                                         <div>
                                             <label className="block text-[10px] font-black uppercase text-amber-700 mb-1 tracking-widest">Nome do Novo Fornecedor</label>
                                             <input type="text" required value={tempContact.nome} onChange={e => setTempContact({...tempContact, nome: e.target.value})} className="w-full px-4 py-2 border border-amber-200 rounded-xl outline-none bg-white shadow-sm" placeholder="Ex: Mercado local" />
@@ -476,32 +580,59 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                         </div>
                                     </div>
                                 )}
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">Descrição</label>
-                                    <input type="text" required value={formData.descricao} onChange={e => setFormData({ ...formData, descricao: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none" placeholder="Ex: Reforma Cerca" />
+
+                                <div className="md:col-span-2 lg:col-span-4">
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Descrição <span className="text-red-500">*</span></label>
+                                    <textarea required value={formData.descricao} onChange={e => setFormData({ ...formData, descricao: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none resize-y min-h-[100px]" placeholder="Ex: Reforma da Cerca, Compra de Insumos..." />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">Valor (R$)</label>
-                                    <input type="number" step="0.01" required value={formData.valor} onChange={e => setFormData({ ...formData, valor: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none font-mono" placeholder="0.00" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">Data</label>
-                                    <input type="date" required value={formData.data_pagamento} onChange={e => setFormData({ ...formData, data_pagamento: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">Categoria</label>
-                                    <select value={formData.categoria} onChange={e => setFormData({ ...formData, categoria: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white">
-                                        {(formData.tipo === 'entrada' ? groupsReceita : groupsDespesa).map(g => (
-                                            <optgroup key={g.groupName} label={g.groupName}>
-                                                {g.items.map(i => <option key={i} value={i}>{i}</option>)}
-                                            </optgroup>
-                                        ))}
-                                    </select>
+                                <div className="md:col-span-2 lg:col-span-4">
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Comentários Adicionais / Observações</label>
+                                    <textarea value={formData.observacoes} onChange={e => setFormData({ ...formData, observacoes: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none resize-y min-h-[80px]" placeholder="Detalhes extras, referências, justificativas..." />
                                 </div>
 
-                                <div className="md:col-span-2 lg:col-span-4 flex justify-end gap-4 pt-6 border-t border-gray-100">
+                                <div className="md:col-span-2 lg:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-gray-100">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">Marcadores (Tags)</label>
+                                        <input type="text" value={formData.tags} onChange={e => setFormData({ ...formData, tags: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none" placeholder="Ex: Urgente, Imposto..." />
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            {['Urgente', 'Imposto', 'Insumos', 'Obras'].map(t => (
+                                                <button type="button" key={t} onClick={() => setFormData(prev => ({...prev, tags: prev.tags ? prev.tags + ', ' + t : t}))} className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-xs font-bold rounded-full text-gray-600 transition-colors">{t}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">Data do Documento</label>
+                                        <input type="date" value={formData.data_documento} onChange={e => setFormData({ ...formData, data_documento: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none text-gray-700" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">Data do Vencimento</label>
+                                        <input type="date" value={formData.data_vencimento} onChange={e => setFormData({ ...formData, data_vencimento: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none text-red-700 font-bold" />
+                                    </div>
+                                </div>
+
+                                {!editingEntry && (
+                                    <div className="md:col-span-2 lg:col-span-4 bg-sky-50 border border-sky-200 rounded-2xl p-6 mt-2">
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input type="checkbox" checked={formData.is_parcelado} onChange={e => setFormData({ ...formData, is_parcelado: e.target.checked })} className="w-5 h-5 rounded border-sky-300 text-sky-600 focus:ring-sky-500" />
+                                            <span className="font-bold text-sky-900">Esta compra / despesa foi parcelada?</span>
+                                        </label>
+                                        {formData.is_parcelado && (
+                                            <div className="mt-4 animate-fade-in flex flex-col md:flex-row items-start md:items-center gap-4">
+                                                <div className="w-full md:w-1/4">
+                                                    <label className="block text-xs font-bold text-sky-800 uppercase mb-2">Número de Parcelas</label>
+                                                    <input type="number" min="2" max="60" value={formData.parcelas} onChange={e => setFormData({ ...formData, parcelas: parseInt(e.target.value) || 2 })} className="w-full px-4 py-3 border border-sky-300 rounded-xl outline-none text-sky-900 font-bold" />
+                                                </div>
+                                                <div className="text-sm text-sky-800 bg-sky-100 p-4 rounded-xl flex-1 border border-sky-200">
+                                                    <strong>Atenção:</strong> O valor total {(parseFloat(formData.valor.toString().replace(',','.')) || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} será dividido em <strong>{formData.parcelas} parcelas mensais</strong> no valor de <strong>{((parseFloat(formData.valor.toString().replace(',','.')) || 0) / formData.parcelas).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</strong>.<br/>O vencimento e/ou pagamento será incrementado em 1 mês para cada nova parcela, a partir das datas informadas.
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div className="md:col-span-2 lg:col-span-4 flex justify-end gap-4 pt-6 mt-4 border-t border-gray-100">
                                     <button type="button" onClick={handleCancelForm} className="px-6 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl">Cancelar</button>
-                                    <button type="submit" disabled={submitting} className="font-bold py-3 px-8 rounded-xl bg-farm-800 text-white shadow-md disabled:opacity-50">Salvar Lançamento</button>
+                                    <button type="submit" disabled={submitting} className="font-bold py-3 px-8 rounded-xl bg-farm-800 text-white shadow-md hover:bg-farm-900 disabled:opacity-50 transition-all">Salvar Lançamento</button>
                                 </div>
                             </form>
                         </div>
@@ -524,10 +655,18 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                         {entries.map((entry) => (
                                             <tr key={entry.id} className="hover:bg-gray-50 transition-colors group">
                                                 <td className="px-6 py-5 text-sm">{new Date(entry.data_pagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                                                <td className="px-6 py-5"><div className="font-bold text-gray-800">{entry.descricao}</div>{entry.cnpj_fornecedor && <div className="text-xs text-gray-400 font-mono">{entry.cnpj_fornecedor}</div>}</td>
+                                                <td className="px-6 py-5">
+                                                    <div className="font-bold text-gray-800">{entry.descricao}</div>
+                                                    {entry.cnpj_fornecedor && <div className="text-xs text-gray-400 font-mono mt-0.5">{entry.cnpj_fornecedor}</div>}
+                                                    {entry.tags && <div className="flex gap-1 mt-1 flex-wrap">{entry.tags.split(',').map(tag => <span key={tag} className="text-[9px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-md font-bold">{tag.trim()}</span>)}</div>}
+                                                    {entry.observacoes && <div className="text-xs text-farm-600 mt-1.5 line-clamp-2 max-w-xs">{entry.observacoes}</div>}
+                                                </td>
                                                 <td className="px-6 py-5">
                                                     <div className="flex flex-col gap-1">
-                                                        <span className={`text-[10px] font-black uppercase w-fit px-1.5 py-0.5 rounded ${entry.meio_pagamento === 'Dinheiro' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{entry.meio_pagamento === 'Dinheiro' ? '💵 ' : '🏦 '}{entry.conta_origem}</span>
+                                                        <span className={`text-[10px] font-black uppercase w-fit px-1.5 py-0.5 rounded ${entry.meio_pagamento === 'Dinheiro' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                            {entry.meio_pagamento === 'Dinheiro' ? '💵 ' : '🏦 '}{entry.conta_origem}
+                                                        </span>
+                                                        <span className="px-2 py-0.5 bg-gray-50 border border-gray-100 rounded text-[9px] font-bold text-gray-600 w-fit uppercase">{entry.forma_pagamento || 'N/I'}</span>
                                                         <span className="px-2 py-0.5 bg-gray-50 rounded text-xs font-bold text-farm-700 w-fit">{entry.categoria}</span>
                                                     </div>
                                                 </td>
