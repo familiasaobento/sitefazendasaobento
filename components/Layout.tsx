@@ -129,15 +129,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
       {/* Backdrop for mobile */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/50 z-[50] md:hidden transition-opacity"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
 
       <aside className={`
-        bg-farm-900 text-farm-50 w-full md:w-64 flex-shrink-0 transition-all duration-300 ease-in-out
-        ${isMobileMenuOpen ? 'block' : 'hidden'} md:block
-        md:fixed md:top-0 md:left-0 md:h-screen z-50
+        bg-farm-900 text-farm-50 flex-shrink-0 transition-transform duration-300 ease-in-out z-[60]
+        fixed top-0 left-0 h-screen w-64
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
+        md:translate-x-0
       `}>
         <div className="flex flex-col h-full max-h-screen">
           {/* Logo Section */}
