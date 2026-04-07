@@ -28,6 +28,8 @@ interface CashFlowEntry {
     tags?: string | null;
     parcela_atual?: number;
     total_parcelas?: number;
+    status?: string;
+    data_aprovacao?: string | null;
 }
 
 interface FinanceContact {
@@ -39,6 +41,11 @@ interface FinanceContact {
     conta: string;
     tipo_conta: string;
     chave_pix: string;
+}
+
+interface FinanceTag {
+    id: number;
+    nome: string;
 }
 
 interface FinanceAccount {
@@ -87,12 +94,13 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
     });
     const [isSavingAccount, setIsSavingAccount] = useState(false);
 
-    const [activeTab, setActiveTab] = useState<'flow' | 'contacts' | 'accounts' | 'reports'>(isViewOnly ? 'reports' : 'flow');
+    const [activeTab, setActiveTab] = useState<'flow' | 'contacts' | 'accounts' | 'reports' | 'tags'>(isViewOnly ? 'reports' : 'flow');
     const [reportFilters, setReportFilters] = useState({
         account: 'all',
         type: 'all' as 'all' | 'Banco' | 'Dinheiro',
         month: new Date().getMonth() + 1,
-        year: new Date().getFullYear()
+        year: new Date().getFullYear(),
+        tag: ''
     });
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -121,12 +129,21 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         nome: '', identificador: '', banco: '', agencia: '', conta: '', chave_pix: ''
     });
 
+    const [registeredTags, setRegisteredTags] = useState<FinanceTag[]>([]);
+    const [newTag, setNewTag] = useState('');
+
     useEffect(() => {
         fetchCashFlow();
         fetchCategories();
         fetchContacts();
         fetchAccounts();
+        fetchTags();
     }, []);
+
+    const fetchTags = async () => {
+        const { data } = await supabase.from('finance_tags').select('*').order('nome');
+        if (data) setRegisteredTags(data);
+    };
 
     const fetchContacts = async () => {
         const { data } = await supabase.from('finance_contacts').select('*');
@@ -180,6 +197,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             setEntries(data || []);
 
             const totals = (data || []).reduce((acc, curr) => {
+                if (curr.status === 'pendente') return acc;
                 if (curr.tipo === 'entrada') acc.totalEntradas += Number(curr.valor);
                 else acc.totalSaidas += Number(curr.valor);
                 return acc;
@@ -226,6 +244,26 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         setTempContact({ nome: '', identificador: '', banco: '', agencia: '', conta: '', chave_pix: '' });
     };
 
+    const handleSaveTag = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newTag.trim()) return;
+        try {
+            const { error } = await supabase.from('finance_tags').insert({ nome: newTag.trim() });
+            if (error) throw error;
+            setNewTag('');
+            fetchTags();
+        } catch (err: any) { alert(err.message); }
+    };
+
+    const handleDeleteTag = async (id: number) => {
+        if (!window.confirm('Excluir esta tag? Ela não sumirá dos lançamentos passados, mas não poderá ser usada em novos.')) return;
+        try {
+            const { error } = await supabase.from('finance_tags').delete().eq('id', id);
+            if (error) throw error;
+            fetchTags();
+        } catch (err: any) { alert(err.message); }
+    };
+
     const handleDelete = async (id: number) => {
         try {
             const { error } = await supabase.from('fluxo_caixa').delete().eq('id', id);
@@ -234,6 +272,20 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             fetchCashFlow();
         } catch (err: any) {
             alert('Erro ao excluir: ' + err.message);
+        }
+    };
+
+    const handleApprove = async (id: number) => {
+        try {
+            const dataAtual = new Date().toISOString().split('T')[0];
+            const { error } = await supabase
+                .from('fluxo_caixa')
+                .update({ status: 'aprovado', data_aprovacao: dataAtual })
+                .eq('id', id);
+            if (error) throw error;
+            fetchCashFlow();
+        } catch (err: any) {
+            alert('Erro ao aprovar: ' + err.message);
         }
     };
 
@@ -363,7 +415,9 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                 observacoes: formData.observacoes,
                 data_documento: formData.data_documento || null,
                 data_vencimento: formData.data_vencimento || null,
-                tags: formData.tags || null
+                tags: formData.tags || null,
+                status: editingEntry ? editingEntry.status : (canApprove ? 'aprovado' : 'pendente'),
+                data_aprovacao: editingEntry ? editingEntry.data_aprovacao : (canApprove ? new Date().toISOString().split('T')[0] : null)
             };
 
             const payloads = [];
@@ -450,6 +504,10 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                 <button onClick={() => setActiveTab('reports')} className={`px-8 py-4 font-bold text-sm transition-all relative ${activeTab === 'reports' ? 'text-farm-800' : 'text-gray-400 hover:text-gray-600'}`}>
                     📊 Relatórios
                     {activeTab === 'reports' && <div className="absolute bottom-0 left-0 w-full h-1 bg-farm-600 rounded-t-full"></div>}
+                </button>
+                <button onClick={() => setActiveTab('tags')} className={`px-8 py-4 font-bold text-sm transition-all relative ${activeTab === 'tags' ? 'text-farm-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                    Projetos / Tags
+                    {activeTab === 'tags' && <div className="absolute bottom-0 left-0 w-full h-1 bg-farm-600 rounded-t-full"></div>}
                 </button>
             </div>
 
@@ -552,7 +610,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                     <input type="number" step="0.01" required value={formData.valor} onChange={e => setFormData({ ...formData, valor: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none font-mono text-lg text-farm-800" placeholder="0.00" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">Data</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Data de Lançamento</label>
                                     <input type="date" required value={formData.data_pagamento} onChange={e => setFormData({ ...formData, data_pagamento: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none" />
                                 </div>
                                 <div className="md:col-span-2 lg:col-span-2">
@@ -590,19 +648,13 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                     <textarea value={formData.observacoes} onChange={e => setFormData({ ...formData, observacoes: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none resize-y min-h-[80px]" placeholder="Detalhes extras, referências, justificativas..." />
                                 </div>
 
-                                <div className="md:col-span-2 lg:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-gray-100">
+                                <div className="md:col-span-2 lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-2">Marcadores (Tags)</label>
-                                        <input type="text" value={formData.tags} onChange={e => setFormData({ ...formData, tags: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none" placeholder="Ex: Urgente, Imposto..." />
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                            {['Urgente', 'Imposto', 'Insumos', 'Obras'].map(t => (
-                                                <button type="button" key={t} onClick={() => setFormData(prev => ({...prev, tags: prev.tags ? prev.tags + ', ' + t : t}))} className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-xs font-bold rounded-full text-gray-600 transition-colors">{t}</button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-2">Data do Documento</label>
-                                        <input type="date" value={formData.data_documento} onChange={e => setFormData({ ...formData, data_documento: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none text-gray-700" />
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">Projeto / Centro de Custo (Tag)</label>
+                                        <select value={formData.tags || ''} onChange={e => setFormData({ ...formData, tags: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white font-medium">
+                                            <option value="">-- GERAL (NENHUM ESPECÍFICO) --</option>
+                                            {registeredTags.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
+                                        </select>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-gray-700 mb-2">Data do Vencimento</label>
@@ -654,11 +706,14 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                     <tbody className="divide-y divide-gray-100">
                                         {entries.map((entry) => (
                                             <tr key={entry.id} className="hover:bg-gray-50 transition-colors group">
-                                                <td className="px-6 py-5 text-sm">{new Date(entry.data_pagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                                                <td className="px-6 py-5 text-sm">
+                                                    <div>{new Date(entry.data_pagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
+                                                    {entry.status === 'pendente' && <span className="px-2 py-0.5 mt-1 bg-amber-100 text-amber-800 text-[10px] font-bold rounded block w-fit">PENDENTE APROVAÇÃO</span>}
+                                                </td>
                                                 <td className="px-6 py-5">
                                                     <div className="font-bold text-gray-800">{entry.descricao}</div>
                                                     {entry.cnpj_fornecedor && <div className="text-xs text-gray-400 font-mono mt-0.5">{entry.cnpj_fornecedor}</div>}
-                                                    {entry.tags && <div className="flex gap-1 mt-1 flex-wrap">{entry.tags.split(',').map(tag => <span key={tag} className="text-[9px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-md font-bold">{tag.trim()}</span>)}</div>}
+                                                    {entry.tags && <div className="mt-1.5"><span className="text-[10px] px-2 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-lg font-bold shadow-sm uppercase">📌 {entry.tags}</span></div>}
                                                     {entry.observacoes && <div className="text-xs text-farm-600 mt-1.5 line-clamp-2 max-w-xs">{entry.observacoes}</div>}
                                                 </td>
                                                 <td className="px-6 py-5">
@@ -671,8 +726,11 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                                     </div>
                                                 </td>
                                                 <td className={`px-6 py-5 text-right font-black whitespace-nowrap ${entry.tipo === 'entrada' ? 'text-green-600' : 'text-red-500'}`}>{entry.tipo === 'entrada' ? '+' : '-'} R$ {entry.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                                <td className="px-6 py-5 flex items-center justify-center gap-1">
+                                                <td className="px-6 py-5 flex items-center justify-center gap-1 flex-wrap">
                                                     {entry.documento_anexo_url && (<a href={entry.documento_anexo_url} target="_blank" className="p-2 text-farm-600"><IconFileText className="w-5 h-5" /></a>)}
+                                                    {canApprove && entry.status === 'pendente' && (
+                                                        <button onClick={() => handleApprove(entry.id)} className="px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 font-bold text-xs rounded-xl transition-colors shadow-sm">Aprovar ✓</button>
+                                                    )}
                                                     {!isViewOnly && (
                                                         <>
                                                             <button onClick={() => handleEditEntry(entry)} className="p-2 text-gray-400 hover:text-amber-600 opacity-0 group-hover:opacity-100"><IconEdit className="w-5 h-5" /></button>
@@ -701,7 +759,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                             </button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
                             <div>
                                 <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Origem</label>
                                 <select 
@@ -753,16 +811,29 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                     {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
                                 </select>
                             </div>
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Projeto (Tag)</label>
+                                <select 
+                                    value={reportFilters.tag} 
+                                    onChange={e => setReportFilters({...reportFilters, tag: e.target.value})}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200 text-indigo-800"
+                                >
+                                    <option value="">-- TODOS OS PROJETOS --</option>
+                                    {registeredTags.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
+                                </select>
+                            </div>
                         </div>
 
                         {(() => {
                             const filtered = entries.filter(e => {
-                                const d = new Date(e.data_pagamento + 'T12:00:00');
+                                if (e.status === 'pendente') return false;
+                                const d = new Date((e.data_aprovacao || e.data_pagamento) + 'T12:00:00');
                                 const matchDate = d.getMonth() + 1 === reportFilters.month && d.getFullYear() === reportFilters.year;
                                 if (!matchDate) return false;
 
                                 if (reportFilters.account !== 'all') return e.conta_origem === reportFilters.account;
                                 if (reportFilters.type !== 'all') return e.meio_pagamento === reportFilters.type;
+                                if (reportFilters.tag !== '' && e.tags !== reportFilters.tag) return false;
                                 return true;
                             });
 
@@ -803,7 +874,9 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                                 ) : (
                                                     filtered.map(e => (
                                                         <tr key={e.id} className="hover:bg-gray-50">
-                                                            <td className="px-4 py-3 whitespace-nowrap">{new Date(e.data_pagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                                {new Date((e.data_aprovacao || e.data_pagamento) + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                            </td>
                                                             <td className="px-4 py-3">
                                                                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${e.meio_pagamento === 'Banco' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
                                                                     {e.meio_pagamento === 'Banco' ? '🏦' : '💵'} {e.conta_origem}
@@ -880,7 +953,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                         </table>
                     </div>
                 </div>
-            ) : (
+            ) : activeTab === 'contacts' ? (
                 <div className="bg-white rounded-3xl shadow-xl border overflow-hidden">
                     <div className="p-6 border-b flex justify-between items-center bg-gray-50">
                         <input type="text" placeholder="Buscar por nome ou documento..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="flex-1 px-4 py-3 rounded-xl border outline-none bg-white shadow-inner" />
@@ -918,7 +991,38 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                         </table>
                     </div>
                 </div>
-            )}
+            ) : activeTab === 'tags' ? (
+                <div className="bg-white rounded-3xl shadow-xl border overflow-hidden animate-fade-in">
+                    <div className="p-8 border-b flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-50 gap-4">
+                        <div>
+                            <h3 className="text-xl font-bold font-serif italic text-indigo-900">Projetos e Centros de Custo (Tags)</h3>
+                            <p className="text-xs text-gray-500">Crie marcadores para agrupar despesas num projeto ou obra e ver o relatório filtrado.</p>
+                        </div>
+                        {!isViewOnly && (
+                            <form onSubmit={handleSaveTag} className="flex gap-2 w-full md:w-auto">
+                                <input type="text" value={newTag} onChange={e => setNewTag(e.target.value)} placeholder="Novo projeto..." className="px-4 py-3 rounded-xl border border-gray-300 outline-none w-full md:w-64" required />
+                                <button type="submit" className="bg-indigo-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-indigo-700 transition flex items-center justify-center whitespace-nowrap shadow-sm"><IconPlus className="w-5 h-5 mr-1" /> Adicionar</button>
+                            </form>
+                        )}
+                    </div>
+                    <div className="p-8">
+                        {registeredTags.length === 0 ? (
+                            <div className="text-center py-12 text-gray-400 font-bold border-2 border-dashed rounded-2xl">Nenhum projeto cadastrado.</div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {registeredTags.map(tag => (
+                                    <div key={tag.id} className="flex justify-between items-center bg-indigo-50 border border-indigo-100 p-4 rounded-xl group hover:shadow-md transition-all">
+                                        <div className="font-bold text-indigo-900 truncate" title={tag.nome}>📌 {tag.nome}</div>
+                                        {!isViewOnly && (
+                                            <button onClick={() => handleDeleteTag(tag.id)} title="Excluir" className="text-indigo-300 hover:text-red-600 p-2 rounded opacity-0 group-hover:opacity-100 transition-all"><IconTrash className="w-5 h-5" /></button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ) : null}
 
             {/* Account Manager Modal */}
             {showAccountManager && (
