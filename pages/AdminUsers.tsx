@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { IconUser, IconCalendar, IconTrash } from '../components/Icons';
+import { IconUser, IconCalendar, IconTrash, IconPlus, IconX, IconLoader, IconMail, IconCheck, IconLock } from '../components/Icons';
 
 interface Profile {
     id: string;
@@ -10,19 +10,56 @@ interface Profile {
     created_at: string;
     host_name?: string;
     member_status?: string;
+    email?: string;
+}
+
+interface NewUser {
+    email: string;
+    full_name: string;
+    role: string;
+    member_status: string;
+    send_email: boolean;
+    cpf: string;
+    phone: string;
+    birth_date: string;
+    address: string;
+    host_name: string;
+    dependents: { name: string; birthDate: string; relationship: string; }[];
 }
 
 export const AdminUsersPage: React.FC = () => {
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'pending' | 'approved'>('pending');
+    
+    // Admin Registration States
+    const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+    const [registerLoading, setRegisterLoading] = useState(false);
+    const [registerError, setRegisterError] = useState('');
+    const [registerSuccess, setRegisterSuccess] = useState('');
+    
+    const initialNewUser: NewUser = {
+        email: '',
+        full_name: '',
+        role: 'member',
+        member_status: 'Ativo',
+        send_email: false,
+        cpf: '',
+        phone: '',
+        birth_date: '',
+        address: '',
+        host_name: '',
+        dependents: []
+    };
+
+    const [newUser, setNewUser] = useState<NewUser>(initialNewUser);
 
     const fetchProfiles = async () => {
         setLoading(true);
         try {
             const { data, error } = await supabase
                 .from('profiles')
-                .select('id, full_name, role, approved, created_at, host_name, member_status')
+                .select('id, full_name, role, approved, created_at, host_name, member_status, email')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -57,19 +94,6 @@ export const AdminUsersPage: React.FC = () => {
     };
 
     const handleToggleRole = async (id: string, newRole: string) => {
-        const roleLabels: any = {
-            'admin': 'Administrador Geral',
-            'site_admin': 'Site Admin (Conteúdo)',
-            'finance_manager': 'Gerente Financeiro',
-            'finance': 'Financeiro Operador',
-            'member': 'Sócio',
-            'visitor': 'Visitante',
-            'pdv': 'PDV / Consumo',
-            'accounting': 'Contabilidade'
-        };
-
-        if (!confirm(`Deseja realmente alterar o tipo deste usuário para ${roleLabels[newRole] || newRole}?`)) return;
-
         try {
             const { error } = await supabase
                 .from('profiles')
@@ -94,8 +118,6 @@ export const AdminUsersPage: React.FC = () => {
             const { error } = await supabase.rpc('delete_user_account', { target_user_id: id });
 
             if (error) {
-                // If the RPC fails (either not created or due to foreign key constraints), fallback to trying to delete just the profile
-                // Though for a complete deletion they must run the SQL to create the RPC
                 const fallbackResponse = await supabase.from('profiles').delete().eq('id', id);
                 if (fallbackResponse.error) throw fallbackResponse.error;
             }
@@ -103,7 +125,7 @@ export const AdminUsersPage: React.FC = () => {
             setProfiles(profiles.filter(p => p.id !== id));
         } catch (err) {
             console.error('Error deleting user:', err);
-            alert('Erro ao excluir usuário.\nVerifique se este usuário possui Reservas, Consumos no PDV ou Lançamentos vinculados a ele. Caso tenha, primeiro cancele/exclua o histórico dele.');
+            alert('Erro ao excluir usuário.');
         }
     };
 
@@ -125,6 +147,104 @@ export const AdminUsersPage: React.FC = () => {
         }
     };
 
+    const handleSendInvite = async (profile: Profile) => {
+        if (!profile.email) {
+            alert('Este usuário não possui e-mail.');
+            return;
+        }
+        if (!confirm(`Deseja enviar agora o e-mail de convite para "${profile.full_name}"?`)) return;
+
+        setLoading(true);
+        try {
+            const { data, error } = await supabase.functions.invoke('admin-register-user', {
+                body: { 
+                    action: 'send-invite',
+                    email: profile.email,
+                    full_name: profile.full_name,
+                    role: profile.role
+                }
+            });
+
+            if (error) throw error;
+            if (data.error) throw new Error(data.error);
+
+            alert('Convite enviado com sucesso!');
+        } catch (err: any) {
+            console.error('Error sending invite:', err);
+            alert('Erro ao enviar convite: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResetPassword = async (email: string) => {
+        if (!email) {
+            alert('Este usuário não possui e-mail.');
+            return;
+        }
+        if (!confirm(`Enviar link de redefinição de senha para "${email}"?`)) return;
+
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: 'https://portal.fazendafamiliasaobento.com.br'
+            });
+            if (error) throw error;
+            alert('E-mail enviado!');
+        } catch (err: any) {
+            alert('Erro: ' + err.message);
+        }
+    };
+
+    const handleAdminRegister = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setRegisterLoading(true);
+        setRegisterError('');
+        setRegisterSuccess('');
+
+        try {
+            const { data, error } = await supabase.functions.invoke('admin-register-user', {
+                body: { ...newUser, action: 'register' }
+            });
+
+            if (error) throw error;
+            if (data.error) throw new Error(data.error);
+
+            setRegisterSuccess('Usuário cadastrado com sucesso!');
+            setNewUser(initialNewUser);
+            fetchProfiles();
+            
+            setTimeout(() => {
+                setIsRegisterModalOpen(false);
+                setRegisterSuccess('');
+            }, 3000);
+
+        } catch (err: any) {
+            console.error('Error registering user:', err);
+            setRegisterError(err.message || 'Erro ao cadastrar usuário.');
+        } finally {
+            setRegisterLoading(false);
+        }
+    };
+
+    const addDependent = () => {
+        setNewUser({
+            ...newUser,
+            dependents: [...newUser.dependents, { name: '', birthDate: '', relationship: '' }]
+        });
+    };
+
+    const removeDependent = (index: number) => {
+        const newDeps = [...newUser.dependents];
+        newDeps.splice(index, 1);
+        setNewUser({ ...newUser, dependents: newDeps });
+    };
+
+    const updateDependent = (index: number, field: string, value: string) => {
+        const newDeps = [...newUser.dependents];
+        newDeps[index] = { ...newDeps[index], [field]: value };
+        setNewUser({ ...newUser, dependents: newDeps });
+    };
+
     const filteredProfiles = profiles.filter(p => {
         if (filter === 'pending') return !p.approved;
         if (filter === 'approved') return p.approved;
@@ -136,30 +256,40 @@ export const AdminUsersPage: React.FC = () => {
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                     <h1 className="text-4xl font-bold text-gray-900 font-serif">Controle de Acessos</h1>
-                    <p className="text-gray-500 mt-2 text-lg">Aprovação de novos usuários e gestão de permissões do portal.</p>
+                    <p className="text-gray-500 mt-2 text-lg">Gestão de usuários e permissões do portal.</p>
                 </div>
 
-                <div className="flex bg-white rounded-lg shadow-sm p-1 border border-gray-100">
+                <div className="flex gap-4">
                     <button
-                        onClick={() => setFilter('pending')}
-                        className={`px-4 py-2 rounded-md transition-all ${filter === 'pending' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
+                        onClick={() => setIsRegisterModalOpen(true)}
+                        className="bg-farm-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-farm-800 transition-all shadow-lg shadow-farm-100"
                     >
-                        Pendentes
-                    </button>
-                    <button
-                        onClick={() => setFilter('approved')}
-                        className={`px-4 py-2 rounded-md transition-all ${filter === 'approved' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        Aprovados
-                    </button>
-                    <button
-                        onClick={() => setFilter('all')}
-                        className={`px-4 py-2 rounded-md transition-all ${filter === 'all' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        Todos
+                        <IconPlus className="w-5 h-5" />
+                        Cadastrar Novo
                     </button>
                 </div>
             </header>
+
+            <div className="flex bg-white rounded-lg shadow-sm p-1 border border-gray-100 w-fit">
+                <button
+                    onClick={() => setFilter('pending')}
+                    className={`px-4 py-2 rounded-md transition-all ${filter === 'pending' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                    Pendentes
+                </button>
+                <button
+                    onClick={() => setFilter('approved')}
+                    className={`px-4 py-2 rounded-md transition-all ${filter === 'approved' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                    Aprovados
+                </button>
+                <button
+                    onClick={() => setFilter('all')}
+                    className={`px-4 py-2 rounded-md transition-all ${filter === 'all' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                    Todos
+                </button>
+            </div>
 
             {loading ? (
                 <div className="flex justify-center p-12">
@@ -173,7 +303,7 @@ export const AdminUsersPage: React.FC = () => {
                 </div>
             ) : (
                 <>
-                    {/* Mobile View: Cards */}
+                    {/* Mobile View */}
                     <div className="grid grid-cols-1 gap-4 md:hidden">
                         {filteredProfiles.map((profile) => (
                             <div key={profile.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-4">
@@ -182,102 +312,50 @@ export const AdminUsersPage: React.FC = () => {
                                         {profile.full_name?.charAt(0) || '?'}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-gray-800 truncate">{profile.full_name || 'Usuário sem nome'}</p>
-                                        <p className="text-xs text-gray-400 flex items-center gap-1">
-                                            <IconCalendar className="w-3 h-3" />
-                                            {new Date(profile.created_at).toLocaleDateString('pt-BR')}
-                                        </p>
+                                        <p className="font-bold text-gray-800 truncate">{profile.full_name || '—'}</p>
+                                        <p className="text-xs text-gray-400 truncate">{profile.email}</p>
                                     </div>
                                     <button
                                         onClick={() => handleDeleteUser(profile.id, profile.full_name)}
-                                        className="p-2 text-red-400 hover:text-red-600 bg-red-50 rounded-lg transition-colors"
+                                        className="p-2 text-red-400 hover:text-red-600 bg-red-50 rounded-lg"
                                     >
                                         <IconTrash className="w-5 h-5" />
                                     </button>
                                 </div>
-
-                                {profile.host_name && (
-                                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                        <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">Responsável / Convite</span>
-                                        <p className="text-xs font-bold text-gray-700">{profile.host_name}</p>
-                                    </div>
-                                )}
-
-                                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-50">
-                                    <select
-                                        value={profile.role}
-                                        onChange={(e) => handleToggleRole(profile.id, e.target.value)}
-                                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold outline-none cursor-pointer appearance-none ${profile.role === 'admin'
-                                            ? 'bg-purple-100 text-purple-800'
-                                            : profile.role === 'site_admin'
-                                                ? 'bg-blue-100 text-blue-800'
-                                                : profile.role === 'finance_manager'
-                                                    ? 'bg-emerald-100 text-emerald-800'
-                                                    : profile.role === 'finance'
-                                                        ? 'bg-teal-100 text-teal-800'
-                                                        : profile.role === 'pdv'
-                                                            ? 'bg-rose-100 text-rose-800'
-                                                            : profile.role === 'visitor'
-                                                                ? 'bg-orange-100 text-orange-800'
-                                                                : profile.role === 'accounting'
-                                                                    ? 'bg-amber-100 text-amber-800'
-                                                                    : 'bg-slate-100 text-slate-800'
-                                            }`}
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button
+                                        onClick={() => handleToggleApproval(profile.id, profile.approved)}
+                                        className={`py-2 rounded-lg font-bold text-[10px] transition-all ${profile.approved ? 'text-yellow-600 bg-yellow-50' : 'bg-farm-700 text-white'}`}
                                     >
-                                        <option value="admin">Administrador Geral</option>
-                                        <option value="site_admin">Site Admin</option>
-                                        <option value="finance_manager">Ger. Financeiro</option>
-                                        <option value="finance">Financeiro Ops</option>
-                                        <option value="accounting">Contabilidade</option>
-                                        <option value="pdv">PDV / Consumo</option>
-                                        <option value="member">Sócio</option>
-                                        <option value="visitor">Visitante</option>
-                                    </select>
-                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${profile.approved
-                                        ? 'bg-green-100 text-green-800'
-                                        : 'bg-yellow-100 text-yellow-800'
-                                        }`}>
-                                        {profile.approved ? 'Acesso Liberado' : 'Pendente'}
-                                    </span>
-                                    
-                                    <select
-                                        value={profile.member_status || 'Ativo'}
-                                        onChange={(e) => handleUpdateStatus(profile.id, e.target.value)}
-                                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold outline-none cursor-pointer appearance-none ${
-                                            profile.member_status === 'Ativo' ? 'bg-green-50 text-green-700' :
-                                            profile.member_status === 'Inativo' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700'
-                                        }`}
+                                        {profile.approved ? 'Bloquear' : 'Liberar'}
+                                    </button>
+                                    <button
+                                        onClick={() => handleSendInvite(profile)}
+                                        className="py-2 rounded-lg font-bold text-[10px] text-gray-600 bg-gray-100 flex items-center justify-center gap-1"
                                     >
-                                        <option value="Ativo">🟢 Ativo</option>
-                                        <option value="Inativo">🔴 Inativo</option>
-                                        <option value="Licença">🟠 Licença</option>
-                                    </select>
+                                        <IconMail className="w-3 h-3" /> Convite
+                                    </button>
+                                    <button
+                                        onClick={() => handleResetPassword(profile.email || '')}
+                                        className="py-2 rounded-lg font-bold text-[10px] text-gray-600 bg-gray-100"
+                                    >
+                                        Senha
+                                    </button>
                                 </div>
-
-                                <button
-                                    onClick={() => handleToggleApproval(profile.id, profile.approved)}
-                                    className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${profile.approved
-                                        ? 'text-yellow-600 border border-yellow-200 bg-yellow-50'
-                                        : 'bg-farm-700 text-white shadow-md'
-                                        }`}
-                                >
-                                    {profile.approved ? 'Bloquear Acesso' : 'Liberar Acesso'}
-                                </button>
                             </div>
                         ))}
                     </div>
 
-                    {/* Desktop View: Table */}
+                    {/* Desktop View */}
                     <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden hidden md:block">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
                                 <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
                                     <tr>
                                         <th className="px-6 py-4 font-semibold">Usuário</th>
-                                        <th className="px-6 py-4 font-semibold">Responsável / Convite</th>
+                                        <th className="px-6 py-4 font-semibold">Responsável</th>
                                         <th className="px-6 py-4 font-semibold">Tipo</th>
-                                        <th className="px-6 py-4 font-semibold">Status Acesso</th>
-                                        <th className="px-6 py-4 font-semibold">Status Cadastro</th>
+                                        <th className="px-6 py-4 font-semibold text-center">Cadastro</th>
                                         <th className="px-6 py-4 font-semibold text-right">Ações</th>
                                     </tr>
                                 </thead>
@@ -290,86 +368,55 @@ export const AdminUsersPage: React.FC = () => {
                                                         {profile.full_name?.charAt(0) || '?'}
                                                     </div>
                                                     <div>
-                                                        <p className="font-bold text-gray-800">{profile.full_name || 'Usuário sem nome'}</p>
-                                                        <p className="text-xs text-gray-400 flex items-center gap-1">
-                                                            <IconCalendar className="w-3 h-3" />
-                                                            {new Date(profile.created_at).toLocaleDateString('pt-BR')}
-                                                        </p>
+                                                        <p className="font-bold text-gray-800">{profile.full_name || '—'}</p>
+                                                        <p className="text-xs text-gray-400">{profile.email}</p>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <p className="text-sm font-medium text-gray-700">{profile.host_name || '—'}</p>
-                                            </td>
+                                            <td className="px-6 py-4 text-sm text-gray-600">{profile.host_name || '—'}</td>
                                             <td className="px-6 py-4">
                                                 <select
                                                     value={profile.role}
                                                     onChange={(e) => handleToggleRole(profile.id, e.target.value)}
-                                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium outline-none cursor-pointer appearance-none ${profile.role === 'admin'
-                                                        ? 'bg-purple-100 text-purple-800 hover:bg-purple-200'
-                                                        : profile.role === 'site_admin'
-                                                            ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-                                                            : profile.role === 'finance_manager'
-                                                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                                                                : profile.role === 'finance'
-                                                                    ? 'bg-teal-100 text-teal-800 hover:bg-teal-200'
-                                                                    : profile.role === 'pdv'
-                                                                        ? 'bg-rose-100 text-rose-800 hover:bg-rose-200'
-                                                                        : profile.role === 'visitor'
-                                                                            ? 'bg-orange-100 text-orange-800 hover:bg-orange-200'
-                                                                            : profile.role === 'accounting'
-                                                                                ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                                                                                : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
-                                                        } transition-colors cursor-pointer`}
-                                                    title="Selecione o tipo de acesso"
+                                                    className="bg-gray-50 border-none rounded-full px-3 py-1 text-xs font-bold text-gray-700 cursor-pointer hover:bg-gray-100 transition-all font-sans"
                                                 >
-                                                    <option value="admin">Administrador Geral</option>
-                                                    <option value="site_admin">Site Admin (Conteúdo)</option>
-                                                    <option value="finance_manager">Ger. Financeiro</option>
-                                                    <option value="finance">Financeiro Operador</option>
-                                                    <option value="accounting">Contabilidade</option>
-                                                    <option value="pdv">PDV / Consumo</option>
                                                     <option value="member">Sócio</option>
                                                     <option value="visitor">Visitante</option>
+                                                    <option value="finance">Financeiro</option>
+                                                    <option value="site_admin">Site Admin</option>
+                                                    <option value="admin">Admin Geral</option>
                                                 </select>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${profile.approved
-                                                    ? 'bg-green-100 text-green-800'
-                                                    : 'bg-yellow-100 text-yellow-800'
-                                                    }`}>
-                                                    {profile.approved ? 'Acesso Liberado' : 'Aguardando Aprovação'}
+                                            <td className="px-6 py-4 text-center">
+                                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${profile.approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                                    {profile.approved ? 'OK' : 'PEND'}
                                                 </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <select
-                                                    value={profile.member_status || 'Ativo'}
-                                                    onChange={(e) => handleUpdateStatus(profile.id, e.target.value)}
-                                                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold outline-none cursor-pointer appearance-none border border-transparent hover:border-gray-200 transition-all ${
-                                                        profile.member_status === 'Ativo' ? 'bg-green-50 text-green-700' :
-                                                        profile.member_status === 'Inativo' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700'
-                                                    }`}
-                                                >
-                                                    <option value="Ativo">🟢 Ativo</option>
-                                                    <option value="Inativo">🔴 Inativo</option>
-                                                    <option value="Licença">🟠 Licença</option>
-                                                </select>
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-2">
                                                     <button
                                                         onClick={() => handleToggleApproval(profile.id, profile.approved)}
-                                                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${profile.approved
-                                                            ? 'text-yellow-600 hover:bg-yellow-50 border border-yellow-100'
-                                                            : 'bg-farm-700 text-white hover:bg-farm-800 shadow-sm'
-                                                            }`}
+                                                        className={`px-4 py-2 rounded-lg font-bold text-xs transition-all ${profile.approved ? 'text-yellow-600 bg-yellow-50 hover:bg-yellow-100' : 'bg-farm-700 text-white hover:bg-farm-800 shadow-sm'}`}
                                                     >
-                                                        {profile.approved ? 'Bloquear Acesso' : 'Liberar Acesso'}
+                                                        {profile.approved ? 'Bloquear' : 'Liberar'}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleSendInvite(profile)}
+                                                        className="p-2 text-gray-400 hover:text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-all"
+                                                        title="Enviar E-mail de Convite"
+                                                    >
+                                                        <IconMail className="w-5 h-5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleResetPassword(profile.email || '')}
+                                                        className="p-2 text-gray-400 hover:text-farm-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all border border-transparent hover:border-gray-200"
+                                                        title="Redefinir Senha"
+                                                    >
+                                                        <IconLock className="w-5 h-5" />
                                                     </button>
                                                     <button
                                                         onClick={() => handleDeleteUser(profile.id, profile.full_name)}
                                                         className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                        title="Excluir Usuário"
                                                     >
                                                         <IconTrash className="w-5 h-5" />
                                                     </button>
@@ -383,7 +430,148 @@ export const AdminUsersPage: React.FC = () => {
                     </div>
                 </>
             )}
-        </div >
+
+            {/* Registration Modal - FULL PROFILE VERSION */}
+            {isRegisterModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+                    <div className="bg-white rounded-[2rem] shadow-2xl max-w-4xl w-full my-8 overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
+                        <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center shrink-0">
+                            <div>
+                                <h3 className="text-2xl font-bold text-gray-900 font-serif">Cadastro Completo de Usuário</h3>
+                                <p className="text-gray-500 text-sm">Pré-preenchimento de todos os dados do perfil.</p>
+                            </div>
+                            <button onClick={() => setIsRegisterModalOpen(false)} className="p-2 hover:bg-white rounded-xl">
+                                <IconX className="w-6 h-6 text-gray-400" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleAdminRegister} className="overflow-y-auto p-8 space-y-8 flex-1">
+                            {registerError && <div className="bg-red-50 text-red-700 p-4 rounded-xl text-sm font-bold">{registerError}</div>}
+                            {registerSuccess && <div className="bg-green-50 text-green-700 p-4 rounded-xl text-sm font-bold">{registerSuccess}</div>}
+                            
+                            {/* Seção 1: Acesso e Identidade */}
+                            <div className="space-y-4">
+                                <h4 className="text-sm font-black text-farm-700 uppercase tracking-widest border-l-4 border-farm-500 pl-3">Acesso e Identidade</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">Nome Completo</label>
+                                        <input type="text" required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.full_name} onChange={e => setNewUser({...newUser, full_name: e.target.value})} placeholder="Ex: João da Silva" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">E-mail</label>
+                                        <input type="email" required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} placeholder="joao@email.com" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">CPF</label>
+                                        <input type="text" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.cpf} onChange={e => setNewUser({...newUser, cpf: e.target.value})} placeholder="000.000.000-00" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">Data de Nascimento</label>
+                                        <input type="date" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.birth_date} onChange={e => setNewUser({...newUser, birth_date: e.target.value})} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Seção 2: Contato e Localização */}
+                            <div className="space-y-4">
+                                <h4 className="text-sm font-black text-farm-700 uppercase tracking-widest border-l-4 border-farm-500 pl-3">Contato e Localização</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">Telefone / WhatsApp</label>
+                                        <input type="text" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.phone} onChange={e => setNewUser({...newUser, phone: e.target.value})} placeholder="(00) 00000-0000" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">Responsável (Sócio Anfitrião se Visitante)</label>
+                                        <input type="text" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.host_name} onChange={e => setNewUser({...newUser, host_name: e.target.value})} placeholder="Nome do Sócio" />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">Endereço Residencial</label>
+                                        <input type="text" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.address} onChange={e => setNewUser({...newUser, address: e.target.value})} placeholder="Rua, Número, Bairro, Cidade - UF" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Seção 3: Configurações de Acesso */}
+                            <div className="space-y-4">
+                                <h4 className="text-sm font-black text-farm-700 uppercase tracking-widest border-l-4 border-farm-500 pl-3">Configurações de Acesso</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">Tipo de Perfil</label>
+                                        <select className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none bg-white font-sans" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
+                                            <option value="member">Sócio</option>
+                                            <option value="visitor">Visitante</option>
+                                            <option value="finance">Financeiro</option>
+                                            <option value="site_admin">Site Admin</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">Situação do Cadastro</label>
+                                        <select className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none bg-white font-sans" value={newUser.member_status} onChange={e => setNewUser({...newUser, member_status: e.target.value})}>
+                                            <option value="Ativo">🟢 Ativo</option>
+                                            <option value="Inativo">🔴 Inativo</option>
+                                            <option value="Licença">🟠 Licença</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-end">
+                                        <label className="flex items-center gap-3 p-3 bg-farm-50 border border-farm-100 rounded-xl w-full cursor-pointer hover:bg-farm-100 transition-all select-none border-dashed">
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-5 h-5 accent-farm-600" 
+                                                checked={newUser.send_email} 
+                                                onChange={e => setNewUser({...newUser, send_email: e.target.checked})} 
+                                            />
+                                            <span className="text-xs font-bold text-farm-800 leading-tight">Enviar convite por e-mail AGORA</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Seção 4: Dependentes */}
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h4 className="text-sm font-black text-farm-700 uppercase tracking-widest border-l-4 border-farm-500 pl-3">Dependentes</h4>
+                                    <button type="button" onClick={addDependent} className="text-xs font-bold bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-all flex items-center gap-1">
+                                        <IconPlus className="w-3 h-3" /> Adicionar
+                                    </button>
+                                </div>
+                                {newUser.dependents.length === 0 ? (
+                                    <div className="text-center py-6 bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-gray-400 text-sm">
+                                        Nenhum dependente adicionado.
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {newUser.dependents.map((dep, idx) => (
+                                            <div key={idx} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100 relative group">
+                                                <input type="text" className="px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-farm-500 text-sm" placeholder="Nome" value={dep.name} onChange={e => updateDependent(idx, 'name', e.target.value)} />
+                                                <input type="date" className="px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-farm-500 text-sm" value={dep.birthDate} onChange={e => updateDependent(idx, 'birthDate', e.target.value)} />
+                                                <select className="px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-farm-500 text-sm bg-white font-sans" value={dep.relationship} onChange={e => updateDependent(idx, 'relationship', e.target.value)}>
+                                                    <option value="">Parentesco</option>
+                                                    <option value="Cônjuge">Cônjuge</option>
+                                                    <option value="Filho(a)">Filho(a)</option>
+                                                    <option value="Pai/Mãe">Pai/Mãe</option>
+                                                    <option value="Outro">Outro</option>
+                                                </select>
+                                                <div className="flex items-center justify-end">
+                                                    <button type="button" onClick={() => removeDependent(idx)} className="p-2 text-red-400 hover:text-red-600 bg-white rounded-lg shadow-sm border border-gray-100">
+                                                        <IconTrash className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </form>
+
+                        <div className="p-8 border-t border-gray-100 bg-gray-50 shrink-0">
+                            <button type="button" onClick={handleAdminRegister} disabled={registerLoading || !!registerSuccess} className="w-full bg-farm-800 text-white font-bold py-4 rounded-2xl shadow-xl shadow-farm-100 hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-lg">
+                                {registerLoading ? <IconLoader className="w-6 h-6 animate-spin" /> : <IconCheck className="w-6 h-6" />}
+                                {registerLoading ? 'Processando Cadastro...' : 'Salvar Cadastro e Finalizar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 };
-

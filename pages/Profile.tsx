@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { QRCodeCanvas } from 'qrcode.react';
 import html2canvas from 'html2canvas';
 import { VisualizadorProforma } from '../components/VisualizadorProforma';
-import { IconFileText, IconZap, IconUser, IconLoader, IconDownload } from '../components/Icons';
+import { IconFileText, IconZap, IconUser, IconLoader, IconDownload, IconLock } from '../components/Icons';
 
 interface Dependent {
     name: string;
@@ -31,7 +31,10 @@ export const ProfilePage: React.FC = () => {
     const [pastStays, setPastStays] = useState<any[]>([]);
     const [activeBraceletCodes, setActiveBraceletCodes] = useState<{code: string; name: string}[]>([]);
     const [selectedEstadiaId, setSelectedEstadiaId] = useState<number | null>(null);
-    const [activeTab, setActiveTab] = useState<'id' | 'data'>('id');
+    const [activeTab, setActiveTab] = useState<'id' | 'data' | 'security'>('id');
+    const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' });
+    const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+    const [passwordMessage, setPasswordMessage] = useState({ text: '', type: '' });
 
     const [isDownloading, setIsDownloading] = useState(false);
 
@@ -247,6 +250,32 @@ export const ProfilePage: React.FC = () => {
         }
     };
 
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            setPasswordMessage({ text: 'As senhas não coincidem.', type: 'error' });
+            return;
+        }
+        if (passwordData.newPassword.length < 6) {
+            setPasswordMessage({ text: 'A senha deve ter pelo menos 6 caracteres.', type: 'error' });
+            return;
+        }
+
+        setIsUpdatingPassword(true);
+        setPasswordMessage({ text: '', type: '' });
+
+        try {
+            const { error } = await supabase.auth.updateUser({ password: passwordData.newPassword });
+            if (error) throw error;
+            setPasswordMessage({ text: 'Senha atualizada com sucesso!', type: 'success' });
+            setPasswordData({ newPassword: '', confirmPassword: '' });
+        } catch (err: any) {
+            setPasswordMessage({ text: err.message || 'Erro ao atualizar senha.', type: 'error' });
+        } finally {
+            setIsUpdatingPassword(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex justify-center py-12">
@@ -292,6 +321,13 @@ export const ProfilePage: React.FC = () => {
                 >
                     <IconUser className="w-4 h-4" />
                     Meus Dados e Histórico
+                </button>
+                <button
+                    onClick={() => setActiveTab('security')}
+                    className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${activeTab === 'security' ? 'bg-farm-700 text-white shadow-lg shadow-farm-100' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                    <IconLock className="w-4 h-4" />
+                    Segurança
                 </button>
             </div>
 
@@ -364,7 +400,7 @@ export const ProfilePage: React.FC = () => {
                         </div>
                     )}
                 </div>
-            ) : (
+            ) : activeTab === 'data' ? (
                 /* Profile Form and History */
                 <div className="animate-fade-in space-y-6">
                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
@@ -605,7 +641,63 @@ export const ProfilePage: React.FC = () => {
                         </div>
                     </div>
                 </div>
-            )}
+            ) : activeTab === 'security' ? (
+                /* Security / Password Section */
+                <div className="animate-fade-in space-y-6">
+                    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-900 font-serif">Segurança e Acesso</h3>
+                                <p className="text-gray-500 text-xs">Atualize sua senha de acesso ao portal.</p>
+                            </div>
+                            <div className="bg-white p-3 rounded-2xl shadow-sm">
+                                <IconLock className="w-6 h-6 text-farm-600" />
+                            </div>
+                        </div>
+
+                        <form onSubmit={handleChangePassword} className="p-8 space-y-6">
+                            {passwordMessage.text && (
+                                <div className={`px-4 py-3 rounded-xl text-sm font-bold ${passwordMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+                                    {passwordMessage.text}
+                                </div>
+                            )}
+
+                            <div className="space-y-4">
+                                <div className="space-y-1">
+                                    <label className="block text-sm font-medium text-gray-700">Nova Senha</label>
+                                    <input
+                                        type="password"
+                                        required
+                                        placeholder="Mínimo 6 caracteres"
+                                        value={passwordData.newPassword}
+                                        onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="block text-sm font-medium text-gray-700">Confirmar Nova Senha</label>
+                                    <input
+                                        type="password"
+                                        required
+                                        placeholder="Digite novamente"
+                                        value={passwordData.confirmPassword}
+                                        onChange={e => setPasswordData({...passwordData, confirmPassword: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={isUpdatingPassword}
+                                className="w-full bg-farm-800 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-black transition-all disabled:opacity-50"
+                            >
+                                {isUpdatingPassword ? 'Atualizando...' : 'Alterar Minha Senha'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            ) : null}
 
             {selectedEstadiaId && (
                 <div className="fixed inset-0 z-[100] overflow-y-auto no-print">

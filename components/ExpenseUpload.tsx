@@ -23,7 +23,21 @@ export const ExpenseUpload: React.FC = () => {
     const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
     const [suggestedRC, setSuggestedRC] = useState<PurchaseRequest | null>(null);
     const [isConfirmed, setIsConfirmed] = useState(false);
+    const [projects, setProjects] = useState<{id: number, nome: string}[]>([]);
+    const [tags, setTags] = useState<{id: number, nome: string}[]>([]);
+    const [selectedProject, setSelectedProject] = useState('');
+    const [selectedTag, setSelectedTag] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    React.useEffect(() => {
+        const fetchMeta = async () => {
+            const { data: p } = await supabase.from('finance_projects').select('id, nome').eq('ativo', true).order('nome');
+            const { data: t } = await supabase.from('finance_tags').select('id, nome').order('nome');
+            if (p) setProjects(p);
+            if (t) setTags(t);
+        };
+        fetchMeta();
+    }, []);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -108,7 +122,9 @@ export const ExpenseUpload: React.FC = () => {
                     valor: extractedData.valorTotal,
                     cnpj_fornecedor: extractedData.cnpjEmitente,
                     categoria: 'Diversos', // Default category
-                    meio_pagamento: 'Banco'
+                    meio_pagamento: 'Banco',
+                    projeto: selectedProject || null,
+                    tags: selectedTag || null
                 }]);
 
             if (entryError) throw entryError;
@@ -229,6 +245,23 @@ export const ExpenseUpload: React.FC = () => {
                                         <span className="font-bold text-gray-900">R$ {item.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                     </div>
                                 ))}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-amber-700 mb-1 tracking-widest">🏗️ Atribuir a Projeto</label>
+                                <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} className="w-full px-4 py-2 border rounded-xl outline-none bg-amber-50 text-amber-900 font-bold border-amber-100">
+                                    <option value="">-- NENHUM PROJETO --</option>
+                                    {projects.map(p => <option key={p.id} value={p.nome}>{p.nome}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-indigo-700 mb-1 tracking-widest">📌 Atribuir a Área (Tag)</label>
+                                <select value={selectedTag} onChange={e => setSelectedTag(e.target.value)} className="w-full px-4 py-2 border rounded-xl outline-none bg-indigo-50 text-indigo-900 font-bold border-indigo-100">
+                                    <option value="">-- NENHUMA ÁREA --</option>
+                                    {tags.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
+                                </select>
                             </div>
                         </div>
 

@@ -16,7 +16,9 @@ const COLORS = ['#389f76', '#5ebb92', '#2a7f5e', '#23513f', '#95d8b6', '#c3ead4'
 
 export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = ({ userRole, isAdmin }) => {
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState<'month' | 'quarter' | 'year'>('month');
+   const [timeRange, setTimeRange] = useState<'month' | 'quarter' | 'year'>('month');
+   const [projects, setProjects] = useState<{id: number, nome: string}[]>([]);
+   const [selectedProject, setSelectedProject] = useState<string>('');
   
   // Data States
   const [kpis, setKpis] = useState({
@@ -30,12 +32,13 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
 
   const [financialData, setFinancialData] = useState<any[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<any[]>([]);
+  const [incomeCategories, setIncomeCategories] = useState<any[]>([]);
   const [occupancyData, setOccupancyData] = useState<any[]>([]);
   const [accountBalances, setAccountBalances] = useState<{dinheiro: number, banco: number}>({ dinheiro: 0, banco: 0 });
 
   useEffect(() => {
-    fetchDashboardData();
-  }, [timeRange]);
+     fetchDashboardData();
+   }, [timeRange, selectedProject]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -43,19 +46,40 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
       const now = new Date();
       let startDate = new Date();
       
-      if (timeRange === 'month') startDate.setMonth(now.getMonth() - 1);
-      else if (timeRange === 'quarter') startDate.setMonth(now.getMonth() - 3);
-      else startDate.setFullYear(now.getFullYear() - 1);
+      if (timeRange === 'month') {
+        // Início do mês atual
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (timeRange === 'quarter') {
+        // Início do trimestre atual (Jan, Abr, Jul, Out)
+        const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+        startDate = new Date(now.getFullYear(), quarterMonth, 1);
+      } else {
+        // Início do ano atual
+        startDate = new Date(now.getFullYear(), 0, 1);
+      }
 
       const startDateStr = startDate.toISOString().split('T')[0];
 
       // 1. Fetch Fluxo de Caixa (Financeiro)
-      const { data: cashFlow } = await supabase
+      let query = supabase
         .from('fluxo_caixa')
         .select('*')
         .gte('data_pagamento', startDateStr);
+      
+      if (selectedProject) {
+        query = query.eq('projeto', selectedProject);
+      }
+
+      const { data: cashFlow } = await query;
+
+      // 1.5 Fetch Projects if not already fetched
+      if (projects.length === 0) {
+        const { data: pData } = await supabase.from('finance_projects').select('id, nome').order('nome');
+        if (pData) setProjects(pData);
+      }
 
       // 2. Fetch Reservations (Ocupação e Reservas)
+      // Usamos check_in como referência de período de usufruto/pagamento
       const { data: reservations } = await supabase
         .from('reservations')
         .select('*, estadias(*)')
@@ -96,14 +120,22 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
       // Process Expense Categories
       const catMap: Record<string, number> = {};
       cashFlow?.filter(e => e.tipo === 'saida').forEach(entry => {
-        catMap[entry.categoria] = (catMap[entry.categoria] || 0) + entry.valor;
+        catMap[entry.categoria || 'Outros'] = (catMap[entry.categoria || 'Outros'] || 0) + entry.valor;
+      });
+
+      // Process Income Categories
+      const incMap: Record<string, number> = {};
+      cashFlow?.filter(e => e.tipo === 'entrada').forEach(entry => {
+        incMap[entry.categoria || 'Outros'] = (incMap[entry.categoria || 'Outros'] || 0) + entry.valor;
       });
 
       // Process Occupancy
       const occMap: Record<string, number> = {};
+      const monthsRef = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
       reservations?.forEach(res => {
-        const date = new Date(res.check_in + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'short' });
-        occMap[date] = (occMap[date] || 0) + 1;
+        const d = new Date(res.check_in + 'T00:00:00');
+        const monthName = monthsRef[d.getMonth()];
+        occMap[monthName] = (occMap[monthName] || 0) + 1;
       });
 
       // Total Pdv
@@ -146,10 +178,15 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
         .slice(0, 6)
       );
 
-      const monthsRef = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+      setIncomeCategories(Object.entries(incMap).map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 6)
+      );
+
+      const monthsRefShort = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
       setOccupancyData(Object.entries(occMap)
         .map(([name, value]) => ({ name, reservas: value }))
-        .sort((a, b) => monthsRef.indexOf(a.name.toLowerCase()) - monthsRef.indexOf(b.name.toLowerCase()))
+        .sort((a, b) => monthsRefShort.indexOf(a.name.toLowerCase()) - monthsRefShort.indexOf(b.name.toLowerCase()))
       );
 
     } catch (err) {
@@ -177,16 +214,27 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
           <p className="text-gray-600 mt-1">Análise em tempo real da performance da fazenda.</p>
         </div>
         
-        <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100">
-          {(['month', 'quarter', 'year'] as const).map((r) => (
-            <button
-              key={r}
-              onClick={() => setTimeRange(r)}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timeRange === r ? 'bg-farm-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              {r === 'month' ? 'Mensal' : r === 'quarter' ? 'Trimestral' : 'Anual'}
-            </button>
-          ))}
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100">
+            {(['month', 'quarter', 'year'] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setTimeRange(r)}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timeRange === r ? 'bg-farm-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                {r === 'month' ? 'Este Mês' : r === 'quarter' ? 'Este Trimestre' : 'Este Ano'}
+              </button>
+            ))}
+          </div>
+
+          <select 
+            value={selectedProject} 
+            onChange={e => setSelectedProject(e.target.value)}
+            className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 text-xs font-bold text-gray-500 outline-none focus:ring-2 focus:ring-farm-200"
+          >
+            <option value="">TODOS OS PROJETOS</option>
+            {projects.map(p => <option key={p.id} value={p.nome}>{p.nome.toUpperCase()}</option>)}
+          </select>
         </div>
       </div>
 
@@ -316,8 +364,8 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
         </div>
       </div>
 
-      {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Bottom Row: Reservas e Receitas */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Reservas Tendência */}
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
           <h3 className="text-xl font-bold text-gray-800 font-serif mb-8">Volume de Reservas</h3>
@@ -340,23 +388,58 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
           </div>
         </div>
 
-        {/* Informações Adicionais */}
+        {/* Principais Receitas */}
+        <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+          <h3 className="text-xl font-bold text-gray-800 font-serif mb-8">Origem das Receitas</h3>
+          <div className="h-[200px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={incomeCategories}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={70}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {incomeCategories.map((entry, index) => (
+                    <Cell key={`cell-inc-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                   contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                   formatter={(value: number) => [formatCurrency(value), '']}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 space-y-2">
+            {incomeCategories.map((cat, idx) => (
+              <div key={cat.name} className="flex items-center justify-between text-[10px]">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[(idx + 2) % COLORS.length] }}></div>
+                  <span className="text-gray-500 truncate max-w-[120px]">{cat.name}</span>
+                </div>
+                <span className="font-bold text-gray-700">{formatCurrency(cat.value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Informações Adicionais / Card de Status */}
         <div className="bg-farm-900 rounded-3xl p-8 text-white relative overflow-hidden flex flex-col justify-center">
           <div className="relative z-10">
-            <h3 className="text-2xl font-bold mb-4 font-serif italic">Relatórios Inteligentes</h3>
+            <h3 className="text-2xl font-bold mb-4 font-serif italic">Inteligência de Dados</h3>
             <p className="text-farm-100 text-sm leading-relaxed mb-6">
-              Este painel é alimentado em tempo real com todos os lançamentos de caixa, consumo nos PDVs e reservas realizadas. 
-              Diferente do relatório antigo, aqui os dados são processados instantaneamente.
+              Este dashboard cruza informações de fluxo de caixa, PDV e reservas para te dar uma visão 360º da saúde da fazenda.
             </p>
-            <div className="flex flex-wrap gap-3">
-              <span className="bg-white/10 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-white/10">Sincronizado</span>
-              <span className="bg-white/10 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-white/10">Tempo Real</span>
-              <span className="bg-white/10 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-white/10">Privado</span>
+            <div className="flex flex-wrap gap-2 text-white">
+               <div className="bg-white/10 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest border border-white/10">Receitas OK</div>
+               <div className="bg-white/10 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest border border-white/10">Custos OK</div>
             </div>
           </div>
-          {/* Decorative shapes */}
           <div className="absolute top-[-20px] right-[-20px] w-40 h-40 bg-farm-800 rounded-full blur-3xl opacity-50"></div>
-          <div className="absolute bottom-[-40px] left-[-20px] w-64 h-64 bg-farm-700 rounded-full blur-3xl opacity-30"></div>
         </div>
       </div>
     </div>

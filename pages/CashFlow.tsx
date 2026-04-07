@@ -26,10 +26,17 @@ interface CashFlowEntry {
     data_documento?: string | null;
     data_vencimento?: string | null;
     tags?: string | null;
+    projeto?: string | null;
     parcela_atual?: number;
     total_parcelas?: number;
     status?: string;
     data_aprovacao?: string | null;
+}
+
+interface FinanceProject {
+    id: number;
+    nome: string;
+    descricao?: string;
 }
 
 interface FinanceContact {
@@ -41,6 +48,7 @@ interface FinanceContact {
     conta: string;
     tipo_conta: string;
     chave_pix: string;
+    categoria_padrao?: string;
 }
 
 interface FinanceTag {
@@ -83,7 +91,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
     // Contact Management
     const [showContactManager, setShowContactManager] = useState(false);
     const [newContact, setNewContact] = useState<Partial<FinanceContact>>({
-        identificador: '', nome: '', nome_fantasia: '', banco: '', agencia: '', conta: '', tipo_conta: 'Corrente', chave_pix: ''
+        identificador: '', nome: '', nome_fantasia: '', banco: '', agencia: '', conta: '', tipo_conta: 'Corrente', chave_pix: '', categoria_padrao: ''
     });
     const [isSavingContact, setIsSavingContact] = useState(false);
 
@@ -100,7 +108,8 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         type: 'all' as 'all' | 'Banco' | 'Dinheiro',
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
-        tag: ''
+        tag: '',
+        projeto: ''
     });
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -118,6 +127,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         data_documento: '',
         data_vencimento: '',
         tags: '',
+        projeto: '',
         is_parcelado: false,
         parcelas: 1
     };
@@ -126,11 +136,74 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
     const [submitting, setSubmitting] = useState(false);
     const [saveToContacts, setSaveToContacts] = useState(false);
     const [tempContact, setTempContact] = useState<Partial<FinanceContact>>({
-        nome: '', identificador: '', banco: '', agencia: '', conta: '', chave_pix: ''
+        nome: '', identificador: '', banco: '', agencia: '', conta: '', chave_pix: '', categoria_padrao: ''
     });
 
     const [registeredTags, setRegisteredTags] = useState<FinanceTag[]>([]);
     const [newTag, setNewTag] = useState('');
+
+    const [registeredProjects, setRegisteredProjects] = useState<FinanceProject[]>([]);
+    const [newProject, setNewProject] = useState({ nome: '', descricao: '' });
+
+    const exportToExcel = async (data: CashFlowEntry[], filename: string) => {
+        const formatted = data.map(e => ({
+            'Data': new Date(e.data_pagamento + 'T12:00:00').toLocaleDateString('pt-BR'),
+            'Tipo': e.tipo.toUpperCase(),
+            'Descrição': e.descricao,
+            'Categoria': e.categoria,
+            'Valor': e.valor,
+            'Conta': e.conta_origem,
+            'Meio': e.meio_pagamento,
+            'Projeto': e.projeto || '-',
+            'Tag': e.tags || '-',
+            'Status': e.status.toUpperCase()
+        }));
+        
+        if (formatted.length === 0) {
+            alert('Não há dados para exportar.');
+            return;
+        }
+
+        const csv = [
+            Object.keys(formatted[0]).join(';'),
+            ...formatted.map(row => Object.values(row).map(v => typeof v === 'string' ? `"${v}"` : v).join(';'))
+        ].join('\n');
+
+        const csvContent = "\ufeff" + csv;
+
+        // Try modern File System Access API (Save As dialog)
+        if ('showSaveFilePicker' in window) {
+            try {
+                const handle = await (window as any).showSaveFilePicker({
+                    suggestedName: `${filename}.csv`,
+                    types: [{
+                        description: 'CSV File',
+                        accept: {'text/csv': ['.csv']},
+                    }],
+                });
+                const writable = await handle.createWritable();
+                await writable.write(csvContent);
+                await writable.close();
+                return;
+            } catch (err: any) {
+                if (err.name === 'AbortError') return; // User cancelled
+                console.error('Error with Save Picker:', err);
+                // Fallback to traditional download if something fails
+            }
+        }
+
+        // Traditional Download Fallback
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `${filename}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
 
     useEffect(() => {
         fetchCashFlow();
@@ -138,7 +211,13 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         fetchContacts();
         fetchAccounts();
         fetchTags();
+        fetchProjects();
     }, []);
+
+    const fetchProjects = async () => {
+        const { data } = await supabase.from('finance_projects').select('*').eq('ativo', true).order('nome');
+        if (data) setRegisteredProjects(data);
+    };
 
     const fetchTags = async () => {
         const { data } = await supabase.from('finance_tags').select('*').order('nome');
@@ -155,7 +234,16 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
 
     const fetchAccounts = async () => {
         const { data } = await supabase.from('finance_accounts').select('*').eq('ativo', true).order('nome');
-        if (data) setAccounts(data);
+        if (data) {
+            setAccounts(data);
+            // Default to first bank account for new entries
+            if (!editingEntry && formData.conta_origem === '') {
+                const firstBank = data.find(a => a.tipo === 'Banco');
+                if (firstBank) {
+                    setFormData(prev => ({ ...prev, conta_origem: firstBank.nome, meio_pagamento: 'Banco' }));
+                }
+            }
+        }
     };
 
     const fetchCategories = async () => {
@@ -226,6 +314,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             data_documento: entry.data_documento || '',
             data_vencimento: entry.data_vencimento || '',
             tags: entry.tags || '',
+            projeto: entry.projeto || '',
             is_parcelado: false,
             parcelas: 1
         });
@@ -261,6 +350,26 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             const { error } = await supabase.from('finance_tags').delete().eq('id', id);
             if (error) throw error;
             fetchTags();
+        } catch (err: any) { alert(err.message); }
+    };
+
+    const handleSaveProject = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newProject.nome.trim()) return;
+        try {
+            const { error } = await supabase.from('finance_projects').insert([newProject]);
+            if (error) throw error;
+            setNewProject({ nome: '', descricao: '' });
+            fetchProjects();
+        } catch (err: any) { alert(err.message); }
+    };
+
+    const handleDeleteProject = async (id: number) => {
+        if (!window.confirm('Excluir este projeto?')) return;
+        try {
+            const { error } = await supabase.from('finance_projects').delete().eq('id', id);
+            if (error) throw error;
+            fetchProjects();
         } catch (err: any) { alert(err.message); }
     };
 
@@ -416,6 +525,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                 data_documento: formData.data_documento || null,
                 data_vencimento: formData.data_vencimento || null,
                 tags: formData.tags || null,
+                projeto: formData.projeto || null,
                 status: editingEntry ? editingEntry.status : (canApprove ? 'aprovado' : 'pendente'),
                 data_aprovacao: editingEntry ? editingEntry.data_aprovacao : (canApprove ? new Date().toISOString().split('T')[0] : null)
             };
@@ -471,12 +581,12 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
 
     return (
         <div className="space-y-8 pb-20">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 no-print">
                 <div>
                     <h1 className="text-4xl font-bold text-gray-900 font-serif">Fluxo de Caixa</h1>
                     <p className="text-gray-500 mt-2 text-lg">Gerenciamento completo de entradas e saídas.</p>
                 </div>
-                {!isViewOnly && (
+                {!isViewOnly && activeTab === 'flow' && (
                     <div className="flex gap-4 w-full md:w-auto">
                         <button onClick={() => setShowReconciliation(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-farm-700 border-2 border-farm-100 font-bold px-6 py-3 rounded-xl hover:bg-farm-50 transition-colors">
                             <IconRefresh className="w-5 h-5" /> Conciliar Extrato
@@ -488,7 +598,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                 )}
             </div>
 
-            <div className="flex border-b border-gray-200">
+            <div className="flex border-b border-gray-200 no-print">
                 <button onClick={() => setActiveTab('flow')} className={`px-8 py-4 font-bold text-sm transition-all relative ${activeTab === 'flow' ? 'text-farm-800' : 'text-gray-400 hover:text-gray-600'}`}>
                     Lançamentos
                     {activeTab === 'flow' && <div className="absolute bottom-0 left-0 w-full h-1 bg-farm-600 rounded-t-full"></div>}
@@ -529,7 +639,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                     </div>
 
                     {showForm && (
-                        <div className={`bg-white p-8 rounded-3xl shadow-lg border animate-fade-in relative overflow-hidden ${editingEntry ? 'border-amber-200' : 'border-farm-100'}`}>
+                        <div className={`bg-white p-8 rounded-3xl shadow-lg border animate-fade-in relative overflow-hidden no-print ${editingEntry ? 'border-amber-200' : 'border-farm-100'}`}>
                             <div className={`absolute top-0 left-0 w-2 h-full ${editingEntry ? 'bg-amber-400' : 'bg-farm-500'}`}></div>
                             <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
                                 {editingEntry ? (<><span className="bg-amber-100 p-2 rounded-lg text-amber-700"><IconEdit className="w-5 h-5" /></span>Editando Lançamento</>) : (<><span className="bg-farm-100 p-2 rounded-lg text-farm-700"><IconPlus className="w-5 h-5" /></span>Novo Lançamento</>)}
@@ -552,6 +662,10 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                             </div>
 
                             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <div className="md:col-span-2 lg:col-span-4">
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Descrição <span className="text-red-500">*</span></label>
+                                    <textarea required value={formData.descricao} onChange={e => setFormData({ ...formData, descricao: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none resize-y min-h-[80px]" placeholder="Ex: Reforma da Cerca, Compra de Insumos..." />
+                                </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">Tipo</label>
                                     <div className="flex bg-gray-100 p-1 rounded-xl">
@@ -615,7 +729,20 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                 </div>
                                 <div className="md:col-span-2 lg:col-span-2">
                                     <label className="block text-sm font-bold text-gray-700 mb-2">Fornecedor / Origem</label>
-                                    <select value={formData.cnpj_fornecedor === 'NEW_MANUAL' ? 'outro' : (formData.cnpj_fornecedor || '')} onChange={e => setFormData({ ...formData, cnpj_fornecedor: e.target.value === 'outro' ? 'NEW_MANUAL' : e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white font-medium">
+                                    <select 
+                                        value={formData.cnpj_fornecedor === 'NEW_MANUAL' ? 'outro' : (formData.cnpj_fornecedor || '')} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            const newCnpj = val === 'outro' ? 'NEW_MANUAL' : val;
+                                            const contact = contacts[val];
+                                            if (contact && contact.categoria_padrao) {
+                                                setFormData({ ...formData, cnpj_fornecedor: newCnpj, categoria: contact.categoria_padrao });
+                                            } else {
+                                                setFormData({ ...formData, cnpj_fornecedor: newCnpj });
+                                            }
+                                        }} 
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white font-medium"
+                                    >
                                         <option value="">NÃO INFORMADO</option>
                                         {Object.values(contacts).map((contact: any) => (<option key={contact.identificador} value={contact.identificador}>{contact.nome_fantasia || contact.nome}</option>))}
                                         <option value="outro">+ OUTRO (DIGITAR MANUAL)</option>
@@ -640,23 +767,26 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                 )}
 
                                 <div className="md:col-span-2 lg:col-span-4">
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">Descrição <span className="text-red-500">*</span></label>
-                                    <textarea required value={formData.descricao} onChange={e => setFormData({ ...formData, descricao: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none resize-y min-h-[100px]" placeholder="Ex: Reforma da Cerca, Compra de Insumos..." />
-                                </div>
-                                <div className="md:col-span-2 lg:col-span-4">
                                     <label className="block text-sm font-bold text-gray-700 mb-2">Comentários Adicionais / Observações</label>
                                     <textarea value={formData.observacoes} onChange={e => setFormData({ ...formData, observacoes: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none resize-y min-h-[80px]" placeholder="Detalhes extras, referências, justificativas..." />
                                 </div>
 
                                 <div className="md:col-span-2 lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100">
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-2">Projeto / Centro de Custo (Tag)</label>
-                                        <select value={formData.tags || ''} onChange={e => setFormData({ ...formData, tags: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white font-medium">
-                                            <option value="">-- GERAL (NENHUM ESPECÍFICO) --</option>
+                                    <div className="md:col-span-2 lg:col-span-2">
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">Projeto Especial</label>
+                                        <select value={formData.projeto || ''} onChange={e => setFormData({ ...formData, projeto: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white font-medium text-amber-700">
+                                            <option value="">-- NENHUM PROJETO ESPECÍFICO --</option>
+                                            {registeredProjects.map(p => <option key={p.id} value={p.nome}>{p.nome}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="md:col-span-2 lg:col-span-2">
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">Área / Departamento (Tag)</label>
+                                        <select value={formData.tags || ''} onChange={e => setFormData({ ...formData, tags: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white font-medium text-indigo-700">
+                                            <option value="">-- GERAL (NENHUMA ÁREA) --</option>
                                             {registeredTags.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
                                         </select>
                                     </div>
-                                    <div>
+                                    <div className="md:col-span-2 lg:col-span-4">
                                         <label className="block text-sm font-bold text-gray-700 mb-2">Data do Vencimento</label>
                                         <input type="date" value={formData.data_vencimento} onChange={e => setFormData({ ...formData, data_vencimento: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none text-red-700 font-bold" />
                                     </div>
@@ -692,6 +822,23 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
 
                     {!loading && (
                         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
+                            <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50/50 no-print">
+                                <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">Listagem de Lançamentos</span>
+                                <div className="flex gap-2 w-full md:w-auto">
+                                    <button 
+                                        onClick={() => exportToExcel(entries, 'todos_lancamentos')}
+                                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-green-700 border border-green-200 font-bold px-4 py-2 rounded-xl hover:bg-green-50 transition-colors text-xs shadow-sm"
+                                    >
+                                        Excel (Tudo)
+                                    </button>
+                                    <button 
+                                        onClick={() => window.print()}
+                                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-800 text-white font-bold px-4 py-2 rounded-xl hover:bg-black transition-colors text-xs shadow-sm"
+                                    >
+                                        Imprimir PDF
+                                    </button>
+                                </div>
+                            </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left">
                                     <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
@@ -700,7 +847,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                             <th className="px-6 py-4 font-semibold">Descrição</th>
                                             <th className="px-6 py-4 font-semibold">Origem / Categoria</th>
                                             <th className="px-6 py-4 font-semibold text-right">Valor</th>
-                                            <th className="px-6 py-4 font-semibold text-center">Ações</th>
+                                            <th className="px-6 py-4 font-semibold text-center no-print">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -713,7 +860,10 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                                 <td className="px-6 py-5">
                                                     <div className="font-bold text-gray-800">{entry.descricao}</div>
                                                     {entry.cnpj_fornecedor && <div className="text-xs text-gray-400 font-mono mt-0.5">{entry.cnpj_fornecedor}</div>}
-                                                    {entry.tags && <div className="mt-1.5"><span className="text-[10px] px-2 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-lg font-bold shadow-sm uppercase">📌 {entry.tags}</span></div>}
+                                                    <div className="flex gap-2 mt-2">
+                                                        {entry.projeto && <span className="text-[9px] px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 rounded font-black uppercase">🏗️ {entry.projeto}</span>}
+                                                        {entry.tags && <span className="text-[9px] px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded font-black uppercase">📌 {entry.tags}</span>}
+                                                    </div>
                                                     {entry.observacoes && <div className="text-xs text-farm-600 mt-1.5 line-clamp-2 max-w-xs">{entry.observacoes}</div>}
                                                 </td>
                                                 <td className="px-6 py-5">
@@ -726,7 +876,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                                     </div>
                                                 </td>
                                                 <td className={`px-6 py-5 text-right font-black whitespace-nowrap ${entry.tipo === 'entrada' ? 'text-green-600' : 'text-red-500'}`}>{entry.tipo === 'entrada' ? '+' : '-'} R$ {entry.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                                <td className="px-6 py-5 flex items-center justify-center gap-1 flex-wrap">
+                                                <td className="px-6 py-5 flex items-center justify-center gap-1 flex-wrap no-print">
                                                     {entry.documento_anexo_url && (<a href={entry.documento_anexo_url} target="_blank" className="p-2 text-farm-600"><IconFileText className="w-5 h-5" /></a>)}
                                                     {canApprove && entry.status === 'pendente' && (
                                                         <button onClick={() => handleApprove(entry.id)} className="px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 font-bold text-xs rounded-xl transition-colors shadow-sm">Aprovar ✓</button>
@@ -754,12 +904,33 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                 <h3 className="text-2xl font-bold text-gray-800 font-serif italic">Relatório de Movimentação</h3>
                                 <p className="text-gray-500">Filtragem avançada por banco, caixa ou visão consolidada.</p>
                             </div>
-                            <button onClick={() => window.print()} className="flex items-center gap-2 bg-gray-800 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-black transition-all shadow-lg">
-                                <IconFileText className="w-4 h-4" /> Exportar / Imprimir
-                            </button>
+                            <div className="flex gap-3 w-full md:w-auto overflow-x-auto no-print">
+                                <button 
+                                    onClick={() => {
+                                        const filtered = entries.filter(e => {
+                                            if (e.status === 'pendente') return false;
+                                            const d = new Date(e.data_pagamento + 'T12:00:00');
+                                            const matchDate = d.getMonth() + 1 === reportFilters.month && d.getFullYear() === reportFilters.year;
+                                            if (!matchDate) return false;
+                                            if (reportFilters.account !== 'all') return e.conta_origem === reportFilters.account;
+                                            if (reportFilters.type !== 'all') return e.meio_pagamento === reportFilters.type;
+                                            if (reportFilters.tag !== '' && e.tags !== reportFilters.tag) return false;
+                                            if (reportFilters.projeto !== '' && e.projeto !== reportFilters.projeto) return false;
+                                            return true;
+                                        });
+                                        exportToExcel(filtered, `relatorio_${reportFilters.month}_${reportFilters.year}`);
+                                    }} 
+                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-50 text-green-800 border-2 border-green-100 px-6 py-3 rounded-xl font-bold text-sm hover:bg-green-100 transition-all shadow-md"
+                                >
+                                    📥 Excel
+                                </button>
+                                <button onClick={() => window.print()} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-800 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-black transition-all shadow-lg">
+                                    <IconFileText className="w-4 h-4" /> Imprimir / PDF
+                                </button>
+                            </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8 no-print">
                             <div>
                                 <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Origem</label>
                                 <select 
@@ -812,13 +983,24 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Projeto (Tag)</label>
+                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Projeto</label>
+                                <select 
+                                    value={reportFilters.projeto} 
+                                    onChange={e => setReportFilters({...reportFilters, projeto: e.target.value})}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200 text-amber-800"
+                                >
+                                    <option value="">-- TODOS OS PROJETOS --</option>
+                                    {registeredProjects.map(p => <option key={p.id} value={p.nome}>{p.nome}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Área (Tag)</label>
                                 <select 
                                     value={reportFilters.tag} 
                                     onChange={e => setReportFilters({...reportFilters, tag: e.target.value})}
                                     className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200 text-indigo-800"
                                 >
-                                    <option value="">-- TODOS OS PROJETOS --</option>
+                                    <option value="">-- TODAS AS ÁREAS --</option>
                                     {registeredTags.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
                                 </select>
                             </div>
@@ -827,13 +1009,14 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                         {(() => {
                             const filtered = entries.filter(e => {
                                 if (e.status === 'pendente') return false;
-                                const d = new Date((e.data_aprovacao || e.data_pagamento) + 'T12:00:00');
+                                const d = new Date(e.data_pagamento + 'T12:00:00');
                                 const matchDate = d.getMonth() + 1 === reportFilters.month && d.getFullYear() === reportFilters.year;
                                 if (!matchDate) return false;
 
                                 if (reportFilters.account !== 'all') return e.conta_origem === reportFilters.account;
                                 if (reportFilters.type !== 'all') return e.meio_pagamento === reportFilters.type;
                                 if (reportFilters.tag !== '' && e.tags !== reportFilters.tag) return false;
+                                if (reportFilters.projeto !== '' && e.projeto !== reportFilters.projeto) return false;
                                 return true;
                             });
 
@@ -875,7 +1058,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                                     filtered.map(e => (
                                                         <tr key={e.id} className="hover:bg-gray-50">
                                                             <td className="px-4 py-3 whitespace-nowrap">
-                                                                {new Date((e.data_aprovacao || e.data_pagamento) + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                                {new Date(e.data_pagamento + 'T12:00:00').toLocaleDateString('pt-BR')}
                                                             </td>
                                                             <td className="px-4 py-3">
                                                                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${e.meio_pagamento === 'Banco' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -958,7 +1141,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                     <div className="p-6 border-b flex justify-between items-center bg-gray-50">
                         <input type="text" placeholder="Buscar por nome ou documento..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="flex-1 px-4 py-3 rounded-xl border outline-none bg-white shadow-inner" />
                         {!isViewOnly && (
-                            <button onClick={() => { setNewContact({ identificador: '', nome: '', nome_fantasia: '', banco: '', agencia: '', conta: '', tipo_conta: 'Corrente', chave_pix: '' }); setShowContactManager(true); }} className="bg-farm-800 text-white px-6 py-3 rounded-xl font-bold ml-4">+ Novo Contato</button>
+                            <button onClick={() => { setNewContact({ identificador: '', nome: '', nome_fantasia: '', banco: '', agencia: '', conta: '', tipo_conta: 'Corrente', chave_pix: '', categoria_padrao: '' }); setShowContactManager(true); }} className="bg-farm-800 text-white px-6 py-3 rounded-xl font-bold ml-4">+ Novo Contato</button>
                         )}
                     </div>
                     <div className="overflow-x-auto">
@@ -992,34 +1175,69 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                     </div>
                 </div>
             ) : activeTab === 'tags' ? (
-                <div className="bg-white rounded-3xl shadow-xl border overflow-hidden animate-fade-in">
-                    <div className="p-8 border-b flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-50 gap-4">
-                        <div>
-                            <h3 className="text-xl font-bold font-serif italic text-indigo-900">Projetos e Centros de Custo (Tags)</h3>
-                            <p className="text-xs text-gray-500">Crie marcadores para agrupar despesas num projeto ou obra e ver o relatório filtrado.</p>
-                        </div>
-                        {!isViewOnly && (
-                            <form onSubmit={handleSaveTag} className="flex gap-2 w-full md:w-auto">
-                                <input type="text" value={newTag} onChange={e => setNewTag(e.target.value)} placeholder="Novo projeto..." className="px-4 py-3 rounded-xl border border-gray-300 outline-none w-full md:w-64" required />
-                                <button type="submit" className="bg-indigo-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-indigo-700 transition flex items-center justify-center whitespace-nowrap shadow-sm"><IconPlus className="w-5 h-5 mr-1" /> Adicionar</button>
-                            </form>
-                        )}
-                    </div>
-                    <div className="p-8">
-                        {registeredTags.length === 0 ? (
-                            <div className="text-center py-12 text-gray-400 font-bold border-2 border-dashed rounded-2xl">Nenhum projeto cadastrado.</div>
-                        ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {registeredTags.map(tag => (
-                                    <div key={tag.id} className="flex justify-between items-center bg-indigo-50 border border-indigo-100 p-4 rounded-xl group hover:shadow-md transition-all">
-                                        <div className="font-bold text-indigo-900 truncate" title={tag.nome}>📌 {tag.nome}</div>
-                                        {!isViewOnly && (
-                                            <button onClick={() => handleDeleteTag(tag.id)} title="Excluir" className="text-indigo-300 hover:text-red-600 p-2 rounded opacity-0 group-hover:opacity-100 transition-all"><IconTrash className="w-5 h-5" /></button>
-                                        )}
-                                    </div>
-                                ))}
+                <div className="space-y-8 animate-fade-in">
+                    {/* Seção de Projetos */}
+                    <div className="bg-white rounded-3xl shadow-xl border overflow-hidden">
+                        <div className="p-8 border-b flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-50 gap-4">
+                            <div>
+                                <h3 className="text-xl font-bold font-serif italic text-amber-900">Projetos Especiais / Obras</h3>
+                                <p className="text-xs text-gray-500">Ex: Repotencialização de Minas, Pintura da Sede, etc.</p>
                             </div>
-                        )}
+                            {!isViewOnly && (
+                                <form onSubmit={handleSaveProject} className="flex gap-2 w-full md:w-auto">
+                                    <input type="text" value={newProject.nome} onChange={e => setNewProject({...newProject, nome: e.target.value})} placeholder="Nome do projeto..." className="px-4 py-3 rounded-xl border border-gray-300 outline-none w-full md:w-64" required />
+                                    <button type="submit" className="bg-amber-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-amber-700 transition flex items-center justify-center whitespace-nowrap shadow-sm"><IconPlus className="w-5 h-5 mr-1" /> Adicionar</button>
+                                </form>
+                            )}
+                        </div>
+                        <div className="p-8">
+                            {registeredProjects.length === 0 ? (
+                                <div className="text-center py-12 text-gray-400 font-bold border-2 border-dashed rounded-2xl">Nenhum projeto especial cadastrado.</div>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {registeredProjects.map(p => (
+                                        <div key={p.id} className="flex justify-between items-center bg-amber-50 border border-amber-100 p-4 rounded-xl group hover:shadow-md transition-all">
+                                            <div className="font-bold text-amber-900 truncate" title={p.nome}>🏗️ {p.nome}</div>
+                                            {!isViewOnly && (
+                                                <button onClick={() => handleDeleteProject(p.id)} className="text-amber-300 hover:text-red-600 p-2 rounded opacity-0 group-hover:opacity-100 transition-all"><IconTrash className="w-5 h-5" /></button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Seção de Tags */}
+                    <div className="bg-white rounded-3xl shadow-xl border overflow-hidden">
+                        <div className="p-8 border-b flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-50 gap-4">
+                            <div>
+                                <h3 className="text-xl font-bold font-serif italic text-indigo-900">Áreas / Departamentos (Tags)</h3>
+                                <p className="text-xs text-gray-500">Ex: Cozinha, Jardinagem, Portaria, etc.</p>
+                            </div>
+                            {!isViewOnly && (
+                                <form onSubmit={handleSaveTag} className="flex gap-2 w-full md:w-auto">
+                                    <input type="text" value={newTag} onChange={e => setNewTag(e.target.value)} placeholder="Nova área..." className="px-4 py-3 rounded-xl border border-gray-300 outline-none w-full md:w-64" required />
+                                    <button type="submit" className="bg-indigo-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-indigo-700 transition flex items-center justify-center whitespace-nowrap shadow-sm"><IconPlus className="w-5 h-5 mr-1" /> Adicionar</button>
+                                </form>
+                            )}
+                        </div>
+                        <div className="p-8">
+                            {registeredTags.length === 0 ? (
+                                <div className="text-center py-12 text-gray-400 font-bold border-2 border-dashed rounded-2xl">Nenhuma área (tag) cadastrada.</div>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {registeredTags.map(tag => (
+                                        <div key={tag.id} className="flex justify-between items-center bg-indigo-50 border border-indigo-100 p-4 rounded-xl group hover:shadow-md transition-all">
+                                            <div className="font-bold text-indigo-900 truncate" title={tag.nome}>📌 {tag.nome}</div>
+                                            {!isViewOnly && (
+                                                <button onClick={() => handleDeleteTag(tag.id)} className="text-indigo-300 hover:text-red-600 p-2 rounded opacity-0 group-hover:opacity-100 transition-all"><IconTrash className="w-5 h-5" /></button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             ) : null}
@@ -1087,6 +1305,21 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                 <input type="text" placeholder="Agencia" value={newContact.agencia} onChange={e => setNewContact({...newContact, agencia: e.target.value})} className="px-4 py-2 border rounded" />
                                 <input type="text" placeholder="Conta" value={newContact.conta} onChange={e => setNewContact({...newContact, conta: e.target.value})} className="px-4 py-2 border rounded" />
                                 <input type="text" placeholder="PIX" value={newContact.chave_pix} onChange={e => setNewContact({...newContact, chave_pix: e.target.value})} className="px-4 py-2 border rounded" />
+                                <div className="md:col-span-2">
+                                    <label className="block text-xs font-bold text-gray-400 mb-1">Categoria Padrão (Sugestão Automática)</label>
+                                    <select 
+                                        value={newContact.categoria_padrao || ''} 
+                                        onChange={e => setNewContact({...newContact, categoria_padrao: e.target.value})}
+                                        className="w-full px-4 py-2 border rounded bg-white"
+                                    >
+                                        <option value="">-- NENHUMA (ESCOLHER NA HORA) --</option>
+                                        {[...groupsReceita, ...groupsDespesa].map(g => (
+                                            <optgroup key={g.groupName} label={g.groupName}>
+                                                {g.items.map(i => <option key={i} value={i}>{i}</option>)}
+                                            </optgroup>
+                                        ))}
+                                    </select>
+                                </div>
                                 <button type="submit" className="md:col-span-2 py-3 bg-farm-800 text-white font-bold rounded">Salvar Fornecedor</button>
                             </form>
                         </div>
