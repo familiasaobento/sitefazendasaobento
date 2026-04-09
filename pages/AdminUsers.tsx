@@ -348,84 +348,86 @@ export const AdminUsersPage: React.FC = () => {
 
                     {/* Desktop View */}
                     <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden hidden md:block">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
-                                    <tr>
-                                        <th className="px-6 py-4 font-semibold">Usuário</th>
-                                        <th className="px-6 py-4 font-semibold">Responsável</th>
-                                        <th className="px-6 py-4 font-semibold">Tipo</th>
-                                        <th className="px-6 py-4 font-semibold text-center">Cadastro</th>
-                                        <th className="px-6 py-4 font-semibold text-right">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {filteredProfiles.map((profile) => (
-                                        <tr key={profile.id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="bg-farm-50 w-10 h-10 rounded-full flex items-center justify-center text-farm-700 font-bold shrink-0">
-                                                        {profile.full_name?.charAt(0) || '?'}
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-bold text-gray-800">{profile.full_name || '—'}</p>
-                                                        <p className="text-xs text-gray-400">{profile.email}</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{profile.host_name || '—'}</td>
-                                            <td className="px-6 py-4">
-                                                <select
-                                                    value={profile.role}
-                                                    onChange={(e) => handleToggleRole(profile.id, e.target.value)}
-                                                    className="bg-gray-50 border-none rounded-full px-3 py-1 text-xs font-bold text-gray-700 cursor-pointer hover:bg-gray-100 transition-all font-sans"
-                                                >
-                                                    <option value="member">Sócio</option>
-                                                    <option value="visitor">Visitante</option>
-                                                    <option value="finance">Financeiro</option>
-                                                    <option value="site_admin">Site Admin</option>
-                                                    <option value="admin">Admin Geral</option>
-                                                </select>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${profile.approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                                    {profile.approved ? 'OK' : 'PEND'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <button
-                                                        onClick={() => handleToggleApproval(profile.id, profile.approved)}
-                                                        className={`px-4 py-2 rounded-lg font-bold text-xs transition-all ${profile.approved ? 'text-yellow-600 bg-yellow-50 hover:bg-yellow-100' : 'bg-farm-700 text-white hover:bg-farm-800 shadow-sm'}`}
-                                                    >
-                                                        {profile.approved ? 'Bloquear' : 'Liberar'}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleSendInvite(profile)}
-                                                        className="p-2 text-gray-400 hover:text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-all"
-                                                        title="Enviar E-mail de Convite"
-                                                    >
-                                                        <IconMail className="w-5 h-5" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleResetPassword(profile.email || '')}
-                                                        className="p-2 text-gray-400 hover:text-farm-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all border border-transparent hover:border-gray-200"
-                                                        title="Redefinir Senha"
-                                                    >
-                                                        <IconLock className="w-5 h-5" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDeleteUser(profile.id, profile.full_name)}
-                                                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                    >
-                                                        <IconTrash className="w-5 h-5" />
-                                                    </button>
-                                                </div>
-                                            </td>
+                        <div className="inline-block min-w-full align-middle">
+                            <div className="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm custom-scrollbar">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
+                                        <tr>
+                                            <th className="px-6 py-4 font-semibold">Usuário</th>
+                                            <th className="px-6 py-4 font-semibold">Responsável</th>
+                                            <th className="px-6 py-4 font-semibold">Tipo</th>
+                                            <th className="px-6 py-4 font-semibold text-center">Cadastro</th>
+                                            <th className="px-6 py-4 font-semibold text-right">Ações</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {filteredProfiles.map((profile) => (
+                                            <tr key={profile.id} className="hover:bg-gray-50 transition-colors">
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="bg-farm-50 w-10 h-10 rounded-full flex items-center justify-center text-farm-700 font-bold shrink-0">
+                                                            {profile.full_name?.charAt(0) || '?'}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-gray-800">{profile.full_name || '—'}</p>
+                                                            <p className="text-xs text-gray-400">{profile.email}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">{profile.host_name || '—'}</td>
+                                                <td className="px-6 py-4">
+                                                    <select
+                                                        value={profile.role}
+                                                        onChange={(e) => handleToggleRole(profile.id, e.target.value)}
+                                                        className="bg-gray-50 border-none rounded-full px-3 py-1 text-xs font-bold text-gray-700 cursor-pointer hover:bg-gray-100 transition-all font-sans"
+                                                    >
+                                                        <option value="member">Sócio</option>
+                                                        <option value="visitor">Visitante</option>
+                                                        <option value="finance">Financeiro</option>
+                                                        <option value="site_admin">Site Admin</option>
+                                                        <option value="admin">Admin Geral</option>
+                                                    </select>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${profile.approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                                        {profile.approved ? 'OK' : 'PEND'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={() => handleToggleApproval(profile.id, profile.approved)}
+                                                            className={`px-4 py-2 rounded-lg font-bold text-xs transition-all ${profile.approved ? 'text-yellow-600 bg-yellow-50 hover:bg-yellow-100' : 'bg-farm-700 text-white hover:bg-farm-800 shadow-sm'}`}
+                                                        >
+                                                            {profile.approved ? 'Bloquear' : 'Liberar'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleSendInvite(profile)}
+                                                            className="p-2 text-gray-400 hover:text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-all"
+                                                            title="Enviar E-mail de Convite"
+                                                        >
+                                                            <IconMail className="w-5 h-5" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleResetPassword(profile.email || '')}
+                                                            className="p-2 text-gray-400 hover:text-farm-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all border border-transparent hover:border-gray-200"
+                                                            title="Redefinir Senha"
+                                                        >
+                                                            <IconLock className="w-5 h-5" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteUser(profile.id, profile.full_name)}
+                                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                        >
+                                                            <IconTrash className="w-5 h-5" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </>
@@ -433,7 +435,7 @@ export const AdminUsersPage: React.FC = () => {
 
             {/* Registration Modal - FULL PROFILE VERSION */}
             {isRegisterModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
                     <div className="bg-white rounded-[2rem] shadow-2xl max-w-4xl w-full my-8 overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
                         <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center shrink-0">
                             <div>

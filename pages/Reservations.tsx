@@ -1732,7 +1732,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
 
         {/* Integration Modals */}
         {showProforma && selectedStayId && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="fixed inset-0 z-[100] overflow-y-auto">
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => {
                 setShowProforma(false);
                 fetchAllReservations();
@@ -1755,7 +1755,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
         )}
 
         {showCheckinModal && selectedResForCheckin && (
-          <div className="fixed inset-0 z-50 overflow-y-auto no-print">
+          <div className="fixed inset-0 z-[100] overflow-y-auto no-print">
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => setShowCheckinModal(false)}></div>
             <div className="flex min-h-full items-start md:items-center justify-center p-4 sm:p-6">
               <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto animate-fade-in relative z-10 w-full transform transition-all">

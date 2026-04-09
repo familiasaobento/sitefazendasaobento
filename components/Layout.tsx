@@ -191,7 +191,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 md:ml-64 p-4 sm:p-6 md:p-8 lg:p-10 min-h-screen">
+      <main className="flex-1 md:ml-64 p-4 sm:p-6 md:p-8 lg:p-10 min-h-screen min-w-0">
         <div className={fullWidth ? "w-full" : "w-full max-w-[1400px] mx-auto"}>
           {children}
         </div>

@@ -489,7 +489,7 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
     }, {})) : [];
 
     return (
-        <div ref={printRef} className="bg-white rounded-3xl shadow-2xl border border-gray-100 w-full animate-fade-in relative z-50 proforma-print-container">
+        <div ref={printRef} className="bg-white rounded-3xl shadow-2xl border border-gray-100 w-full animate-fade-in relative z-[100] proforma-print-container">
             <div className="bg-farm-700 p-8 text-white relative">
                 <button
                     onClick={onClose}

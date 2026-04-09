@@ -1244,7 +1244,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
 
             {/* Account Manager Modal */}
             {showAccountManager && (
-                <div className="fixed inset-0 z-[70] overflow-y-auto no-print">
+                <div className="fixed inset-0 z-[100] overflow-y-auto no-print">
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => setShowAccountManager(false)}></div>
                     <div className="flex min-h-full items-center justify-center p-4">
                         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] relative z-10">
@@ -1292,7 +1292,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             )}
 
             {showContactManager && (
-                <div className="fixed inset-0 z-[70] overflow-y-auto no-print">
+                <div className="fixed inset-0 z-[100] overflow-y-auto no-print">
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => setShowContactManager(false)}></div>
                     <div className="flex min-h-full items-center justify-center p-4">
                         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] relative z-10">
@@ -1329,7 +1329,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             )}
 
             {confirmDeleteId !== null && (
-                <div className="fixed inset-0 z-50 overflow-y-auto no-print">
+                <div className="fixed inset-0 z-[100] overflow-y-auto no-print">
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => setConfirmDeleteId(null)}></div>
                     <div className="flex min-h-full items-center justify-center p-4">
                         <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full relative z-10"><h3 className="text-xl font-bold mb-4">Excluir?</h3><div className="flex gap-4"><button onClick={() => setConfirmDeleteId(null)} className="flex-1 py-3 border rounded-2xl">Não</button><button onClick={() => handleDelete(confirmDeleteId)} className="flex-1 py-3 bg-red-600 text-white rounded-2xl">Excluir</button></div></div>
@@ -1338,7 +1338,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             )}
 
             {showReconciliation && (
-                <div className="fixed inset-0 z-[80] overflow-y-auto no-print">
+                <div className="fixed inset-0 z-[100] overflow-y-auto no-print">
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => setShowReconciliation(false)}></div>
                     <div className="flex min-h-full items-center justify-center p-4 sm:p-6 lg:p-8">
                         <div className="w-full max-w-5xl relative z-10 transform transition-all">
