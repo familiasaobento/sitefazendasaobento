@@ -422,7 +422,15 @@ export const AdminUsersPage: React.FC = () => {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-bold text-gray-800 truncate">{profile.full_name || '—'}</p>
-                                        <p className="text-xs text-gray-400 truncate">{profile.email}</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                                                profile.member_status === 'Ativo' ? 'bg-green-100 text-green-700' :
+                                                profile.member_status === 'Inativo' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                                            }`}>
+                                                {profile.member_status || 'Ativo'}
+                                            </span>
+                                            <p className="text-[10px] text-gray-400 truncate">{profile.email}</p>
+                                        </div>
                                     </div>
                                     <button
                                         onClick={() => handleDeleteUser(profile.id, profile.full_name)}
@@ -471,7 +479,8 @@ export const AdminUsersPage: React.FC = () => {
                                             <th className="px-6 py-5 text-left">Usuário</th>
                                             <th className="px-6 py-5 text-left">Responsável</th>
                                             <th className="px-6 py-5 text-left">Tipo</th>
-                                            <th className="px-6 py-5 text-center">Status</th>
+                                            <th className="px-6 py-5 text-center whitespace-nowrap">Situação</th>
+                                            <th className="px-6 py-5 text-center">Acesso</th>
                                             <th className="px-6 py-5 text-right pr-8">Ações</th>
                                         </tr>
                                     </thead>
@@ -504,8 +513,22 @@ export const AdminUsersPage: React.FC = () => {
                                                     </select>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
+                                                    <select
+                                                        value={profile.member_status || 'Ativo'}
+                                                        onChange={(e) => handleUpdateStatus(profile.id, e.target.value)}
+                                                        className={`text-[10px] font-black uppercase rounded-lg px-2 py-1.5 outline-none border border-transparent hover:border-gray-200 transition-all cursor-pointer ${
+                                                            profile.member_status === 'Ativo' ? 'bg-green-50 text-green-700' :
+                                                            profile.member_status === 'Inativo' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700'
+                                                        }`}
+                                                    >
+                                                        <option value="Ativo">🟢 Ativo</option>
+                                                        <option value="Inativo">🔴 Inativo</option>
+                                                        <option value="Licença">🟠 Licença</option>
+                                                    </select>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
                                                     <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${profile.approved ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                        {profile.approved ? 'Ativo' : 'Pendente'}
+                                                        {profile.approved ? 'Liberado' : 'Pendente'}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right pr-8">
