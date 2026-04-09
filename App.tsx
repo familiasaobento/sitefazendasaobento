@@ -579,7 +579,7 @@ const App: React.FC = () => {
       isVisitor={isVisitor}
       userName={userName}
       userRole={userRole || 'member'}
-      fullWidth={currentPage === Page.RESERVATIONS || currentPage === Page.ACTIVE_STAYS}
+      fullWidth={currentPage === Page.RESERVATIONS || currentPage === Page.ACTIVE_STAYS || currentPage === Page.ADMIN_USERS || currentPage === Page.MEMBERS || currentPage === Page.VISITORS}
     >
       {renderContent()}
       {showPasswordSetup && <PasswordSetupModal onComplete={() => setShowPasswordSetup(false)} />}

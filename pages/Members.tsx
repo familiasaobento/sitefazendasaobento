@@ -17,6 +17,13 @@ interface Profile {
     cpf?: string;
     phone?: string;
     address?: string;
+    address_street?: string;
+    address_number?: string;
+    address_complement?: string;
+    address_neighborhood?: string;
+    address_city?: string;
+    has_house?: boolean;
+    house_number?: string;
     email?: string;
     member_status?: string;
     dependents?: Dependent[];
@@ -180,7 +187,14 @@ export const MembersPage: React.FC = () => {
                                         {profile.full_name?.charAt(0) || '?'}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-gray-900 truncate">{profile.full_name || 'Sem nome'}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-bold text-gray-900 truncate">{profile.full_name || 'Sem nome'}</p>
+                                            {profile.has_house && profile.house_number && (
+                                                <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded-md font-black border border-blue-200">
+                                                    CASA {profile.house_number}
+                                                </span>
+                                            )}
+                                        </div>
                                         <p className="text-xs text-gray-400 font-mono">
                                             {profile.cpf ? (
                                                 profile.cpf.replace(/\D/g, '').length === 11 
@@ -224,10 +238,15 @@ export const MembersPage: React.FC = () => {
                                     )}
                                 </div>
 
-                                {profile.address && (
+                                {(profile.address || profile.address_street) && (
                                     <div className="bg-gray-50 p-2 rounded-lg">
                                         <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Endereço</p>
-                                        <p className="text-gray-700 text-xs leading-tight">{profile.address}</p>
+                                        <p className="text-gray-700 text-xs leading-tight">
+                                            {profile.address_street 
+                                                ? `${profile.address_street}, ${profile.address_number}${profile.address_complement ? ` - ${profile.address_complement}` : ''}, ${profile.address_neighborhood}, ${profile.address_city}`
+                                                : profile.address
+                                            }
+                                        </p>
                                     </div>
                                 )}
 
@@ -266,18 +285,19 @@ export const MembersPage: React.FC = () => {
                     </div>
 
                     {/* Desktop Table View (Hidden on Mobile) */}
-                    <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden print:hidden hidden md:block">
-                        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200">
-                            <table className="w-full text-left min-w-[1000px]">
-                                <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
-                                    <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
-                                        <th className="px-6 py-4 font-semibold w-64">Usuário</th>
-                                        <th className="px-6 py-4 font-semibold w-40">CPF</th>
-                                        <th className="px-6 py-4 font-semibold">Contato</th>
-                                        <th className="px-6 py-4 font-semibold">E-mail</th>
-                                        <th className="px-6 py-4 font-semibold text-right">Ações</th>
-                                    </tr>
-                                </thead>
+                    <div className="bg-white rounded-[2rem] shadow-xl border border-gray-100 overflow-hidden print:hidden hidden md:block">
+                        <div className="w-full">
+                            <div className="overflow-x-auto custom-scrollbar">
+                                <table className="w-full text-left min-w-[1200px] divide-y divide-gray-100">
+                                    <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
+                                        <tr>
+                                            <th className="px-6 py-5 font-black">Usuário</th>
+                                            <th className="px-6 py-5 font-black">CPF</th>
+                                            <th className="px-6 py-5 font-black">Contato</th>
+                                            <th className="px-6 py-5 font-black">E-mail</th>
+                                            <th className="px-6 py-5 font-black text-right">Ações</th>
+                                        </tr>
+                                    </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {filteredProfiles.map((profile) => (
                                         <React.Fragment key={profile.id}>
@@ -288,9 +308,21 @@ export const MembersPage: React.FC = () => {
                                                             {profile.full_name?.charAt(0) || '?'}
                                                         </div>
                                                         <div>
-                                                            <p className="font-bold text-gray-800">{profile.full_name || 'Sem nome'}</p>
-                                                            {profile.address && (
-                                                                <p className="text-xs text-gray-400 mt-0.5 leading-tight" title={profile.address}>{profile.address}</p>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="font-bold text-gray-800">{profile.full_name || 'Sem nome'}</p>
+                                                                {profile.has_house && profile.house_number && (
+                                                                    <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-black border border-blue-200">
+                                                                        CASA {profile.house_number}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {(profile.address || profile.address_street) && (
+                                                                <p className="text-xs text-gray-400 mt-0.5 leading-tight" title={profile.address_street ? `${profile.address_street}, ${profile.address_number}, ${profile.address_city}` : profile.address}>
+                                                                    {profile.address_street 
+                                                                        ? `${profile.address_street}, ${profile.address_number}${profile.address_complement ? ` - ${profile.address_complement}` : ''}, ${profile.address_neighborhood}, ${profile.address_city}`
+                                                                        : profile.address
+                                                                    }
+                                                                </p>
                                                             )}
                                                         </div>
                                                     </div>
@@ -392,6 +424,7 @@ export const MembersPage: React.FC = () => {
                             </table>
                         </div>
                     </div>
+                </div>
 
                     {/* Print Views */}
                     <div className="hidden print:block bg-white p-8">

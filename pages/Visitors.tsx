@@ -170,7 +170,6 @@ export const VisitorsPage: React.FC = () => {
                     />
                 </div>
             </header>
-
             {loading ? (
                 <div className="flex justify-center p-12">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-farm-700"></div>
@@ -181,160 +180,167 @@ export const VisitorsPage: React.FC = () => {
                     <h3 className="text-xl font-medium text-gray-600">Nenhum visitante encontrado</h3>
                 </div>
             ) : (
-                <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden hidden md:block">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
-                                <tr>
-                                    <th className="px-6 py-4 font-semibold">Visitante</th>
-                                    <th className="px-6 py-4 font-semibold">CPF / Telefone</th>
-                                    <th className="px-6 py-4 font-semibold">Sócio Responsável</th>
-                                    <th className="px-6 py-4 font-semibold">Histórico de Visitas</th>
-                                    <th className="px-6 py-4 font-semibold text-right">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {filteredVisitors.map((visitor) => (
-                                    <tr key={visitor.id} className="hover:bg-gray-50/50 transition-colors align-top">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="bg-blue-50 w-10 h-10 rounded-full flex items-center justify-center text-blue-700 font-bold shrink-0">
-                                                    {visitor.full_name?.charAt(0) || '?'}
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-gray-800">{visitor.full_name || 'Visitante'}</p>
-                                                    <p className="text-xs text-gray-400">{visitor.email}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap" title={visitor.cpf}>
-                                            <p className="text-sm font-mono text-gray-600">
-                                                {visitor.cpf && visitor.cpf.replace(/\D/g, '').length === 11 
-                                                    ? visitor.cpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
-                                                    : visitor.cpf}
-                                            </p>
-                                            <p className="text-xs text-gray-400 mt-1">{visitor.phone}</p>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <p className="text-sm font-medium text-gray-700">{visitor.host_name}</p>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="space-y-2">
-                                                {visitor.history.length === 0 ? (
-                                                    <span className="text-xs text-gray-300 italic">Nenhuma reserva</span>
-                                                ) : (
-                                                    <div className="max-h-32 overflow-y-auto pr-2 space-y-1 custom-scrollbar">
-                                                        {visitor.history.map((h, i) => (
-                                                            <div key={h.id} className="text-[10px] bg-white border border-gray-100 p-1.5 rounded flex justify-between items-center gap-4">
-                                                                <div className="flex-1">
-                                                                    <span className="font-bold text-gray-700">{formatDate(h.check_in)}</span>
-                                                                    <span className="mx-1">à</span>
-                                                                    <span className="font-bold text-gray-700">{formatDate(h.check_out)}</span>
-                                                                </div>
-                                                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${h.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                                                                        h.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-                                                                    }`}>
-                                                                    {h.status === 'confirmed' ? 'Confirmada' : h.status === 'rejected' ? 'RECUSADA' : 'AGUARDANDO'}
-                                                                </span>
-                                                            </div>
-                                                        ))}
+                <div className="space-y-6">
+                    {/* Desktop Table View */}
+                    <div className="bg-white rounded-[2rem] shadow-xl border border-gray-100 overflow-hidden hidden md:block">
+                        <div className="w-full">
+                            <div className="overflow-x-auto custom-scrollbar">
+                                <table className="w-full text-left min-w-[1200px] divide-y divide-gray-100">
+                                    <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
+                                        <tr>
+                                            <th className="px-6 py-5 text-left">Visitante</th>
+                                            <th className="px-6 py-5 text-left">Identificação</th>
+                                            <th className="px-6 py-5 text-left">Responsável</th>
+                                            <th className="px-6 py-5 text-left">Histórico</th>
+                                            <th className="px-6 py-5 text-right pr-8">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {filteredVisitors.map((visitor) => (
+                                            <tr key={visitor.id} className="hover:bg-gray-50/50 transition-colors align-top">
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="bg-blue-50 w-10 h-10 rounded-full flex items-center justify-center text-blue-700 font-bold shrink-0">
+                                                            {visitor.full_name?.charAt(0) || '?'}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-gray-800">{visitor.full_name || 'Visitante'}</p>
+                                                            <p className="text-xs text-gray-400">{visitor.email}</p>
+                                                        </div>
                                                     </div>
-                                                )}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap" title={visitor.cpf}>
+                                                    <p className="text-sm font-mono text-gray-600">
+                                                        {visitor.cpf && visitor.cpf.replace(/\D/g, '').length === 11 
+                                                            ? visitor.cpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
+                                                            : visitor.cpf}
+                                                    </p>
+                                                    <p className="text-xs text-gray-400 mt-1">{visitor.phone}</p>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <p className="text-sm font-medium text-gray-700">{visitor.host_name}</p>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="space-y-2">
+                                                        {visitor.history.length === 0 ? (
+                                                            <span className="text-xs text-gray-300 italic">Nenhuma reserva</span>
+                                                        ) : (
+                                                            <div className="max-h-32 overflow-y-auto pr-2 space-y-1 custom-scrollbar">
+                                                                {visitor.history.map((h, i) => (
+                                                                    <div key={h.id} className="text-[10px] bg-white border border-gray-100 p-1.5 rounded flex justify-between items-center gap-4">
+                                                                        <div className="flex-1">
+                                                                            <span className="font-bold text-gray-700">{formatDate(h.check_in)}</span>
+                                                                            <span className="mx-1">à</span>
+                                                                            <span className="font-bold text-gray-700">{formatDate(h.check_out)}</span>
+                                                                        </div>
+                                                                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${h.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                                                                                h.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
+                                                                            }`}>
+                                                                            {h.status === 'confirmed' ? 'Confirmada' : h.status === 'rejected' ? 'RECUSADA' : 'AGUARDANDO'}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    {isAdmin && (
+                                                        <button
+                                                            onClick={() => handleDeleteVisitor(visitor.id, visitor.full_name)}
+                                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                            title="Excluir Visitante"
+                                                        >
+                                                            <IconTrash className="w-5 h-5" />
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Mobile View */}
+                    <div className="md:hidden space-y-4">
+                        {filteredVisitors.map((visitor) => (
+                            <div key={visitor.id} className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 space-y-3">
+                                <div className="flex items-center gap-3 border-b border-gray-50 pb-3">
+                                    <div className="bg-blue-50 w-12 h-12 rounded-full flex items-center justify-center text-blue-700 font-bold text-xl">
+                                        {visitor.full_name?.charAt(0) || '?'}
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="font-bold text-gray-900">{visitor.full_name}</p>
+                                        <p className="text-xs text-gray-500">{visitor.email}</p>
+                                    </div>
+                                    {isAdmin && (
+                                        <button
+                                            onClick={() => handleDeleteVisitor(visitor.id, visitor.full_name)}
+                                            className="p-2 text-red-500 bg-red-50 rounded-lg"
+                                        >
+                                            <IconTrash className="w-5 h-5" />
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-y-3 text-xs">
+                                    <div>
+                                        <p className="text-gray-400 font-bold uppercase text-[9px]">Anfitrião</p>
+                                        <p className="text-gray-800">{visitor.host_name}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-400 font-bold uppercase text-[9px]">CPF</p>
+                                        <p className="text-gray-800 font-mono">
+                                            {visitor.cpf && visitor.cpf.replace(/\D/g, '').length === 11 
+                                                ? visitor.cpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
+                                                : visitor.cpf}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-400 font-bold uppercase text-[9px]">Telefone</p>
+                                        <p className="text-gray-800">{visitor.phone}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-400 font-bold uppercase text-[9px]">Visitas</p>
+                                        <p className="text-gray-800">{visitor.history.filter(h => h.status === 'confirmed').length}</p>
+                                    </div>
+                                </div>
+
+                                {/* Expandable History for Mobile */}
+                                {visitor.history.length > 0 && (
+                                    <div className="pt-2">
+                                        <button
+                                            onClick={() => setExpandedVisitor(expandedVisitor === visitor.id ? null : visitor.id)}
+                                            className="w-full bg-gray-50 py-2 rounded-xl text-[10px] font-bold text-gray-500 hover:bg-gray-100 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            {expandedVisitor === visitor.id ? 'Ocultar Histórico' : 'Ver Histórico Completo'}
+                                        </button>
+
+                                        {expandedVisitor === visitor.id && (
+                                            <div className="mt-2 space-y-2 animate-in slide-in-from-top-2 duration-300">
+                                                {visitor.history.map((h) => (
+                                                    <div key={h.id} className="bg-white border border-gray-100 p-2 rounded-xl text-[10px] flex justify-between items-center shadow-sm">
+                                                        <div>
+                                                            <p className="font-bold text-gray-700">{formatDate(h.check_in)} — {formatDate(h.check_out)}</p>
+                                                            <p className="text-gray-400">{h.accommodation || 'Acomodação'}</p>
+                                                        </div>
+                                                        <span className={`px-1.5 py-0.5 rounded-lg text-[8px] font-black uppercase ${h.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                                                                h.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
+                                                            }`}>
+                                                            {h.status === 'confirmed' ? 'Confirmada' : h.status === 'rejected' ? 'Recusada' : 'Pendente'}
+                                                        </span>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            {isAdmin && (
-                                                <button
-                                                    onClick={() => handleDeleteVisitor(visitor.id, visitor.full_name)}
-                                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                    title="Excluir Visitante"
-                                                >
-                                                    <IconTrash className="w-5 h-5" />
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
-
-            {/* Mobile View */}
-            <div className="md:hidden space-y-4">
-                {filteredVisitors.map((visitor) => (
-                    <div key={visitor.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-3">
-                        <div className="flex items-center gap-3 border-b border-gray-50 pb-3">
-                            <div className="bg-blue-50 w-12 h-12 rounded-full flex items-center justify-center text-blue-700 font-bold text-xl">
-                                {visitor.full_name?.charAt(0) || '?'}
-                            </div>
-                            <div className="flex-1">
-                                <p className="font-bold text-gray-900">{visitor.full_name}</p>
-                                <p className="text-xs text-gray-500">{visitor.email}</p>
-                            </div>
-                            {isAdmin && (
-                                <button
-                                    onClick={() => handleDeleteVisitor(visitor.id, visitor.full_name)}
-                                    className="p-2 text-red-500 bg-red-50 rounded-lg"
-                                >
-                                    <IconTrash className="w-5 h-5" />
-                                </button>
-                            )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-y-3 text-xs">
-                            <div>
-                                <p className="text-gray-400 font-bold uppercase text-[9px]">Sócio Anfitrião (Último)</p>
-                                <p className="text-gray-800">{visitor.host_name}</p>
-                            </div>
-                            <div>
-                                <p className="text-gray-400 font-bold uppercase text-[9px]">CPF</p>
-                                <p className="text-gray-800 font-mono">
-                                    {visitor.cpf && visitor.cpf.replace(/\D/g, '').length === 11 
-                                        ? visitor.cpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
-                                        : visitor.cpf}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-gray-400 font-bold uppercase text-[9px]">Telefone</p>
-                                <p className="text-gray-800">{visitor.phone}</p>
-                            </div>
-                            <div>
-                                <p className="text-gray-400 font-bold uppercase text-[9px]">Total de Visitas</p>
-                                <p className="text-gray-800">{visitor.history.filter(h => h.status === 'confirmed').length}</p>
-                            </div>
-                        </div>
-
-                        {/* Expandable History for Mobile */}
-                        <div className="pt-2">
-                            <button
-                                onClick={() => setExpandedVisitor(expandedVisitor === visitor.id ? null : visitor.id)}
-                                className="w-full bg-gray-50 py-2 rounded text-[10px] font-bold text-gray-500 hover:bg-gray-100"
-                            >
-                                {expandedVisitor === visitor.id ? 'Fechar Histórico' : 'Ver Histórico Completo'}
-                            </button>
-
-                            {expandedVisitor === visitor.id && (
-                                <div className="mt-2 space-y-2 fade-in">
-                                    {visitor.history.map((h) => (
-                                        <div key={h.id} className="bg-white border border-gray-100 p-2 rounded text-[10px] flex justify-between items-center">
-                                            <div>
-                                                <p className="font-bold">{formatDate(h.check_in)} - {formatDate(h.check_out)}</p>
-                                                <p className="text-gray-400">{h.accommodation}</p>
-                                            </div>
-                                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${h.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                                                    h.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-                                                }`}>
-                                                {h.status === 'confirmed' ? 'Confirmada' : h.status === 'rejected' ? 'RECUSADA' : 'AGUARDANDO'}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                ))}
-            </div>
         </div>
     );
 };

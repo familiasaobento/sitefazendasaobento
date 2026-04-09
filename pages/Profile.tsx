@@ -16,10 +16,17 @@ interface ProfileData {
     cpf: string;
     birth_date: string;
     phone: string;
-    address: string;
+    address_street: string;
+    address_number: string;
+    address_complement: string;
+    address_neighborhood: string;
+    address_city: string;
+    has_house: boolean;
+    house_number: string;
     email: string;
     dependents: Dependent[];
     host_name: string;
+    role: string;
 }
 
 export const ProfilePage: React.FC = () => {
@@ -70,11 +77,20 @@ export const ProfilePage: React.FC = () => {
         cpf: '',
         birth_date: '',
         phone: '',
-        address: '',
+        address_street: '',
+        address_number: '',
+        address_complement: '',
+        address_neighborhood: '',
+        address_city: '',
+        has_house: false,
+        house_number: '',
         email: '',
         dependents: [],
-        host_name: ''
+        host_name: '',
+        role: ''
     });
+
+    const [legacyAddress, setLegacyAddress] = useState<string>('');
 
     const [hasDependents, setHasDependents] = useState<string>('Não');
 
@@ -100,15 +116,23 @@ export const ProfilePage: React.FC = () => {
 
             if (data && data.length > 0) {
                 const profile = data[0];
+                setLegacyAddress(profile.address || '');
                 setFormData({
                     full_name: profile.full_name || '',
                     cpf: profile.cpf || '',
                     birth_date: profile.birth_date || '',
                     phone: profile.phone || '',
-                    address: profile.address || '',
+                    address_street: profile.address_street || '',
+                    address_number: profile.address_number || '',
+                    address_complement: profile.address_complement || '',
+                    address_neighborhood: profile.address_neighborhood || '',
+                    address_city: profile.address_city || '',
+                    has_house: profile.has_house || false,
+                    house_number: profile.house_number || '',
                     email: profile.email || user.email || '',
                     dependents: profile.dependents || [],
-                    host_name: profile.host_name || ''
+                    host_name: profile.host_name || '',
+                    role: profile.role || ''
                 });
                 setHasDependents(profile.dependents && profile.dependents.length > 0 ? 'Sim' : 'Não');
             } else {
@@ -232,9 +256,15 @@ export const ProfilePage: React.FC = () => {
                     cpf: formData.cpf.replace(/\D/g, ''),
                     birth_date: formData.birth_date || null,
                     phone: formData.phone,
-                    address: formData.address,
+                    address_street: formData.address_street,
+                    address_number: formData.address_number,
+                    address_complement: formData.address_complement,
+                    address_neighborhood: formData.address_neighborhood,
+                    address_city: formData.address_city,
+                    has_house: formData.has_house,
+                    house_number: formData.house_number,
                     dependents: formData.dependents,
-                    email: formData.email // Use contact email from form
+                    email: formData.email 
                 })
                 .eq('id', user.id);
 
@@ -510,17 +540,113 @@ export const ProfilePage: React.FC = () => {
                                 </div>
                             )}
 
-                            <div className="space-y-1">
-                                <label htmlFor="address" className="block text-sm font-medium text-gray-700">Endereço Atual</label>
-                                <input
-                                    id="address"
-                                    type="text"
-                                    required
-                                    value={formData.address}
-                                    onChange={handleInputChange}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
-                                />
+                            {formData.address_street === '' && legacyAddress && (
+                                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl mb-6 shadow-sm animate-pulse-subtle">
+                                    <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                        <span className="bg-amber-200 w-4 h-4 rounded-full flex items-center justify-center text-[8px]">!</span>
+                                        Endereço Anterior Detectado
+                                    </p>
+                                    <p className="text-sm text-amber-900 font-medium italic">{legacyAddress}</p>
+                                    <p className="text-[10px] text-amber-700 mt-2 font-bold uppercase tracking-tight">Copie e preencha os campos abaixo para atualizar seu cadastro:</p>
+                                </div>
+                            )}
+
+                            <div className="space-y-4 pt-4 border-t border-gray-100">
+                                <h4 className="text-sm font-bold text-farm-800">Endereço Residencial</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div className="md:col-span-3 space-y-1">
+                                        <label className="block text-xs font-medium text-gray-700">Rua / Logradouro</label>
+                                        <input
+                                            id="address_street"
+                                            type="text"
+                                            required
+                                            value={formData.address_street}
+                                            onChange={handleInputChange}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="block text-xs font-medium text-gray-700">Número</label>
+                                        <input
+                                            id="address_number"
+                                            type="text"
+                                            required
+                                            value={formData.address_number}
+                                            onChange={handleInputChange}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="block text-xs font-medium text-gray-700">Complemento</label>
+                                        <input
+                                            id="address_complement"
+                                            type="text"
+                                            value={formData.address_complement}
+                                            onChange={handleInputChange}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="block text-xs font-medium text-gray-700">Bairro</label>
+                                        <input
+                                            id="address_neighborhood"
+                                            type="text"
+                                            required
+                                            value={formData.address_neighborhood}
+                                            onChange={handleInputChange}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="block text-xs font-medium text-gray-700">Cidade</label>
+                                        <input
+                                            id="address_city"
+                                            type="text"
+                                            required
+                                            value={formData.address_city}
+                                            onChange={handleInputChange}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
                             </div>
+
+                            {formData.role === 'member' && (
+                                <div className="space-y-4 pt-4 border-t border-gray-100">
+                                    <h4 className="text-sm font-bold text-farm-800">Residência na Fazenda</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <label className="flex items-center gap-3 p-4 bg-blue-50/50 border border-blue-100 rounded-xl cursor-pointer hover:bg-blue-100 transition-all select-none">
+                                            <input 
+                                                type="checkbox" 
+                                                id="has_house"
+                                                className="w-5 h-5 accent-blue-600" 
+                                                checked={formData.has_house} 
+                                                onChange={e => setFormData({...formData, has_house: e.target.checked})} 
+                                            />
+                                            <div>
+                                                <span className="block text-sm font-bold text-blue-900">Possuo casa na fazenda</span>
+                                                <span className="text-[10px] text-blue-700 uppercase font-medium">Ative se você reside ou possui lote edificado</span>
+                                            </div>
+                                        </label>
+
+                                        {formData.has_house && (
+                                            <div className="space-y-1 animate-in slide-in-from-left-2">
+                                                <label className="block text-xs font-medium text-gray-700">Número da Casa / Lote</label>
+                                                <input
+                                                    id="house_number"
+                                                    type="text"
+                                                    value={formData.house_number}
+                                                    onChange={handleInputChange}
+                                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none font-bold text-farm-700"
+                                                    placeholder="Ex: 12-A"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="space-y-4 pt-4 border-t border-gray-100">
                                 <div className="space-y-1">

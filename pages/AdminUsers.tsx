@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { IconUser, IconCalendar, IconTrash, IconPlus, IconX, IconLoader, IconMail, IconCheck, IconLock } from '../components/Icons';
+import { IconUser, IconCalendar, IconTrash, IconPlus, IconX, IconLoader, IconMail, IconCheck, IconLock, IconEdit } from '../components/Icons';
 
 interface Profile {
     id: string;
@@ -22,7 +22,13 @@ interface NewUser {
     cpf: string;
     phone: string;
     birth_date: string;
-    address: string;
+    address_street: string;
+    address_number: string;
+    address_complement: string;
+    address_neighborhood: string;
+    address_city: string;
+    has_house: boolean;
+    house_number: string;
     host_name: string;
     dependents: { name: string; birthDate: string; relationship: string; }[];
 }
@@ -34,6 +40,9 @@ export const AdminUsersPage: React.FC = () => {
     
     // Admin Registration States
     const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingUserId, setEditingUserId] = useState<string | null>(null);
+    const [isFetchingFullProfile, setIsFetchingFullProfile] = useState(false);
     const [registerLoading, setRegisterLoading] = useState(false);
     const [registerError, setRegisterError] = useState('');
     const [registerSuccess, setRegisterSuccess] = useState('');
@@ -47,7 +56,13 @@ export const AdminUsersPage: React.FC = () => {
         cpf: '',
         phone: '',
         birth_date: '',
-        address: '',
+        address_street: '',
+        address_number: '',
+        address_complement: '',
+        address_neighborhood: '',
+        address_city: '',
+        has_house: false,
+        house_number: '',
         host_name: '',
         dependents: []
     };
@@ -74,6 +89,100 @@ export const AdminUsersPage: React.FC = () => {
     useEffect(() => {
         fetchProfiles();
     }, []);
+
+    const handleOpenEditModal = async (profile: Profile) => {
+        setIsFetchingFullProfile(true);
+        setEditingUserId(profile.id);
+        setRegisterError('');
+        setRegisterSuccess('');
+
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', profile.id)
+                .single();
+
+            if (error) throw error;
+
+            if (data) {
+                setNewUser({
+                    email: data.email || '',
+                    full_name: data.full_name || '',
+                    role: data.role || 'member',
+                    member_status: data.member_status || 'Ativo',
+                    send_email: false,
+                    cpf: data.cpf || '',
+                    phone: data.phone || '',
+                    birth_date: data.birth_date || '',
+                    address_street: data.address_street || '',
+                    address_number: data.address_number || '',
+                    address_complement: data.address_complement || '',
+                    address_neighborhood: data.address_neighborhood || '',
+                    address_city: data.address_city || '',
+                    has_house: data.has_house || false,
+                    house_number: data.house_number || '',
+                    host_name: data.host_name || '',
+                    dependents: data.dependents || []
+                });
+                setIsEditModalOpen(true);
+            }
+        } catch (err: any) {
+            console.error('Error fetching full profile:', err);
+            alert('Erro ao carregar dados completos do perfil: ' + err.message);
+        } finally {
+            setIsFetchingFullProfile(false);
+        }
+    };
+
+    const handleUpdateProfile = async () => {
+        setRegisterLoading(true);
+        setRegisterError('');
+        setRegisterSuccess('');
+
+        try {
+            if (!editingUserId) return;
+
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    full_name: newUser.full_name,
+                    role: newUser.role,
+                    member_status: newUser.member_status,
+                    cpf: newUser.cpf,
+                    phone: newUser.phone,
+                    birth_date: newUser.birth_date || null,
+                    address_street: newUser.address_street,
+                    address_number: newUser.address_number,
+                    address_complement: newUser.address_complement,
+                    address_neighborhood: newUser.address_neighborhood,
+                    address_city: newUser.address_city,
+                    has_house: newUser.has_house,
+                    house_number: newUser.house_number,
+                    host_name: newUser.host_name,
+                    dependents: newUser.dependents
+                })
+                .eq('id', editingUserId);
+
+            if (error) throw error;
+
+            setRegisterSuccess('Perfil atualizado com sucesso!');
+            fetchProfiles(); // Refresh list
+            
+            setTimeout(() => {
+                setIsEditModalOpen(false);
+                setEditingUserId(null);
+                setNewUser(initialNewUser);
+                setRegisterSuccess('');
+            }, 1500);
+
+        } catch (err: any) {
+            console.error('Error updating profile:', err);
+            setRegisterError(err.message || 'Erro ao atualizar perfil.');
+        } finally {
+            setRegisterLoading(false);
+        }
+    };
 
     const handleToggleApproval = async (id: string, currentStatus: boolean) => {
         try {
@@ -322,12 +431,18 @@ export const AdminUsersPage: React.FC = () => {
                                         <IconTrash className="w-5 h-5" />
                                     </button>
                                 </div>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-2 gap-2">
                                     <button
                                         onClick={() => handleToggleApproval(profile.id, profile.approved)}
                                         className={`py-2 rounded-lg font-bold text-[10px] transition-all ${profile.approved ? 'text-yellow-600 bg-yellow-50' : 'bg-farm-700 text-white'}`}
                                     >
                                         {profile.approved ? 'Bloquear' : 'Liberar'}
+                                    </button>
+                                    <button
+                                        onClick={() => handleOpenEditModal(profile)}
+                                        className="py-2 rounded-lg font-bold text-[10px] text-blue-600 bg-blue-50 flex items-center justify-center gap-1"
+                                    >
+                                        <IconEdit className="w-3 h-3" /> Editar
                                     </button>
                                     <button
                                         onClick={() => handleSendInvite(profile)}
@@ -347,17 +462,17 @@ export const AdminUsersPage: React.FC = () => {
                     </div>
 
                     {/* Desktop View */}
-                    <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden hidden md:block">
-                        <div className="inline-block min-w-full align-middle">
-                            <div className="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm custom-scrollbar">
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
+                    <div className="bg-white rounded-[2rem] shadow-xl border border-gray-100 overflow-hidden hidden md:block">
+                        <div className="w-full">
+                            <div className="overflow-x-auto custom-scrollbar">
+                                <table className="min-w-[1000px] w-full divide-y divide-gray-100">
+                                    <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
                                         <tr>
-                                            <th className="px-6 py-4 font-semibold">Usuário</th>
-                                            <th className="px-6 py-4 font-semibold">Responsável</th>
-                                            <th className="px-6 py-4 font-semibold">Tipo</th>
-                                            <th className="px-6 py-4 font-semibold text-center">Cadastro</th>
-                                            <th className="px-6 py-4 font-semibold text-right">Ações</th>
+                                            <th className="px-6 py-5 text-left">Usuário</th>
+                                            <th className="px-6 py-5 text-left">Responsável</th>
+                                            <th className="px-6 py-5 text-left">Tipo</th>
+                                            <th className="px-6 py-5 text-center">Status</th>
+                                            <th className="px-6 py-5 text-right pr-8">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -379,7 +494,7 @@ export const AdminUsersPage: React.FC = () => {
                                                     <select
                                                         value={profile.role}
                                                         onChange={(e) => handleToggleRole(profile.id, e.target.value)}
-                                                        className="bg-gray-50 border-none rounded-full px-3 py-1 text-xs font-bold text-gray-700 cursor-pointer hover:bg-gray-100 transition-all font-sans"
+                                                        className="bg-gray-100/50 border-none rounded-lg px-3 py-2 text-[10px] font-black uppercase text-gray-600 cursor-pointer hover:bg-gray-200 transition-all font-sans min-w-[120px]"
                                                     >
                                                         <option value="member">Sócio</option>
                                                         <option value="visitor">Visitante</option>
@@ -389,17 +504,24 @@ export const AdminUsersPage: React.FC = () => {
                                                     </select>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${profile.approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                                        {profile.approved ? 'OK' : 'PEND'}
+                                                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${profile.approved ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        {profile.approved ? 'Ativo' : 'Pendente'}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 text-right">
+                                                <td className="px-6 py-4 text-right pr-8">
                                                     <div className="flex items-center justify-end gap-2">
                                                         <button
                                                             onClick={() => handleToggleApproval(profile.id, profile.approved)}
                                                             className={`px-4 py-2 rounded-lg font-bold text-xs transition-all ${profile.approved ? 'text-yellow-600 bg-yellow-50 hover:bg-yellow-100' : 'bg-farm-700 text-white hover:bg-farm-800 shadow-sm'}`}
                                                         >
                                                             {profile.approved ? 'Bloquear' : 'Liberar'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleOpenEditModal(profile)}
+                                                            className="p-2 text-gray-400 hover:text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all font-sans"
+                                                            title="Editar Informações"
+                                                        >
+                                                            <IconEdit className="w-5 h-5" />
                                                         </button>
                                                         <button
                                                             onClick={() => handleSendInvite(profile)}
@@ -433,21 +555,25 @@ export const AdminUsersPage: React.FC = () => {
                 </>
             )}
 
-            {/* Registration Modal - FULL PROFILE VERSION */}
-            {isRegisterModalOpen && (
+            {/* Registration/Edit Modal - FULL PROFILE VERSION */}
+            {(isRegisterModalOpen || isEditModalOpen) && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
                     <div className="bg-white rounded-[2rem] shadow-2xl max-w-4xl w-full my-8 overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
                         <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center shrink-0">
                             <div>
-                                <h3 className="text-2xl font-bold text-gray-900 font-serif">Cadastro Completo de Usuário</h3>
-                                <p className="text-gray-500 text-sm">Pré-preenchimento de todos os dados do perfil.</p>
+                                <h3 className="text-2xl font-bold text-gray-900 font-serif">
+                                    {isEditModalOpen ? 'Editar Perfil de Usuário' : 'Cadastro Completo de Usuário'}
+                                </h3>
+                                <p className="text-gray-500 text-sm">
+                                    {isEditModalOpen ? 'Atualize as informações cadastrais do perfil.' : 'Pré-preenchimento de todos os dados do perfil.'}
+                                </p>
                             </div>
-                            <button onClick={() => setIsRegisterModalOpen(false)} className="p-2 hover:bg-white rounded-xl">
+                            <button onClick={() => { setIsRegisterModalOpen(false); setIsEditModalOpen(false); setEditingUserId(null); setNewUser(initialNewUser); }} className="p-2 hover:bg-white rounded-xl">
                                 <IconX className="w-6 h-6 text-gray-400" />
                             </button>
                         </div>
 
-                        <form onSubmit={handleAdminRegister} className="overflow-y-auto p-8 space-y-8 flex-1">
+                        <form onSubmit={(e) => { e.preventDefault(); isEditModalOpen ? handleUpdateProfile() : handleAdminRegister(e); }} className="overflow-y-auto p-8 space-y-8 flex-1">
                             {registerError && <div className="bg-red-50 text-red-700 p-4 rounded-xl text-sm font-bold">{registerError}</div>}
                             {registerSuccess && <div className="bg-green-50 text-green-700 p-4 rounded-xl text-sm font-bold">{registerSuccess}</div>}
                             
@@ -461,7 +587,15 @@ export const AdminUsersPage: React.FC = () => {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-gray-700 mb-1">E-mail</label>
-                                        <input type="email" required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} placeholder="joao@email.com" />
+                                        <input 
+                                            type="email" 
+                                            required 
+                                            disabled={isEditModalOpen}
+                                            className={`w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none ${isEditModalOpen ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''}`} 
+                                            value={newUser.email} 
+                                            onChange={e => setNewUser({...newUser, email: e.target.value})} 
+                                            placeholder="joao@email.com" 
+                                        />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-bold text-gray-700 mb-1">CPF</label>
@@ -486,10 +620,95 @@ export const AdminUsersPage: React.FC = () => {
                                         <label className="block text-sm font-bold text-gray-700 mb-1">Responsável (Sócio Anfitrião se Visitante)</label>
                                         <input type="text" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.host_name} onChange={e => setNewUser({...newUser, host_name: e.target.value})} placeholder="Nome do Sócio" />
                                     </div>
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Endereço Residencial</label>
-                                        <input type="text" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.address} onChange={e => setNewUser({...newUser, address: e.target.value})} placeholder="Rua, Número, Bairro, Cidade - UF" />
+                                    <div className="md:col-span-2 space-y-4 pt-4 border-t border-gray-100">
+                                        <h4 className="text-sm font-bold text-farm-800">Endereço Residencial Completo</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                            <div className="md:col-span-3 space-y-1">
+                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Rua / Logradouro</label>
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    value={newUser.address_street}
+                                                    onChange={e => setNewUser({ ...newUser, address_street: e.target.value })}
+                                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm"
+                                                    placeholder="Rua, Av., etc"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Número</label>
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    value={newUser.address_number}
+                                                    onChange={e => setNewUser({ ...newUser, address_number: e.target.value })}
+                                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm"
+                                                    placeholder="123"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div className="space-y-1">
+                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Complemento</label>
+                                                <input
+                                                    type="text"
+                                                    value={newUser.address_complement}
+                                                    onChange={e => setNewUser({ ...newUser, address_complement: e.target.value })}
+                                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm"
+                                                    placeholder="Apto, Bloco, etc"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Bairro</label>
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    value={newUser.address_neighborhood}
+                                                    onChange={e => setNewUser({ ...newUser, address_neighborhood: e.target.value })}
+                                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm"
+                                                    placeholder="Centro"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Cidade</label>
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    value={newUser.address_city}
+                                                    onChange={e => setNewUser({ ...newUser, address_city: e.target.value })}
+                                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm"
+                                                    placeholder="São Paulo"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
+
+                                    {newUser.role === 'member' && (
+                                        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-blue-50/50 border border-blue-100 rounded-2xl">
+                                            <div className="flex items-center">
+                                                <label className="flex items-center gap-3 p-3 bg-white border border-blue-200 rounded-xl w-full cursor-pointer hover:bg-blue-50 transition-all select-none shadow-sm">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="w-5 h-5 accent-blue-600" 
+                                                        checked={newUser.has_house} 
+                                                        onChange={e => setNewUser({...newUser, has_house: e.target.checked})} 
+                                                    />
+                                                    <span className="text-xs font-bold text-blue-800 leading-tight">Possui casa na fazenda?</span>
+                                                </label>
+                                            </div>
+                                            {newUser.has_house && (
+                                                <div className="animate-in slide-in-from-left-2">
+                                                    <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Número da Casa</label>
+                                                    <input
+                                                        type="text"
+                                                        value={newUser.house_number}
+                                                        onChange={e => setNewUser({ ...newUser, house_number: e.target.value })}
+                                                        className="w-full px-4 py-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-blue-900 bg-white"
+                                                        placeholder="Ex: 12-A"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -566,9 +785,14 @@ export const AdminUsersPage: React.FC = () => {
                         </form>
 
                         <div className="p-8 border-t border-gray-100 bg-gray-50 shrink-0">
-                            <button type="button" onClick={handleAdminRegister} disabled={registerLoading || !!registerSuccess} className="w-full bg-farm-800 text-white font-bold py-4 rounded-2xl shadow-xl shadow-farm-100 hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-lg">
-                                {registerLoading ? <IconLoader className="w-6 h-6 animate-spin" /> : <IconCheck className="w-6 h-6" />}
-                                {registerLoading ? 'Processando Cadastro...' : 'Salvar Cadastro e Finalizar'}
+                            <button 
+                                type="button" 
+                                onClick={isEditModalOpen ? handleUpdateProfile : handleAdminRegister} 
+                                disabled={registerLoading || (!!registerSuccess && !isEditModalOpen && !isRegisterModalOpen)} 
+                                className={`w-full ${isEditModalOpen ? 'bg-blue-600 hover:bg-blue-700' : 'bg-farm-800 hover:bg-black'} text-white font-bold py-4 rounded-2xl shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-lg`}
+                            >
+                                {registerLoading ? <IconLoader className="w-6 h-6 animate-spin" /> : isEditModalOpen ? <IconEdit className="w-6 h-6" /> : <IconCheck className="w-6 h-6" />}
+                                {registerLoading ? 'Processando...' : isEditModalOpen ? 'Salvar Alterações' : 'Salvar Cadastro e Finalizar'}
                             </button>
                         </div>
                     </div>
