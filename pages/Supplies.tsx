@@ -291,7 +291,11 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                     tags: rc.area_demandante || null,
                     requisicao_id: rc.id
                 };
-                await supabase.from('fluxo_caixa').insert(payload).select();
+                const { error: insertError } = await supabase.from('fluxo_caixa').insert(payload);
+                if (insertError) {
+                    console.error('Insert Error fluxo_caixa:', insertError);
+                    throw new Error('Falha ao inserir no fluxo de caixa: ' + insertError.message);
+                }
             }
 
             setConfirmConfirmarCompraId(null);
