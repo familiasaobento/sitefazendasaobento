@@ -142,10 +142,10 @@ export const MembersPage: React.FC = () => {
                 <div className="flex flex-col md:flex-row gap-4 items-end">
                     <input
                         type="text"
-                        placeholder="Buscar por nome ou CPF..."
+                        placeholder="Nome ou CPF..."
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
-                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none w-full md:w-64"
+                        className="px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none w-full md:w-64 transition-all"
                     />
                     <div className="flex gap-2">
                         <button
@@ -289,7 +289,7 @@ export const MembersPage: React.FC = () => {
                         <div className="w-full">
                             <div className="overflow-x-auto custom-scrollbar">
                                 <table className="w-full text-left min-w-[1200px] divide-y divide-gray-100">
-                                    <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
+                                    <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
                                         <tr>
                                             <th className="px-6 py-5 font-black">Usuário</th>
                                             <th className="px-6 py-5 font-black">CPF</th>

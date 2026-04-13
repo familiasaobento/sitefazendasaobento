@@ -204,7 +204,7 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                 )}
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Mensagem</label>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Tipo de Mensagem</label>
                     <select
                         value={type}
                         onChange={(e) => setType(e.target.value)}
@@ -218,7 +218,7 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Assunto</label>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Assunto</label>
                     <input
                         type="text"
                         required
@@ -230,7 +230,7 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Mensagem</label>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Mensagem</label>
                     <textarea
                         required
                         rows={6}

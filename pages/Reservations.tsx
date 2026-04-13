@@ -602,7 +602,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                 <IconCalendar className="w-6 h-6 md:w-10 md:h-10 text-farm-800" />
                 {isAdmin ? 'Gestão de Reservas' : 'Minhas Reservas'}
               </h2>
-              <p className="text-[10px] md:text-lg text-gray-500 mt-1 ml-1 leading-tight">
+              <p className="text-sm md:text-lg text-gray-500 mt-1 ml-1 leading-tight">
                 {isAdmin 
                   ? 'Controle de hóspedes, ocupação e financeiro.' 
                   : 'Acompanhe suas reservas na Fazenda.'}
@@ -671,7 +671,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                   <div className="min-w-[1400px] w-full">
                     {/* ... (existing map content) ... */}
                     <div className="flex bg-gray-50/50">
-                      <div className="w-48 flex-shrink-0 p-4 font-black text-[10px] text-gray-400 uppercase tracking-widest border-r border-gray-100 sticky left-0 bg-gray-50 z-30">Acomodação</div>
+                      <div className="w-48 flex-shrink-0 p-4 font-black text-[10px] text-gray-400 uppercase tracking-[0.2em] border-r border-gray-100 sticky left-0 bg-gray-50 z-30">Acomodação</div>
                       <div className="flex-1 flex overflow-hidden">
                         {Array.from({ length: new Date(selectedYear, selectedMonth + 1, 0).getDate() }).map((_, i) => (
                           <div key={i} className={`flex-1 text-center p-3 border-r border-gray-100 text-[11px] font-bold ${new Date().getDate() === i+1 && new Date().getMonth() === selectedMonth && new Date().getFullYear() === selectedYear ? 'bg-farm-600 text-white shadow-inner' : 'text-gray-500'}`}>
@@ -683,7 +683,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
 
                     {accommodationGroups.map((group) => (
                       <React.Fragment key={group.name}>
-                        <div className="bg-gray-100/50 p-2 text-[10px] font-black text-farm-700 uppercase tracking-widest pl-6 border-b border-gray-100 w-full sticky left-0 z-20">
+                        <div className="bg-gray-100/50 p-2 text-[10px] font-black text-farm-700 uppercase tracking-[0.2em] pl-6 border-b border-gray-100 w-full sticky left-0 z-20">
                           {group.name}
                         </div>
                         {group.units.map((unit) => (
@@ -1561,22 +1561,22 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                     <form onSubmit={handleSubmit} className="p-8 space-y-6">
                       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
                       <div className="space-y-1">
-                        <label className="block text-sm font-bold text-gray-700">{isVisitor ? 'Nome do sócio anfitrião' : 'Nome do Sócio Principal'}</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1.5">{isVisitor ? 'Nome do sócio anfitrião' : 'Nome do Sócio Principal'}</label>
                         <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
-                          <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wider">Chegada</label>
+                          <label className="block text-sm font-bold text-gray-700 mb-1.5">Chegada</label>
                           <input type="date" required value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all text-sm font-bold" />
                         </div>
                         <div className="space-y-1">
-                          <label className="block text-[11px] font-black text-gray-400 uppercase tracking-wider">Saída</label>
+                          <label className="block text-sm font-bold text-gray-700 mb-1.5">Saída</label>
                           <input type="date" required value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all text-sm font-bold" />
                         </div>
                       </div>
 
                       <div className="space-y-1">
-                        <label className="block text-sm font-bold text-gray-700">Número de Pessoas</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Número de Pessoas</label>
                         <input type="number" min="1" required value={numGuests} onChange={handleNumGuestsChange} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" />
                       </div>
 

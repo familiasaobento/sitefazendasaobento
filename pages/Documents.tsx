@@ -128,7 +128,7 @@ export const DocumentsPage: React.FC<{ isManagement?: boolean }> = ({ isManageme
           <form onSubmit={handleUpload} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Título do Documento</label>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">Título do Documento</label>
                 <input
                   type="text"
                   required
@@ -139,7 +139,7 @@ export const DocumentsPage: React.FC<{ isManagement?: boolean }> = ({ isManageme
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">Categoria</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
@@ -154,7 +154,7 @@ export const DocumentsPage: React.FC<{ isManagement?: boolean }> = ({ isManageme
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Arquivo</label>
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">Arquivo</label>
               <input
                 type="file"
                 required
@@ -190,8 +190,8 @@ export const DocumentsPage: React.FC<{ isManagement?: boolean }> = ({ isManageme
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           {categories.sort().map((cat) => (
             <div key={cat} className="border-b border-gray-100 last:border-0">
-              <div className="bg-farm-50 px-6 py-3 border-b border-gray-100">
-                <h3 className="font-bold text-farm-800 text-sm uppercase tracking-wide">{cat}</h3>
+              <div className="bg-gray-50/50 px-6 py-3 border-b border-gray-100">
+                <h3 className="text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">{cat}</h3>
               </div>
               <ul className="divide-y divide-gray-100">
                 {documents.filter(doc => doc.category === cat).map((doc) => (

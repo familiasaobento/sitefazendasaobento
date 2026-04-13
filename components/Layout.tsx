@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Page } from '../types';
-import { IconHome, IconCalendar, IconImage, IconChart, IconUser, IconMail, IconMenu, IconFileText, IconShoppingCart, IconZap, IconPackage, IconCheck } from './Icons';
+import { IconHome, IconCalendar, IconImage, IconChart, IconUser, IconMail, IconMenu, IconFileText, IconShoppingCart, IconZap, IconPackage, IconCheck, IconBook } from './Icons';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -35,6 +35,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
     { page: Page.FINANCE, label: 'Painel Financeiro', icon: IconChart },
     { page: Page.RESERVATIONS, label: 'Reservas', icon: IconCalendar },
     { page: Page.PROFILE, label: 'Meu Cadastro', icon: IconUser },
+    { page: Page.HISTORY, label: 'História e Genealogia', icon: IconBook },
     { page: Page.CONTACT, label: 'Contato e Sugestões', icon: IconMail },
   ];
 

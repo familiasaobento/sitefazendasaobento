@@ -453,18 +453,18 @@ export const ProfilePage: React.FC = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-1">
-                                    <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nome Completo</label>
+                                    <label htmlFor="name" className="block text-sm font-bold text-gray-700 mb-1.5">Nome Completo</label>
                                     <input
                                         id="name"
                                         type="text"
                                         required
                                         value={formData.full_name}
                                         onChange={handleInputChange}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label htmlFor="cpf" className="block text-sm font-medium text-gray-700">CPF</label>
+                                    <label htmlFor="cpf" className="block text-sm font-bold text-gray-700 mb-1.5">CPF</label>
                                     <input
                                         id="cpf"
                                         type="text"
@@ -472,58 +472,58 @@ export const ProfilePage: React.FC = () => {
                                         placeholder="000.000.000-00"
                                         value={formData.cpf}
                                         onChange={handleInputChange}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all"
                                     />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-1">
-                                    <label htmlFor="birth_date" className="block text-sm font-medium text-gray-700">Data de Nascimento</label>
+                                    <label htmlFor="birth_date" className="block text-sm font-bold text-gray-700 mb-1.5">Data de Nascimento</label>
                                     <input
                                         id="birth_date"
                                         type="date"
                                         required
                                         value={formData.birth_date}
                                         onChange={handleInputChange}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all"
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label htmlFor="auth_email" className="block text-sm font-medium text-gray-700">E-mail de Acesso (Login)</label>
+                                    <label htmlFor="auth_email" className="block text-sm font-bold text-gray-700 mb-1.5">E-mail de Acesso (Login)</label>
                                     <input
                                         id="auth_email"
                                         type="email"
                                         disabled
                                         value={authEmail}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-400 cursor-not-allowed"
                                     />
                                     <p className="text-[10px] text-gray-400">O e-mail de login não pode ser alterado por aqui.</p>
                                 </div>
                             </div>
 
                             <div className="space-y-1">
-                                <label htmlFor="email" className="block text-sm font-medium text-gray-700">E-mail de Contato (Para relatórios e avisos)</label>
+                                <label htmlFor="email" className="block text-sm font-bold text-gray-700 mb-1.5">E-mail de Contato (Para relatórios e avisos)</label>
                                 <input
                                     id="email"
                                     type="email"
                                     required
                                     value={formData.email}
                                     onChange={handleInputChange}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all"
                                 />
                                 <p className="text-[10px] text-gray-400">Este é o e-mail que aparecerá nos cadastros e relatórios.</p>
                             </div>
 
                             <div className="space-y-1">
-                                <label htmlFor="phone" className="block text-sm font-medium text-gray-700">Telefone / WhatsApp</label>
+                                <label htmlFor="phone" className="block text-sm font-bold text-gray-700 mb-1.5">Telefone / WhatsApp</label>
                                 <input
                                     id="phone"
                                     type="tel"
                                     required
                                     value={formData.phone}
                                     onChange={handleInputChange}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all"
                                 />
                             </div>
 
@@ -555,14 +555,14 @@ export const ProfilePage: React.FC = () => {
                                 <h4 className="text-sm font-bold text-farm-800">Endereço Residencial</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <div className="md:col-span-3 space-y-1">
-                                        <label className="block text-xs font-medium text-gray-700">Rua / Logradouro</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Rua / Logradouro</label>
                                         <input
                                             id="address_street"
                                             type="text"
                                             required
                                             value={formData.address_street}
                                             onChange={handleInputChange}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all"
                                         />
                                     </div>
                                     <div className="space-y-1">
@@ -579,35 +579,35 @@ export const ProfilePage: React.FC = () => {
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="space-y-1">
-                                        <label className="block text-xs font-medium text-gray-700">Complemento</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Complemento</label>
                                         <input
                                             id="address_complement"
                                             type="text"
                                             value={formData.address_complement}
                                             onChange={handleInputChange}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all"
                                         />
                                     </div>
                                     <div className="space-y-1">
-                                        <label className="block text-xs font-medium text-gray-700">Bairro</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Bairro</label>
                                         <input
                                             id="address_neighborhood"
                                             type="text"
                                             required
                                             value={formData.address_neighborhood}
                                             onChange={handleInputChange}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all"
                                         />
                                     </div>
                                     <div className="space-y-1">
-                                        <label className="block text-xs font-medium text-gray-700">Cidade</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Cidade</label>
                                         <input
                                             id="address_city"
                                             type="text"
                                             required
                                             value={formData.address_city}
                                             onChange={handleInputChange}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none"
+                                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all"
                                         />
                                     </div>
                                 </div>
@@ -633,13 +633,13 @@ export const ProfilePage: React.FC = () => {
 
                                         {formData.has_house && (
                                             <div className="space-y-1 animate-in slide-in-from-left-2">
-                                                <label className="block text-xs font-medium text-gray-700">Número da Casa / Lote</label>
+                                                <label className="block text-sm font-bold text-gray-700 mb-1.5">Número da Casa / Lote</label>
                                                 <input
                                                     id="house_number"
                                                     type="text"
                                                     value={formData.house_number}
                                                     onChange={handleInputChange}
-                                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none font-bold text-farm-700"
+                                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none font-bold text-farm-700 transition-all"
                                                     placeholder="Ex: 12-A"
                                                 />
                                             </div>
@@ -650,11 +650,11 @@ export const ProfilePage: React.FC = () => {
 
                             <div className="space-y-4 pt-4 border-t border-gray-100">
                                 <div className="space-y-1">
-                                    <label className="block text-sm font-medium text-gray-700">Possui Dependentes?</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Possui Dependentes?</label>
                                     <select
                                         value={hasDependents}
                                         onChange={handleDependentStatusChange}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none bg-white"
+                                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all"
                                     >
                                         <option value="Não">Não</option>
                                         <option value="Sim">Sim</option>
@@ -678,32 +678,32 @@ export const ProfilePage: React.FC = () => {
                                             {formData.dependents.map((dep, idx) => (
                                                 <div key={idx} className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-white rounded-lg border border-gray-200 relative">
                                                     <div className="space-y-1">
-                                                        <label className="block text-xs font-semibold text-gray-500">Nome do Dependente</label>
+                                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Nome do Dependente</label>
                                                         <input
                                                             type="text"
                                                             required
                                                             value={dep.name}
                                                             onChange={(e) => handleDependentChange(idx, 'name', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none text-sm"
+                                                            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm transition-all"
                                                         />
                                                     </div>
                                                     <div className="space-y-1">
-                                                        <label className="block text-xs font-semibold text-gray-500">Data de Nascimento</label>
+                                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Data de Nascimento</label>
                                                         <input
                                                             type="date"
                                                             required
                                                             value={dep.birthDate}
                                                             onChange={(e) => handleDependentChange(idx, 'birthDate', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none text-sm"
+                                                            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm transition-all"
                                                         />
                                                     </div>
                                                     <div className="space-y-1 md:col-span-2">
-                                                        <label className="block text-xs font-semibold text-gray-500">Parentesco</label>
+                                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Parentesco</label>
                                                         <select
                                                             required
                                                             value={dep.relationship || ''}
                                                             onChange={(e) => handleDependentChange(idx, 'relationship', e.target.value)}
-                                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none text-sm bg-white"
+                                                            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm bg-white transition-all"
                                                         >
                                                             <option value="">Selecione...</option>
                                                             <option value="Filho(a)">Filho(a)</option>

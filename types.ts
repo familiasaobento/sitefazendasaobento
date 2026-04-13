@@ -78,6 +78,7 @@ export enum Page {
   COST_CATEGORIES = 'cost_categories',
   PDV_CONFIG = 'pdv_config',
   VISITOR_PROFILE = 'visitor_profile',
+  HISTORY = 'history',
 }
 
 export interface Document {

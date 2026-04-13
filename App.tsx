@@ -21,6 +21,7 @@ import { CashFlowPage } from './pages/CashFlow';
 import { PricingRulesPage } from './pages/PricingRules';
 import { CostCategoriesPage } from './pages/CostCategories';
 import { PdvConfigPage } from './pages/PdvConfig';
+import { HistoryPage } from './pages/History';
 import { Page, NewsItem } from './types';
 import { IconLock, IconCheck, IconInstagram, IconWhatsapp } from './components/Icons';
 import { supabase } from './lib/supabase';
@@ -537,6 +538,8 @@ const App: React.FC = () => {
         return <ContactPage isAdmin={isAdmin || isSiteAdmin} />;
       case Page.ADMIN_USERS:
         return (isAdmin || isSiteAdmin) ? <AdminUsersPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.HISTORY:
+        return <HistoryPage userRole={userRole || 'member'} />;
 
       // FINANCEIRO (Grupo 3 e 4)
       case Page.FINANCE: // Painel Financeiro

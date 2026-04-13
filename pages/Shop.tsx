@@ -502,7 +502,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                         </div>
                         <div className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Motivo da Recusa</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-1.5">Motivo da Recusa</label>
                                 <textarea
                                     value={rejectionReason}
                                     onChange={e => setRejectionReason(e.target.value)}
@@ -544,7 +544,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                         <form onSubmit={handleSaveProduct} className="p-6 space-y-6">
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">Nome do Produto</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Nome do Produto</label>
                                     <input
                                         type="text"
                                         required
@@ -555,7 +555,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Preço (R$)</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Preço (R$)</label>
                                         <input
                                             type="number"
                                             step="0.01"
@@ -566,7 +566,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Categoria</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Categoria</label>
                                         <select
                                             value={editingProduct.category}
                                             onChange={e => setEditingProduct({ ...editingProduct, category: e.target.value })}
@@ -577,7 +577,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">Descrição</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Descrição</label>
                                     <textarea
                                         value={editingProduct.description || ''}
                                         onChange={e => setEditingProduct({ ...editingProduct, description: e.target.value })}
@@ -606,7 +606,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                                     </label>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">Foto do Produto</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Foto do Produto</label>
                                     <div className="flex items-center gap-4">
                                         <div className="w-16 h-16 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl overflow-hidden flex-shrink-0 relative">
                                             {editingProduct.image_url ? (

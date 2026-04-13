@@ -179,9 +179,9 @@ export const ConsumptionReviewPage: React.FC = () => {
                 <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
+                            <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
                                 <tr>
-                                    <th className="px-6 py-4 w-10">
+                                    <th className="px-6 py-5 w-10">
                                         <input
                                             type="checkbox"
                                             className="w-5 h-5 rounded border-gray-300 text-farm-600 focus:ring-farm-500"
@@ -189,12 +189,12 @@ export const ConsumptionReviewPage: React.FC = () => {
                                             checked={selectedIds.length === launches.length}
                                         />
                                     </th>
-                                    <th className="px-6 py-4 font-semibold">Data / Hora</th>
-                                    <th className="px-6 py-4 font-semibold">Hóspede</th>
-                                    <th className="px-6 py-4 font-semibold">Item / Produto</th>
-                                    <th className="px-6 py-4 font-semibold text-center">Qtd</th>
-                                    <th className="px-6 py-4 font-semibold text-right">Subtotal</th>
-                                    <th className="px-6 py-4 font-semibold text-right">Ações</th>
+                                    <th className="px-6 py-5 font-black">Data / Hora</th>
+                                    <th className="px-6 py-5 font-black">Hóspede</th>
+                                    <th className="px-6 py-5 font-black">Item / Produto</th>
+                                    <th className="px-6 py-5 font-black text-center">Qtd</th>
+                                    <th className="px-6 py-5 font-black text-right">Subtotal</th>
+                                    <th className="px-6 py-5 font-black text-right">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -270,7 +270,7 @@ export const ConsumptionReviewPage: React.FC = () => {
                                     Item: <span className="font-bold text-gray-800">{editingLaunch.item?.nome || 'Refeição'}</span>
                                 </p>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Quantidade</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Quantidade</label>
                                     <input
                                         type="number"
                                         step="0.001"

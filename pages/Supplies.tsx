@@ -371,7 +371,7 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
 
                         <form onSubmit={handleCreateRequest} className="space-y-6">
                             <div className="space-y-4">
-                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Itens da Solicitação</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-1.5">Itens da Solicitação</label>
                                 {items.map((item, index) => (
                                     <div key={index} className="flex gap-2 items-start animate-fade-in">
                                         <div className="flex-1">
@@ -413,7 +413,7 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Categoria</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Categoria</label>
                                     <select
                                         value={categoria}
                                         onChange={(e) => setCategoria(e.target.value)}
@@ -429,7 +429,7 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Valor Estimado (R$)</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Valor Estimado (R$)</label>
                                     <input
                                         type="number"
                                         step="0.01"

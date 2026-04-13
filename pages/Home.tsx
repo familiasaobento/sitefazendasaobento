@@ -185,7 +185,7 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
                             <form onSubmit={handleAddNews} className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                     <div className="md:col-span-2 lg:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Título</label>
                                         <input
                                             type="text"
                                             required
@@ -196,7 +196,7 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Categoria</label>
                                         <select
                                             value={category}
                                             onChange={(e) => setCategory(e.target.value)}
@@ -209,7 +209,7 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Anexar Detalhamento</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Anexar Detalhamento</label>
                                         <div className="relative">
                                             <input
                                                 type="file"
@@ -234,7 +234,7 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Resumo do Conteúdo</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Resumo do Conteúdo</label>
                                     <textarea
                                         required
                                         rows={4}

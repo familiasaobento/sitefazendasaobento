@@ -508,8 +508,11 @@ export const AdminUsersPage: React.FC = () => {
                                                         <option value="member">Sócio</option>
                                                         <option value="visitor">Visitante</option>
                                                         <option value="finance">Financeiro</option>
+                                                        <option value="finance_manager">Gerente Financeiro</option>
+                                                        <option value="accounting">Contabilidade</option>
                                                         <option value="site_admin">Site Admin</option>
                                                         <option value="admin">Admin Geral</option>
+                                                        <option value="pdv">Operador PDV</option>
                                                     </select>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
@@ -605,11 +608,11 @@ export const AdminUsersPage: React.FC = () => {
                                 <h4 className="text-sm font-black text-farm-700 uppercase tracking-widest border-l-4 border-farm-500 pl-3">Acesso e Identidade</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Nome Completo</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Nome Completo</label>
                                         <input type="text" required className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.full_name} onChange={e => setNewUser({...newUser, full_name: e.target.value})} placeholder="Ex: João da Silva" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">E-mail</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">E-mail</label>
                                         <input 
                                             type="email" 
                                             required 
@@ -621,11 +624,11 @@ export const AdminUsersPage: React.FC = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">CPF</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">CPF</label>
                                         <input type="text" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.cpf} onChange={e => setNewUser({...newUser, cpf: e.target.value})} placeholder="000.000.000-00" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Data de Nascimento</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Data de Nascimento</label>
                                         <input type="date" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.birth_date} onChange={e => setNewUser({...newUser, birth_date: e.target.value})} />
                                     </div>
                                 </div>
@@ -745,7 +748,11 @@ export const AdminUsersPage: React.FC = () => {
                                             <option value="member">Sócio</option>
                                             <option value="visitor">Visitante</option>
                                             <option value="finance">Financeiro</option>
+                                            <option value="finance_manager">Gerente Financeiro</option>
+                                            <option value="accounting">Contabilidade</option>
                                             <option value="site_admin">Site Admin</option>
+                                            <option value="admin">Admin Geral</option>
+                                            <option value="pdv">Operador PDV</option>
                                         </select>
                                     </div>
                                     <div>

@@ -87,14 +87,14 @@ export const InventoryManagementPage: React.FC = () => {
                 <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
+                            <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
                                 <tr>
-                                    <th className="px-6 py-4 font-semibold">Produto</th>
-                                    <th className="px-6 py-4 font-semibold">Estoque Atual</th>
-                                    <th className="px-6 py-4 font-semibold text-right">Custo Médio</th>
-                                    <th className="px-6 py-4 font-semibold text-right">Preço de Venda</th>
-                                    <th className="px-6 py-4 font-semibold text-right">Margem (%)</th>
-                                    <th className="px-6 py-4 font-semibold text-right">Ação</th>
+                                    <th className="px-6 py-5 font-black">Produto</th>
+                                    <th className="px-6 py-5 font-black">Estoque Atual</th>
+                                    <th className="px-6 py-5 font-black text-right">Custo Médio</th>
+                                    <th className="px-6 py-5 font-black text-right">Preço de Venda</th>
+                                    <th className="px-6 py-5 font-black text-right">Margem (%)</th>
+                                    <th className="px-6 py-5 font-black text-right">Ação</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -157,13 +157,13 @@ export const InventoryManagementPage: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Novo Preço de Venda (R$)</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Novo Preço de Venda (R$)</label>
                                     <input
                                         type="number"
                                         step="0.01"
                                         value={newPrice}
                                         onChange={(e) => setNewPrice(e.target.value)}
-                                        className="w-full px-4 py-4 border-2 border-farm-100 rounded-2xl focus:border-farm-500 outline-none text-2xl font-black text-farm-900"
+                                        className="w-full px-4 py-4 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-farm-500 outline-none text-2xl font-black text-farm-900 transition-all"
                                         autoFocus
                                     />
                                 </div>

@@ -646,16 +646,16 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                             </h3>
 
                             <div className="mb-8 p-1 bg-gray-100 rounded-2xl flex max-w-md w-full shadow-inner">
-                                <button onClick={() => { setEntryMode('manual'); }} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all ${entryMode === 'manual' ? 'bg-white text-farm-800 shadow-md' : 'text-gray-500'}`}>Manual</button>
-                                <button onClick={() => { setEntryMode('ocr'); }} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all ${entryMode === 'ocr' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-500'}`}>Leitor OCR (Nota Fiscal)</button>
+                                <button onClick={() => { setEntryMode('manual'); }} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all ${entryMode === 'manual' ? 'bg-white text-gray-800 shadow-md' : 'text-gray-500'}`}>Manual</button>
+                                <button onClick={() => { setEntryMode('ocr'); }} className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all ${entryMode === 'ocr' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-500'}`}>Leitor OCR (Nota Fiscal)</button>
                             </div>
 
                             <div className="mb-8">
-                                <label className="block text-sm font-bold text-gray-700 mb-2">{entryMode === 'ocr' ? 'Tirar Foto ou Upload da Nota Fiscal' : 'Anexar Comprovante (Opcional)'}</label>
-                                <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer transition-all relative overflow-hidden ${isOcrProcessing ? 'bg-blue-50 border-blue-200' : selectedFile ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-300 hover:bg-gray-100'}`}>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">Anexar Comprovante (Opcional)</label>
+                                <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer transition-all relative overflow-hidden ${isOcrProcessing ? 'bg-gray-50 border-gray-200' : selectedFile ? 'bg-gray-50 border-gray-300' : 'bg-gray-50 border-gray-300 hover:bg-gray-100'}`}>
                                     {previewUrl && <img src={previewUrl} className="absolute inset-0 w-full h-full object-cover opacity-20 filter blur-sm" alt="Preview" />}
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6 relative z-10">
-                                        {isOcrProcessing ? (<><IconLoader className="w-10 h-10 text-blue-600 animate-spin mb-3" /><span className="text-blue-700 font-bold">Processando OCR...</span></>) : selectedFile ? (<span className="text-green-700 font-bold flex flex-col items-center gap-2"><IconCheck className="w-8 h-8 bg-green-200 rounded-full p-1 shadow-sm" />{selectedFile.name}</span>) : (<><p className="mb-1 text-sm text-gray-500"><span className="font-semibold text-farm-700">Clique para selecionar arquivo</span></p></>)}
+                                        {isOcrProcessing ? (<><IconLoader className="w-10 h-10 text-gray-600 animate-spin mb-3" /><span className="text-gray-700 font-bold">Processando OCR...</span></>) : selectedFile ? (<span className="text-gray-700 font-bold flex flex-col items-center gap-2"><IconCheck className="w-8 h-8 bg-gray-200 rounded-full p-1 shadow-sm" />{selectedFile.name}</span>) : (<><p className="mb-1 text-sm text-gray-500"><span className="font-semibold text-gray-700">Clique para selecionar arquivo</span></p></>)}
                                     </div>
                                     <input type="file" className="hidden" accept=".pdf,image/*" onChange={handleFileChange} />
                                 </label>
@@ -721,11 +721,11 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
 
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">Valor (R$)</label>
-                                    <input type="number" step="0.01" required value={formData.valor} onChange={e => setFormData({ ...formData, valor: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none font-mono text-lg text-farm-800" placeholder="0.00" />
+                                    <input type="number" step="0.01" required value={formData.valor} onChange={e => setFormData({ ...formData, valor: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none font-mono text-lg text-farm-800 focus:ring-2 focus:ring-farm-500 transition-all" placeholder="0.00" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">Data de Lançamento</label>
-                                    <input type="date" required value={formData.data_pagamento} onChange={e => setFormData({ ...formData, data_pagamento: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none" />
+                                    <input type="date" required value={formData.data_pagamento} onChange={e => setFormData({ ...formData, data_pagamento: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-farm-500 transition-all" />
                                 </div>
                                 <div className="md:col-span-2 lg:col-span-2">
                                     <label className="block text-sm font-bold text-gray-700 mb-2">Fornecedor / Origem</label>
@@ -741,7 +741,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                                 setFormData({ ...formData, cnpj_fornecedor: newCnpj });
                                             }
                                         }} 
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white font-medium"
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none bg-white font-medium focus:ring-2 focus:ring-farm-500 transition-all"
                                     >
                                         <option value="">NÃO INFORMADO</option>
                                         {Object.values(contacts).map((contact: any) => (<option key={contact.identificador} value={contact.identificador}>{contact.nome_fantasia || contact.nome}</option>))}
@@ -774,21 +774,21 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                 <div className="md:col-span-2 lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100">
                                     <div className="md:col-span-2 lg:col-span-2">
                                         <label className="block text-sm font-bold text-gray-700 mb-2">Projeto Especial</label>
-                                        <select value={formData.projeto || ''} onChange={e => setFormData({ ...formData, projeto: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white font-medium text-amber-700">
+                                        <select value={formData.projeto || ''} onChange={e => setFormData({ ...formData, projeto: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none bg-white font-medium focus:ring-2 focus:ring-farm-500 transition-all">
                                             <option value="">-- NENHUM PROJETO ESPECÍFICO --</option>
                                             {registeredProjects.map(p => <option key={p.id} value={p.nome}>{p.nome}</option>)}
                                         </select>
                                     </div>
                                     <div className="md:col-span-2 lg:col-span-2">
                                         <label className="block text-sm font-bold text-gray-700 mb-2">Área / Departamento (Tag)</label>
-                                        <select value={formData.tags || ''} onChange={e => setFormData({ ...formData, tags: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none bg-white font-medium text-indigo-700">
+                                        <select value={formData.tags || ''} onChange={e => setFormData({ ...formData, tags: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none bg-white font-medium focus:ring-2 focus:ring-farm-500 transition-all">
                                             <option value="">-- GERAL (NENHUMA ÁREA) --</option>
                                             {registeredTags.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
                                         </select>
                                     </div>
                                     <div className="md:col-span-2 lg:col-span-4">
                                         <label className="block text-sm font-bold text-gray-700 mb-2">Data do Vencimento</label>
-                                        <input type="date" value={formData.data_vencimento} onChange={e => setFormData({ ...formData, data_vencimento: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-xl outline-none text-red-700 font-bold" />
+                                        <input type="date" value={formData.data_vencimento} onChange={e => setFormData({ ...formData, data_vencimento: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-farm-500 transition-all" />
                                     </div>
                                 </div>
 
@@ -796,7 +796,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                     <div className="md:col-span-2 lg:col-span-4 bg-sky-50 border border-sky-200 rounded-2xl p-6 mt-2">
                                         <label className="flex items-center gap-3 cursor-pointer">
                                             <input type="checkbox" checked={formData.is_parcelado} onChange={e => setFormData({ ...formData, is_parcelado: e.target.checked })} className="w-5 h-5 rounded border-sky-300 text-sky-600 focus:ring-sky-500" />
-                                            <span className="font-bold text-sky-900">Esta compra / despesa foi parcelada?</span>
+                                            <span className="font-bold text-gray-700">Esta compra / despesa foi parcelada?</span>
                                         </label>
                                         {formData.is_parcelado && (
                                             <div className="mt-4 animate-fade-in flex flex-col md:flex-row items-start md:items-center gap-4">
@@ -1043,12 +1043,12 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                     <div className="bg-gray-50 rounded-2xl overflow-hidden border">
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-xs min-w-[600px]">
-                                            <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
+                                            <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
                                                 <tr>
-                                                    <th className="px-4 py-3 font-semibold">Data</th>
-                                                    <th className="px-4 py-3 font-semibold">Conta</th>
-                                                    <th className="px-4 py-3 font-semibold">Descrição / Fornecedor</th>
-                                                    <th className="px-4 py-3 font-semibold text-right">Valor</th>
+                                                    <th className="px-6 py-5 text-left">Data</th>
+                                                    <th className="px-6 py-5 text-left">Conta</th>
+                                                    <th className="px-6 py-5 text-left">Descrição / Fornecedor</th>
+                                                    <th className="px-6 py-5 text-right">Valor</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100 bg-white">
@@ -1097,12 +1097,12 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
+                            <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
                                 <tr>
-                                    <th className="px-6 py-4 font-semibold">Nome da Conta</th>
-                                    <th className="px-6 py-4 font-semibold">Tipo</th>
-                                    <th className="px-6 py-4 font-semibold">Detalhes</th>
-                                    <th className="px-6 py-4 font-semibold text-center">Ações</th>
+                                    <th className="px-6 py-5 text-left">Nome da Conta</th>
+                                    <th className="px-6 py-5 text-left">Tipo</th>
+                                    <th className="px-6 py-5 text-left">Detalhes</th>
+                                    <th className="px-6 py-5 text-center">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -1146,12 +1146,12 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
+                            <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
                                 <tr>
-                                    <th className="px-6 py-4 font-semibold">Nome / Razão Social</th>
-                                    <th className="px-6 py-4 font-semibold">Documento</th>
-                                    <th className="px-6 py-4 font-semibold">Banco / PIX</th>
-                                    <th className="px-6 py-4 font-semibold text-right">Ações</th>
+                                    <th className="px-6 py-5 text-left">Nome / Razão Social</th>
+                                    <th className="px-6 py-5 text-left">Documento</th>
+                                    <th className="px-6 py-5 text-left">Banco / PIX</th>
+                                    <th className="px-6 py-5 text-right">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -1259,7 +1259,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                     <input type="text" value={newAccount.nome} onChange={e => setNewAccount({...newAccount, nome: e.target.value})} className="w-full px-4 py-3 border rounded-xl outline-none mt-1" required />
                                 </div>
                                 <div className="col-span-2">
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Tipo</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Tipo</label>
                                     <div className="flex bg-gray-100 p-1 rounded-xl mt-1">
                                         <button type="button" onClick={() => setNewAccount({...newAccount, tipo: 'Banco'})} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${newAccount.tipo === 'Banco' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>🏦 Banco</button>
                                         <button type="button" onClick={() => setNewAccount({...newAccount, tipo: 'Dinheiro'})} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${newAccount.tipo === 'Dinheiro' ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-500'}`}>💵 Dinheiro</button>

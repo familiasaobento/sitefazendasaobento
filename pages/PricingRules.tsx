@@ -280,7 +280,7 @@ export const PricingRulesPage: React.FC = () => {
                     <form onSubmit={handleSave} className="p-6 space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Nome / Descrição Curta</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-1.5">Nome / Descrição Curta</label>
                                 <input
                                     type="text"
                                     required
@@ -291,7 +291,7 @@ export const PricingRulesPage: React.FC = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Preço (R$)</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-1.5">Preço (R$)</label>
                                 <input
                                     type="number"
                                     step="0.01"
@@ -304,7 +304,7 @@ export const PricingRulesPage: React.FC = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Temporada</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-1.5">Temporada</label>
                                 <select
                                     value={season}
                                     onChange={e => setSeason(e.target.value as any)}
@@ -317,7 +317,7 @@ export const PricingRulesPage: React.FC = () => {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Categoria de Serviço</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-1.5">Categoria de Serviço</label>
                                 <select
                                     value={category}
                                     onChange={e => setCategory(e.target.value as any)}
@@ -332,7 +332,7 @@ export const PricingRulesPage: React.FC = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Público-Alvo</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-1.5">Público-Alvo</label>
                                 <select
                                     value={audience}
                                     onChange={e => setAudience(e.target.value as any)}
@@ -345,7 +345,7 @@ export const PricingRulesPage: React.FC = () => {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Local (Opcional)</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-1.5">Local (Opcional)</label>
                                 <select
                                     value={location}
                                     onChange={e => setLocation(e.target.value as any)}
@@ -395,13 +395,13 @@ export const PricingRulesPage: React.FC = () => {
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
-                                <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
-                                    <th className="px-6 py-4 font-semibold">Descrição</th>
-                                    <th className="px-6 py-4 font-semibold">Regras</th>
-                                    <th className="px-6 py-4 font-semibold">Preço</th>
-                                    <th className="px-6 py-4 font-semibold">Status</th>
-                                    <th className="px-6 py-4 font-semibold text-right">Ações</th>
+                            <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
+                                <tr>
+                                    <th className="px-6 py-5 font-black">Descrição</th>
+                                    <th className="px-6 py-5 font-black">Regras</th>
+                                    <th className="px-6 py-5 font-black">Preço</th>
+                                    <th className="px-6 py-5 font-black">Status</th>
+                                    <th className="px-6 py-5 font-black text-right">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -477,7 +477,7 @@ export const PricingRulesPage: React.FC = () => {
                             <form onSubmit={handleSaveSeason} className="p-6 space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="md:col-span-2">
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Nome do Período (Ex: Férias de Julho, Carnaval...)</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Nome do Período (Ex: Férias de Julho, Carnaval...)</label>
                                         <input
                                             type="text"
                                             required
@@ -487,7 +487,7 @@ export const PricingRulesPage: React.FC = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Data Início</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Data Início</label>
                                         <input
                                             type="date"
                                             required
@@ -497,7 +497,7 @@ export const PricingRulesPage: React.FC = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Data Fim</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Data Fim</label>
                                         <input
                                             type="date"
                                             required
@@ -507,7 +507,7 @@ export const PricingRulesPage: React.FC = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Tipo de Temporada Aplicada</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Tipo de Temporada Aplicada</label>
                                         <select
                                             value={seasonType}
                                             onChange={e => setSeasonType(e.target.value as any)}
@@ -541,13 +541,13 @@ export const PricingRulesPage: React.FC = () => {
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
-                                <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
-                                    <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
-                                        <th className="px-6 py-4 font-semibold">Período</th>
-                                        <th className="px-6 py-4 font-semibold">Início</th>
-                                        <th className="px-6 py-4 font-semibold">Fim</th>
-                                        <th className="px-6 py-4 font-semibold">Tipo</th>
-                                        <th className="px-6 py-4 font-semibold text-right">Ações</th>
+                                <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
+                                    <tr>
+                                        <th className="px-6 py-5 font-black">Período</th>
+                                        <th className="px-6 py-5 font-black">Início</th>
+                                        <th className="px-6 py-5 font-black">Fim</th>
+                                        <th className="px-6 py-5 font-black">Tipo</th>
+                                        <th className="px-6 py-5 font-black text-right">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
