@@ -277,24 +277,31 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
             // Auto-push to cash flow
             const rc = requests.find(r => r.id === confirmConfirmarCompraId);
             if (rc) {
+                // Determine description - clean up line breaks
+                const cleanDesc = rc.descricao.replace(/-/g, '').replace(/\n/g, ', ').trim();
+                const finalDesc = `[RC #${rc.id}] ${cleanDesc}`.substring(0, 150);
+
                 const payload = {
                     tipo: 'saida',
-                    categoria: rc.categoria,
+                    categoria: rc.categoria || 'Geral',
                     data_pagamento: new Date().toISOString().split('T')[0],
-                    descricao: `RC Automática: ${rc.descricao.replace(/\n-/g, ',').replace(/^-/,'').substring(0, 80)}...`,
+                    descricao: finalDesc,
                     valor: parsedVal,
-                    conta_origem: contaOrigem,
-                    forma_pagamento: formaPagamento,
+                    conta_origem: contaOrigem || 'Caixa Central',
+                    forma_pagamento: formaPagamento || 'PIX',
                     meio_pagamento: 'Banco',
                     status: 'aprovado',
                     data_aprovacao: new Date().toISOString().split('T')[0],
                     tags: rc.area_demandante || null,
                     requisicao_id: rc.id
                 };
+
                 const { error: insertError } = await supabase.from('fluxo_caixa').insert(payload);
                 if (insertError) {
                     console.error('Insert Error fluxo_caixa:', insertError);
-                    throw new Error('Falha ao inserir no fluxo de caixa: ' + insertError.message);
+                    alert('A compra foi marcada, mas não conseguimos criar o lançamento financeiro automático: ' + insertError.message);
+                } else {
+                    console.log('Finance flow pushed successfully');
                 }
             }
 
@@ -357,9 +364,9 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                                     <div className="flex flex-col gap-1 mt-3 text-sm text-gray-500">
                                         <div className="flex items-center gap-2">
                                             <IconUser className="w-4 h-4 text-gray-400" />
-                                            <span><strong>Solicitante:</strong> {rc.profiles?.full_name} ({new Date(rc.created_at).toLocaleDateString('pt-BR')})</span>
+                                            <span><strong>Solicitante:</strong> {rc.profiles?.full_name || 'Usuário'} ({new Date(rc.created_at).toLocaleDateString('pt-BR')})</span>
                                         </div>
-                                        {rc.aprovador && (
+                                        {rc.aprovador?.full_name && (
                                             <div className="flex items-center gap-2 text-green-700">
                                                 <IconCheck className="w-4 h-4 text-green-600" />
                                                 <span><strong>Aprovador:</strong> {rc.aprovador.full_name}</span>

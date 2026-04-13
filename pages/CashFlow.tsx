@@ -838,35 +838,32 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                         <div className="flex bg-white rounded-xl shadow-inner border border-sky-100 p-1 mb-4 flex-wrap gap-2">
                                             <button type="button" onClick={() => setFormData({ ...formData, frequency_mode: 'unico' })} className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all min-w-[140px] ${formData.frequency_mode === 'unico' ? 'bg-sky-600 text-white shadow-md' : 'text-sky-700 hover:bg-sky-50'}`}>🟢 Único (Padrão)</button>
                                             <button type="button" onClick={() => setFormData({ ...formData, frequency_mode: 'parcelado' })} className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all min-w-[140px] ${formData.frequency_mode === 'parcelado' ? 'bg-amber-500 text-white shadow-md' : 'text-sky-700 hover:bg-sky-50'}`}>💳 Parcelado</button>
-                                            <button type="button" onClick={() => setFormData({ ...formData, frequency_mode: 'recorrente' })} className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all min-w-[140px] ${formData.frequency_mode === 'recorrente' ? 'bg-purple-600 text-white shadow-md' : 'text-sky-700 hover:bg-sky-50'}`}>🔁 Recorrente (Assinatura)</button>
+                                            <button type="button" onClick={() => setFormData({ ...formData, frequency_mode: 'recorrente' })} className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all min-w-[140px] ${formData.frequency_mode === 'recorrente' ? 'bg-purple-600 text-white shadow-md' : 'text-sky-700 hover:bg-sky-50'}`}>🔁 Recorrente</button>
                                         </div>
 
                                         {formData.frequency_mode === 'parcelado' && (
                                             <div className="animate-fade-in bg-white border border-amber-200 p-4 rounded-xl flex items-center gap-4">
                                                 <div>
-                                                    <label className="block text-xs font-bold text-amber-800 mb-1">Total de Parcelas (O valor será dividido)</label>
+                                                    <label className="block text-xs font-bold text-amber-800 mb-1">Total de Parcelas</label>
                                                     <input type="number" min="2" max="60" value={formData.parcelas} onChange={e => setFormData({ ...formData, parcelas: parseInt(e.target.value) || 1 })} className="w-24 px-3 py-2 border border-amber-300 rounded-lg outline-none text-center font-bold text-amber-900" />
                                                 </div>
-                                                <p className="text-sm text-amber-700 leading-tight">O sistema criará <strong className="text-amber-900">{formData.parcelas} faturas</strong> separadas no Contas a Pagar/Receber, dividindo o valor de R$ {formData.valor || '0.00'}.</p>
+                                                <p className="text-sm text-amber-700 leading-tight">O sistema criará {formData.parcelas} faturas separadas, dividindo o valor.</p>
                                             </div>
                                         )}
 
                                         {formData.frequency_mode === 'recorrente' && (
                                             <div className="animate-fade-in bg-white border border-purple-200 p-4 rounded-xl flex items-center gap-4">
                                                 <div>
-                                                    <label className="block text-xs font-bold text-purple-800 mb-1">Intervalo (Frequência da Conta)</label>
-                                                    <select value={formData.recurrence_period} onChange={e => setFormData({ ...formData, recurrence_period: e.target.value as any })} className="w-36 px-3 py-2 border border-purple-300 rounded-lg outline-none text-center font-bold text-purple-900 font-medium">
+                                                    <label className="block text-xs font-bold text-purple-800 mb-1">Intervalo</label>
+                                                    <select value={formData.recurrence_period} onChange={e => setFormData({ ...formData, recurrence_period: e.target.value as any })} className="w-36 px-3 py-2 border border-purple-300 rounded-lg outline-none text-center font-bold text-purple-900">
                                                         <option value="mensal">Mensalmente</option>
                                                         <option value="semestral">A cada 6 meses</option>
                                                         <option value="anual">Anualmente</option>
                                                     </select>
                                                 </div>
-                                                <p className="text-sm text-purple-700 leading-tight">Será lançada apenas a primeira fatura agora. <br/>Quando ela for aprovada/paga, o sistema perguntará se pode projetar o mês seguinte automaticamente.</p>
+                                                <p className="text-sm text-purple-700 leading-tight">Será lançada apenas a primeira fatura agora.</p>
                                             </div>
                                         )}
-                                    </div>
-                                )}
-
                                     </div>
                                 )}
 
@@ -937,7 +934,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                                 <td className="px-6 py-5 flex items-center justify-center gap-1 flex-wrap no-print">
                                                     {entry.documento_anexo_url && (<a href={entry.documento_anexo_url} target="_blank" className="p-2 text-farm-600"><IconFileText className="w-5 h-5" /></a>)}
                                                     {canApprove && entry.status === 'pendente' && (
-                                                        <button onClick={() => handleApprove(entry.id)} className="px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 font-bold text-xs rounded-xl transition-colors shadow-sm">Aprovar ✓</button>
+                                                        <button onClick={() => handleApprove(entry)} className="px-3 py-1 bg-green-100 text-green-700 hover:bg-green-200 font-bold text-xs rounded-xl transition-colors shadow-sm">Aprovar ✓</button>
                                                     )}
                                                     {!isViewOnly && (
                                                         <>
