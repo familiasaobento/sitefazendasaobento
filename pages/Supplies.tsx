@@ -8,12 +8,15 @@ interface PurchaseRequest {
     descricao: string;
     categoria: string;
     valor_estimado: number;
+    valor_real?: number;
+    area_demandante?: string;
     status: 'pendente' | 'aprovada' | 'comprada' | 'negada';
     autorizacao_id: string | null;
     created_at: string;
     profiles: {
         full_name: string;
     }
+    aprovador?: { full_name: string };
 }
 
 export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
@@ -24,13 +27,22 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+    const [confirmConfirmarCompraId, setConfirmConfirmarCompraId] = useState<number | null>(null);
+    const [valorConfirmado, setValorConfirmado] = useState<string>('');
 
     // Form state
     const [items, setItems] = useState<{ name: string; details: string }[]>([{ name: '', details: '' }]);
     const [categoryGroups, setCategoryGroups] = useState<{ groupName: string, items: string[] }[]>([]);
+    const [financeTags, setFinanceTags] = useState<{id: number, nome: string}[]>([]);
+    const [financeAccounts, setFinanceAccounts] = useState<{id: number, nome: string}[]>([]);
     const [categoria, setCategoria] = useState<string>('');
+    const [areaDemandante, setAreaDemandante] = useState<string>('');
     const [valorEstimado, setValorEstimado] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // Payment execution state
+    const [contaOrigem, setContaOrigem] = useState<string>('');
+    const [formaPagamento, setFormaPagamento] = useState<string>('PIX');
 
     useEffect(() => {
         const checkUser = async () => {
@@ -40,7 +52,22 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
         checkUser();
         fetchRequests();
         fetchCategorias();
+        fetchTags();
+        fetchAccounts();
     }, []);
+
+    const fetchTags = async () => {
+        const { data } = await supabase.from('finance_tags').select('id, nome').order('nome', { ascending: true });
+        if (data) setFinanceTags(data);
+    };
+
+    const fetchAccounts = async () => {
+        const { data } = await supabase.from('finance_accounts').select('id, nome').eq('ativo', true).order('nome', { ascending: true });
+        if (data) {
+            setFinanceAccounts(data);
+            if (data.length > 0) setContaOrigem(data[0].nome);
+        }
+    };
 
     const fetchCategorias = async () => {
         try {
@@ -76,7 +103,8 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                 .from('requisicoes_compra')
                 .select(`
                     *,
-                    profiles:solicitante_id(full_name)
+                    profiles:solicitante_id(full_name),
+                    aprovador:aprovador_id(full_name)
                 `)
                 .order('created_at', { ascending: false });
 
@@ -112,6 +140,7 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                     .update({
                         descricao: formattedDesc,
                         categoria,
+                        area_demandante: areaDemandante,
                         valor_estimado: parseFloat(valorEstimado)
                     })
                     .eq('id', editingId);
@@ -125,6 +154,7 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                         solicitante_id: currentUserId,
                         descricao: formattedDesc,
                         categoria,
+                        area_demandante: areaDemandante,
                         valor_estimado: parseFloat(valorEstimado),
                         status: 'pendente'
                     }]);
@@ -161,6 +191,7 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
         setIsEditing(true);
         setEditingId(rc.id);
         setCategoria(rc.categoria);
+        setAreaDemandante(rc.area_demandante || '');
         setValorEstimado(rc.valor_estimado.toString());
 
         // Try to parse items from description
@@ -183,6 +214,7 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
         setEditingId(null);
         setItems([{ name: '', details: '' }]);
         setValorEstimado('');
+        setAreaDemandante('');
     };
 
     const addItem = () => setItems([...items, { name: '', details: '' }]);
@@ -198,16 +230,23 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
     };
 
     const handleUpdateStatus = async (id: number, newStatus: 'aprovada' | 'comprada' | 'negada') => {
-        // Permission check:
-        // aprovada/negada -> only Admin
-        // comprada -> everyone
         if (newStatus !== 'comprada' && !isAdmin) return;
+
+        if (newStatus === 'comprada') {
+            const rc = requests.find(r => r.id === id);
+            if (rc) {
+                setConfirmConfirmarCompraId(id);
+                setValorConfirmado(rc.valor_estimado.toString());
+            }
+            return;
+        }
 
         try {
             const updates: any = { status: newStatus };
 
             if (newStatus === 'aprovada') {
                 updates.autorizacao_id = `AUTH-${Math.random().toString(36).substring(2, 8).toUpperCase()}-${id}`;
+                updates.aprovador_id = currentUserId;
             }
 
             const { error } = await supabase
@@ -219,6 +258,46 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
             fetchRequests();
         } catch (err: any) {
             alert('Erro ao atualizar status: ' + err.message);
+        }
+    };
+
+    const handleConfirmarCompraFinal = async () => {
+        if (!confirmConfirmarCompraId) return;
+        try {
+            const parsedVal = parseFloat(valorConfirmado.replace(',', '.'));
+            if (isNaN(parsedVal)) throw new Error('Valor inválido');
+
+            const { error } = await supabase
+                .from('requisicoes_compra')
+                .update({ status: 'comprada', valor_real: parsedVal })
+                .eq('id', confirmConfirmarCompraId);
+
+            if (error) throw error;
+            
+            // Auto-push to cash flow
+            const rc = requests.find(r => r.id === confirmConfirmarCompraId);
+            if (rc) {
+                const payload = {
+                    tipo: 'saida',
+                    categoria: rc.categoria,
+                    data_pagamento: new Date().toISOString().split('T')[0],
+                    descricao: `RC Automática: ${rc.descricao.replace(/\n-/g, ',').replace(/^-/,'').substring(0, 80)}...`,
+                    valor: parsedVal,
+                    conta_origem: contaOrigem,
+                    forma_pagamento: formaPagamento,
+                    meio_pagamento: 'Banco',
+                    status: 'aprovado',
+                    data_aprovacao: new Date().toISOString().split('T')[0],
+                    tags: rc.area_demandante || null,
+                    requisicao_id: rc.id
+                };
+                await supabase.from('fluxo_caixa').insert(payload).select();
+            }
+
+            setConfirmConfirmarCompraId(null);
+            fetchRequests();
+        } catch(err: any) {
+            alert('Erro ao confirmar compra: ' + err.message);
         }
     };
 
@@ -271,17 +350,39 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                                         </span>
                                     </div>
                                     <pre className="text-sm font-sans text-gray-800 whitespace-pre-wrap leading-relaxed bg-gray-50/50 p-2 rounded-lg mt-2">{rc.descricao}</pre>
-                                    <div className="flex items-center gap-3 text-sm text-gray-400 mt-3">
-                                        <span className="flex items-center gap-1"><IconUser className="w-3 h-3" /> {rc.profiles?.full_name}</span>
-                                        <span>• {new Date(rc.created_at).toLocaleDateString('pt-BR')}</span>
+                                    <div className="flex flex-col gap-1 mt-3 text-sm text-gray-500">
+                                        <div className="flex items-center gap-2">
+                                            <IconUser className="w-4 h-4 text-gray-400" />
+                                            <span><strong>Solicitante:</strong> {rc.profiles?.full_name} ({new Date(rc.created_at).toLocaleDateString('pt-BR')})</span>
+                                        </div>
+                                        {rc.aprovador && (
+                                            <div className="flex items-center gap-2 text-green-700">
+                                                <IconCheck className="w-4 h-4 text-green-600" />
+                                                <span><strong>Aprovador:</strong> {rc.aprovador.full_name}</span>
+                                            </div>
+                                        )}
+                                        {rc.area_demandante && (
+                                            <div className="flex items-center gap-2 text-blue-700">
+                                                <span className="font-semibold uppercase text-xs px-2 py-0.5 bg-blue-50 rounded-full border border-blue-100">
+                                                    🎯 Área: {rc.area_demandante}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
                             <div className="text-right flex flex-col items-end gap-2">
                                 <span className="text-2xl font-black text-farm-900 leading-none">
-                                    R$ {rc.valor_estimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    {rc.status === 'comprada' && typeof rc.valor_real === 'number' 
+                                        ? `R$ ${rc.valor_real.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` 
+                                        : `R$ ${rc.valor_estimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                                 </span>
+                                {rc.status === 'comprada' && typeof rc.valor_real === 'number' && rc.valor_real !== rc.valor_estimado && (
+                                    <span className="text-xs text-gray-400 line-through">
+                                        (Est. R$ {rc.valor_estimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+                                    </span>
+                                )}
                                 {rc.autorizacao_id && (
                                     <span className="text-[10px] font-mono bg-farm-50 text-farm-700 px-2 py-1 rounded">
                                         ID: {rc.autorizacao_id}
@@ -411,13 +512,13 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1.5">Categoria</label>
                                     <select
                                         value={categoria}
                                         onChange={(e) => setCategoria(e.target.value)}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-farm-500 outline-none bg-white font-medium"
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-farm-500 outline-none bg-white font-medium text-sm"
                                     >
                                         {categoryGroups.map(group => (
                                             <optgroup key={group.groupName} label={group.groupName}>
@@ -429,7 +530,20 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Valor Estimado (R$)</label>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Área Demandante</label>
+                                    <select
+                                        value={areaDemandante}
+                                        onChange={(e) => setAreaDemandante(e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-farm-500 outline-none bg-white font-medium text-sm"
+                                    >
+                                        <option value="">-- Opcional --</option>
+                                        {financeTags.map(tag => (
+                                            <option key={tag.id} value={tag.nome}>{tag.nome}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Estimado (R$)</label>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -483,6 +597,69 @@ export const SuppliesPage: React.FC<{ isAdmin: boolean }> = ({ isAdmin }) => {
                             </button>
                         </div>
                     </div>
+                    </div>
+                </div>
+            )}
+            {/* Modal Confirmar Compra (Valor Real) */}
+            {confirmConfirmarCompraId !== null && (
+                <div className="fixed inset-0 z-50 overflow-y-auto no-print">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => setConfirmConfirmarCompraId(null)}></div>
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8 max-h-[90vh] overflow-y-auto text-center relative z-10 animate-fade-in">
+                            <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <IconShoppingCart className="w-8 h-8 text-blue-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 mb-2">Finalizar Compra</h3>
+                            <p className="text-gray-500 text-sm mb-6">Esta ação debitará o valor automaticamente das finanças consolidadas.</p>
+                            
+                            <div className="mb-4 text-left">
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-widest mb-2">Valor Total Pago (R$)</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01" 
+                                    value={valorConfirmado} 
+                                    onChange={e => setValorConfirmado(e.target.value)} 
+                                    className="w-full px-4 py-3 border border-blue-200 rounded-xl outline-none font-bold text-lg text-blue-900 focus:ring-2 focus:ring-blue-500 text-center"
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div className="mb-4 text-left">
+                                <label className="block text-xs font-bold text-gray-700 tracking-widest mb-1.5">Fornecedor / Forma de Pagamento</label>
+                                <select value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium mb-3 text-sm">
+                                    <option value="PIX">PIX</option>
+                                    <option value="Boleto">Boleto Bancário</option>
+                                    <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                    <option value="Cartão de Débito">Cartão de Débito</option>
+                                    <option value="Transferência">Transferência / TED</option>
+                                    <option value="Dinheiro">Dinheiro</option>
+                                </select>
+                            </div>
+
+                            <div className="mb-6 text-left">
+                                <label className="block text-xs font-bold text-gray-700 tracking-widest mb-1.5">Conta Origem</label>
+                                <select value={contaOrigem} onChange={e => setContaOrigem(e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-sm">
+                                    {financeAccounts.map(banco => (
+                                        <option key={banco.id} value={banco.nome}>{banco.nome}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={() => setConfirmConfirmarCompraId(null)}
+                                    className="flex-1 py-3 font-bold text-gray-500 border border-gray-200 rounded-2xl hover:bg-gray-50 transition-colors"
+                                >
+                                    Voltar
+                                </button>
+                                <button
+                                    onClick={handleConfirmarCompraFinal}
+                                    className="flex-1 py-3 font-bold text-white bg-blue-600 rounded-2xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100"
+                                >
+                                    Confirmar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
