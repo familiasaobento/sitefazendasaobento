@@ -28,14 +28,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
 
   const sosoItems = [
     { page: Page.HOME, label: 'Início dos Sócios', icon: IconHome },
+    { page: Page.HISTORY, label: 'História e Genealogia', icon: IconBook },
     { page: Page.EVENTS, label: 'Agenda de Eventos', icon: IconCalendar },
     { page: Page.GALLERY, label: 'Álbum de Fotos', icon: IconImage },
     { page: Page.DOCUMENTS, label: 'Documentos', icon: IconFileText },
     { page: Page.SHOP, label: 'Produtos', icon: IconShoppingCart },
-    { page: Page.FINANCE, label: 'Painel Financeiro', icon: IconChart },
     { page: Page.RESERVATIONS, label: 'Reservas', icon: IconCalendar },
+    { page: Page.FINANCE, label: 'Painel Financeiro', icon: IconChart },
     { page: Page.PROFILE, label: 'Meu Cadastro', icon: IconUser },
-    { page: Page.HISTORY, label: 'História e Genealogia', icon: IconBook },
     { page: Page.CONTACT, label: 'Contato e Sugestões', icon: IconMail },
   ];
 

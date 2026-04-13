@@ -16,9 +16,12 @@ const COLORS = ['#389f76', '#5ebb92', '#2a7f5e', '#23513f', '#95d8b6', '#c3ead4'
 
 export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = ({ userRole, isAdmin }) => {
   const [loading, setLoading] = useState(true);
-   const [timeRange, setTimeRange] = useState<'month' | 'quarter' | 'year'>('month');
-   const [projects, setProjects] = useState<{id: number, nome: string}[]>([]);
-   const [selectedProject, setSelectedProject] = useState<string>('');
+  const [timeRange, setTimeRange] = useState<'month' | 'quarter' | 'year'>('month');
+  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
+  const [projects, setProjects] = useState<{id: number, nome: string}[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string>('');
+  const [closedMonths, setClosedMonths] = useState<string[]>([]);
+  const [isSavingClosing, setIsSavingClosing] = useState(false);
   
   // Data States
   const [kpis, setKpis] = useState({
@@ -38,33 +41,81 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
 
   useEffect(() => {
      fetchDashboardData();
-   }, [timeRange, selectedProject]);
+   }, [timeRange, selectedProject, selectedYear]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
       const now = new Date();
-      let startDate = new Date();
-      
-      if (timeRange === 'month') {
-        // Início do mês atual
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      } else if (timeRange === 'quarter') {
-        // Início do trimestre atual (Jan, Abr, Jul, Out)
-        const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
-        startDate = new Date(now.getFullYear(), quarterMonth, 1);
-      } else {
-        // Início do ano atual
-        startDate = new Date(now.getFullYear(), 0, 1);
-      }
+      let startDateStr = '';
+      let endDateStr = '';
 
-      const startDateStr = startDate.toISOString().split('T')[0];
+      // Fetch closed months
+      const { data: closedData } = await supabase.from('finance_months_closed').select('ano_mes').order('ano_mes', { ascending: false });
+      const closed = closedData?.map(d => d.ano_mes) || [];
+      setClosedMonths(closed);
+
+      const targetYear = parseInt(selectedYear);
+      const isCurrentYear = targetYear === now.getFullYear();
+
+      if (timeRange === 'month') {
+        if (isCurrentYear) {
+            // Mês: O último mês fechado registrado.
+            const lastClosed = closed.length > 0 ? closed[0] : `${targetYear}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const [yr, mo] = lastClosed.split('-');
+            startDateStr = `${yr}-${mo}-01`;
+            const endD = new Date(parseInt(yr), parseInt(mo), 0);
+            endDateStr = endD.toISOString().split('T')[0];
+        } else {
+            // Em anos retroativos, exibimos o último mês por padrão (Dezembro) se a pessoa selecionar "Mês"
+            startDateStr = `${targetYear}-12-01`;
+            endDateStr = `${targetYear}-12-31`;
+        }
+      } else if (timeRange === 'quarter') {
+        // Trimestre: Sempre o trimestre anterior
+        let qStartMonth, qYear;
+        if (isCurrentYear) {
+            const currentQuarter = Math.floor(now.getMonth() / 3);
+            if (currentQuarter === 0) {
+                // Se estamos em Jan/Fev/Mar, o trimestre anterior é o T4 do ano passado
+                qStartMonth = 9; // Outubro
+                qYear = targetYear - 1;
+            } else {
+                qStartMonth = (currentQuarter - 1) * 3; // Trimestre exato passado
+                qYear = targetYear;
+            }
+        } else {
+            // Em anos consolidados, mostramos o 4º Trimestre
+            qStartMonth = 9; 
+            qYear = targetYear;
+        }
+        startDateStr = `${qYear}-${String(qStartMonth + 1).padStart(2, '0')}-01`;
+        const endD = new Date(qYear, qStartMonth + 3, 0);
+        endDateStr = endD.toISOString().split('T')[0];
+      } else {
+         // Ano: Year to Date somente dos meses fechados
+         startDateStr = `${targetYear}-01-01`;
+         if (isCurrentYear) {
+             const closedCurrentYear = closed.filter(c => c.startsWith(`${targetYear}-`));
+             if (closedCurrentYear.length > 0) {
+                 const mo = closedCurrentYear[0].split('-')[1]; // Mês do último mês fechado no ano
+                 const endD = new Date(targetYear, parseInt(mo), 0);
+                 endDateStr = endD.toISOString().split('T')[0];
+             } else {
+                 // Nenhum mês fechado no ano ainda
+                 endDateStr = now.toISOString().split('T')[0];
+             }
+         } else {
+             endDateStr = `${targetYear}-12-31`; // Ano consolidadão full
+         }
+      }
 
       // 1. Fetch Fluxo de Caixa (Financeiro)
       let query = supabase
         .from('fluxo_caixa')
         .select('*')
-        .gte('data_pagamento', startDateStr);
+        .gte('data_pagamento', startDateStr)
+        .lte('data_pagamento', endDateStr);
       
       if (selectedProject) {
         query = query.eq('projeto', selectedProject);
@@ -79,17 +130,18 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
       }
 
       // 2. Fetch Reservations (Ocupação e Reservas)
-      // Usamos check_in como referência de período de usufruto/pagamento
       const { data: reservations } = await supabase
         .from('reservations')
         .select('*, estadias(*)')
-        .gte('check_in', startDateStr);
+        .gte('check_in', startDateStr)
+        .lte('check_in', endDateStr);
 
       // 3. Fetch PDV Consumption
       const { data: consumption } = await supabase
         .from('lancamentos_consumo')
         .select('*')
-        .gte('created_at', startDateStr);
+        .gte('created_at', `${startDateStr}T00:00:00`)
+        .lte('created_at', `${endDateStr}T23:59:59`);
 
       // 4. Fetch Active Stays
       const { data: activeStays } = await supabase
@@ -98,6 +150,7 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
         .eq('status', 'ativa');
 
       // --- Processing Logic ---
+      const monthsRefShort = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
       // Process Finance Data (Monthly grouping)
       const monthlyMap: Record<string, any> = {};
@@ -105,14 +158,20 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
       let totalD = 0;
 
       cashFlow?.forEach(entry => {
-        const month = new Date(entry.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-        if (!monthlyMap[month]) monthlyMap[month] = { name: month, receita: 0, despesa: 0 };
+        if (!entry.data_pagamento) return;
+        const [yr, mo] = entry.data_pagamento.split('-');
+        const monthName = monthsRefShort[parseInt(mo) - 1];
+        const mapKey = `${yr}-${mo}`;
+
+        if (!monthlyMap[mapKey]) {
+          monthlyMap[mapKey] = { nameKey: mapKey, name: `${monthName}/${yr.slice(2)}`, receita: 0, despesa: 0 };
+        }
         
         if (entry.tipo === 'entrada') {
-          monthlyMap[month].receita += entry.valor;
+          monthlyMap[mapKey].receita += entry.valor;
           totalR += entry.valor;
         } else {
-          monthlyMap[month].despesa += entry.valor;
+          monthlyMap[mapKey].despesa += entry.valor;
           totalD += entry.valor;
         }
       });
@@ -131,11 +190,14 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
 
       // Process Occupancy
       const occMap: Record<string, number> = {};
-      const monthsRef = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
       reservations?.forEach(res => {
-        const d = new Date(res.check_in + 'T00:00:00');
-        const monthName = monthsRef[d.getMonth()];
-        occMap[monthName] = (occMap[monthName] || 0) + 1;
+        if (!res.check_in) return;
+        const [yr, mo] = res.check_in.split('-');
+        const monthName = monthsRefShort[parseInt(mo) - 1];
+        const mapKey = `${yr}-${mo}`;
+
+        if (!occMap[mapKey]) occMap[mapKey] = 0;
+        occMap[mapKey] += 1;
       });
 
       // Total Pdv
@@ -163,15 +225,7 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
       });
       setAccountBalances(balances);
 
-      setFinancialData(Object.values(monthlyMap).sort((a, b) => {
-        const [monthA, yearA] = a.name.split('/');
-        const [monthB, yearB] = b.name.split('/');
-        // Simple heuristic for month order
-        const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-        const valA = (parseInt(yearA) * 12) + months.indexOf(monthA.toLowerCase());
-        const valB = (parseInt(yearB) * 12) + months.indexOf(monthB.toLowerCase());
-        return valA - valB;
-      }));
+      setFinancialData(Object.values(monthlyMap).sort((a, b) => a.nameKey.localeCompare(b.nameKey)));
 
       setExpenseCategories(Object.entries(catMap).map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value)
@@ -183,10 +237,12 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
         .slice(0, 6)
       );
 
-      const monthsRefShort = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
       setOccupancyData(Object.entries(occMap)
-        .map(([name, value]) => ({ name, reservas: value }))
-        .sort((a, b) => monthsRefShort.indexOf(a.name.toLowerCase()) - monthsRefShort.indexOf(b.name.toLowerCase()))
+        .map(([mapKey, value]) => {
+           const [yr, mo] = mapKey.split('-');
+           return { nameKey: mapKey, name: `${monthsRefShort[parseInt(mo) - 1]}/${yr.slice(2)}`, reservas: value };
+        })
+        .sort((a, b) => a.nameKey.localeCompare(b.nameKey))
       );
 
     } catch (err) {
@@ -194,6 +250,27 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
     } finally {
       setLoading(false);
     }
+  };
+
+  const nowD = new Date();
+  const prevMonthD = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
+  const prevMonthStr = `${prevMonthD.getFullYear()}-${String(prevMonthD.getMonth() + 1).padStart(2, '0')}`;
+  const monthsRefFull = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const isPrevMonthClosed = closedMonths.includes(prevMonthStr);
+  const labelPrevMonth = `${monthsRefFull[prevMonthD.getMonth()]} ${prevMonthD.getFullYear()}`;
+
+  const handleCloseMonth = async () => {
+    if (isPrevMonthClosed) return;
+    setIsSavingClosing(true);
+    try {
+        const { data: user } = await supabase.auth.getUser();
+        await supabase.from('finance_months_closed').insert({
+            ano_mes: prevMonthStr,
+            fechado_por: user.user?.id
+        });
+        fetchDashboardData();
+    } catch(err) { console.error(err); }
+    setIsSavingClosing(false);
   };
 
   if (loading && financialData.length === 0) {
@@ -208,24 +285,52 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
   return (
     <div className="space-y-8 pb-12">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
           <h2 className="text-4xl font-bold text-farm-900 font-serif">Dashboard Financeiro</h2>
-          <p className="text-gray-600 mt-1">Análise em tempo real da performance da fazenda.</p>
+          <p className="text-gray-600 mt-1">Análise baseada em períodos consolidados (fechados).</p>
+          
+          {(isAdmin || userRole === 'finance_manager') && (
+              <div className="mt-4 flex items-center gap-3">
+                  {isPrevMonthClosed ? (
+                      <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-green-200">
+                          <span className="w-2 h-2 rounded-full bg-green-500"></span> {labelPrevMonth} Fechado
+                      </span>
+                  ) : (
+                      <button 
+                          onClick={handleCloseMonth}
+                          disabled={isSavingClosing}
+                          className="bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold px-4 py-1.5 rounded-full flex items-center gap-2 border border-amber-300 transition-colors cursor-pointer"
+                      >
+                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> Encerrar {labelPrevMonth}
+                      </button>
+                  )}
+              </div>
+          )}
         </div>
         
         <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100">
+          <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100 items-center overflow-x-auto">
             {(['month', 'quarter', 'year'] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setTimeRange(r)}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timeRange === r ? 'bg-farm-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                className={`flex-shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-all ${timeRange === r ? 'bg-farm-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
               >
-                {r === 'month' ? 'Este Mês' : r === 'quarter' ? 'Este Trimestre' : 'Este Ano'}
+                {r === 'month' ? 'Mês Fechado' : r === 'quarter' ? 'Trimestre Anterior' : 'Ano (YTD)'}
               </button>
             ))}
           </div>
+          
+          <select 
+            value={selectedYear} 
+            onChange={e => setSelectedYear(e.target.value)}
+            className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 text-xs font-bold text-gray-500 outline-none focus:ring-2 focus:ring-farm-200"
+          >
+            {Array.from({length: 5}, (_, i) => new Date().getFullYear() - i).map(y => (
+                <option key={y} value={y.toString()}>{y}</option>
+            ))}
+          </select>
 
           <select 
             value={selectedProject} 

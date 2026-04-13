@@ -539,7 +539,7 @@ const App: React.FC = () => {
       case Page.ADMIN_USERS:
         return (isAdmin || isSiteAdmin) ? <AdminUsersPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.HISTORY:
-        return <HistoryPage userRole={userRole || 'member'} />;
+        return (!isVisitor) ? <HistoryPage userRole={userRole || 'member'} /> : <HomePage isManagement={isManagement} canEditNews={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
 
       // FINANCEIRO (Grupo 3 e 4)
       case Page.FINANCE: // Painel Financeiro
