@@ -31,6 +31,8 @@ interface CashFlowEntry {
     total_parcelas?: number;
     status?: string;
     data_aprovacao?: string | null;
+    is_recurrence?: boolean;
+    recurrence_period?: string | null;
 }
 
 interface FinanceProject {
@@ -129,7 +131,9 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         tags: '',
         projeto: '',
         is_parcelado: false,
-        parcelas: 1
+        parcelas: 1,
+        frequency_mode: 'unico' as 'unico' | 'parcelado' | 'recorrente',
+        recurrence_period: 'mensal' as 'mensal' | 'semestral' | 'anual'
     };
 
     const [formData, setFormData] = useState(defaultFormData);
@@ -316,7 +320,9 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             tags: entry.tags || '',
             projeto: entry.projeto || '',
             is_parcelado: false,
-            parcelas: 1
+            parcelas: 1,
+            frequency_mode: entry.is_recurrence ? 'recorrente' : (entry.parcela_atual ? 'parcelado' : 'unico') as any,
+            recurrence_period: (entry.recurrence_period as any) || 'mensal'
         });
         setShowForm(true);
         setEntryMode('manual');
@@ -384,17 +390,49 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         }
     };
 
-    const handleApprove = async (id: number) => {
+    const handleApprove = async (entry: CashFlowEntry) => {
         try {
             const dataAtual = new Date().toISOString().split('T')[0];
             const { error } = await supabase
                 .from('fluxo_caixa')
                 .update({ status: 'aprovado', data_aprovacao: dataAtual })
-                .eq('id', id);
+                .eq('id', entry.id);
             if (error) throw error;
+            
+            if (entry.is_recurrence) {
+                if (window.confirm('Pagamento consolidado! Deseja agendar/clonar a fatura do próximo período para o contas a pagar?')) {
+                    let nextDate = new Date(entry.data_pagamento + 'T12:00:00');
+                    let nextVc = entry.data_vencimento ? new Date(entry.data_vencimento + 'T12:00:00') : null;
+
+                    if (entry.recurrence_period === 'mensal') {
+                        nextDate.setMonth(nextDate.getMonth() + 1);
+                        if (nextVc) nextVc.setMonth(nextVc.getMonth() + 1);
+                    } else if (entry.recurrence_period === 'semestral') {
+                        nextDate.setMonth(nextDate.getMonth() + 6);
+                        if (nextVc) nextVc.setMonth(nextVc.getMonth() + 6);
+                    } else if (entry.recurrence_period === 'anual') {
+                        nextDate.setFullYear(nextDate.getFullYear() + 1);
+                        if (nextVc) nextVc.setFullYear(nextVc.getFullYear() + 1);
+                    }
+
+                    const { id, created_at, status, data_aprovacao, is_recurrence, recurrence_period, ...restProps } = entry as any;
+                    const nextPayload = {
+                       ...restProps,
+                       is_recurrence: true,
+                       recurrence_period: entry.recurrence_period,
+                       data_pagamento: nextDate.toISOString().split('T')[0],
+                       data_vencimento: nextVc ? nextVc.toISOString().split('T')[0] : null,
+                       status: 'pendente'
+                    };
+                    
+                    await supabase.from('fluxo_caixa').insert(nextPayload);
+                    alert('Conta futura projetada na agenda!');
+                }
+            }
+            
             fetchCashFlow();
         } catch (err: any) {
-            alert('Erro ao aprovar: ' + err.message);
+            alert('Erro ao processar: ' + err.message);
         }
     };
 
@@ -526,12 +564,14 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                 data_vencimento: formData.data_vencimento || null,
                 tags: formData.tags || null,
                 projeto: formData.projeto || null,
+                is_recurrence: formData.frequency_mode === 'recorrente',
+                recurrence_period: formData.frequency_mode === 'recorrente' ? formData.recurrence_period : null,
                 status: editingEntry ? editingEntry.status : (canApprove ? 'aprovado' : 'pendente'),
                 data_aprovacao: editingEntry ? editingEntry.data_aprovacao : (canApprove ? new Date().toISOString().split('T')[0] : null)
             };
 
             const payloads = [];
-            if (!editingEntry && formData.is_parcelado && formData.parcelas > 1) {
+            if (!editingEntry && formData.frequency_mode === 'parcelado' && formData.parcelas > 1) {
                 const baseValue = parseFloat(formData.valor.toString().replace(',', '.')) / formData.parcelas;
                 let currentDate = new Date(formData.data_pagamento + 'T12:00:00');
                 let currentVc = formData.data_vencimento ? new Date(formData.data_vencimento + 'T12:00:00') : null;
@@ -794,21 +834,39 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
 
                                 {!editingEntry && (
                                     <div className="md:col-span-2 lg:col-span-4 bg-sky-50 border border-sky-200 rounded-2xl p-6 mt-2">
-                                        <label className="flex items-center gap-3 cursor-pointer">
-                                            <input type="checkbox" checked={formData.is_parcelado} onChange={e => setFormData({ ...formData, is_parcelado: e.target.checked })} className="w-5 h-5 rounded border-sky-300 text-sky-600 focus:ring-sky-500" />
-                                            <span className="font-bold text-gray-700">Esta compra / despesa foi parcelada?</span>
-                                        </label>
-                                        {formData.is_parcelado && (
-                                            <div className="mt-4 animate-fade-in flex flex-col md:flex-row items-start md:items-center gap-4">
-                                                <div className="w-full md:w-1/4">
-                                                    <label className="block text-xs font-bold text-sky-800 uppercase mb-2">Número de Parcelas</label>
-                                                    <input type="number" min="2" max="60" value={formData.parcelas} onChange={e => setFormData({ ...formData, parcelas: parseInt(e.target.value) || 2 })} className="w-full px-4 py-3 border border-sky-300 rounded-xl outline-none text-sky-900 font-bold" />
+                                        <label className="block text-sm font-bold text-sky-900 mb-3 uppercase tracking-widest">Frequência da Transação</label>
+                                        <div className="flex bg-white rounded-xl shadow-inner border border-sky-100 p-1 mb-4 flex-wrap gap-2">
+                                            <button type="button" onClick={() => setFormData({ ...formData, frequency_mode: 'unico' })} className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all min-w-[140px] ${formData.frequency_mode === 'unico' ? 'bg-sky-600 text-white shadow-md' : 'text-sky-700 hover:bg-sky-50'}`}>🟢 Único (Padrão)</button>
+                                            <button type="button" onClick={() => setFormData({ ...formData, frequency_mode: 'parcelado' })} className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all min-w-[140px] ${formData.frequency_mode === 'parcelado' ? 'bg-amber-500 text-white shadow-md' : 'text-sky-700 hover:bg-sky-50'}`}>💳 Parcelado</button>
+                                            <button type="button" onClick={() => setFormData({ ...formData, frequency_mode: 'recorrente' })} className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all min-w-[140px] ${formData.frequency_mode === 'recorrente' ? 'bg-purple-600 text-white shadow-md' : 'text-sky-700 hover:bg-sky-50'}`}>🔁 Recorrente (Assinatura)</button>
+                                        </div>
+
+                                        {formData.frequency_mode === 'parcelado' && (
+                                            <div className="animate-fade-in bg-white border border-amber-200 p-4 rounded-xl flex items-center gap-4">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-amber-800 mb-1">Total de Parcelas (O valor será dividido)</label>
+                                                    <input type="number" min="2" max="60" value={formData.parcelas} onChange={e => setFormData({ ...formData, parcelas: parseInt(e.target.value) || 1 })} className="w-24 px-3 py-2 border border-amber-300 rounded-lg outline-none text-center font-bold text-amber-900" />
                                                 </div>
-                                                <div className="text-sm text-sky-800 bg-sky-100 p-4 rounded-xl flex-1 border border-sky-200">
-                                                    <strong>Atenção:</strong> O valor total {(parseFloat(formData.valor.toString().replace(',','.')) || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} será dividido em <strong>{formData.parcelas} parcelas mensais</strong> no valor de <strong>{((parseFloat(formData.valor.toString().replace(',','.')) || 0) / formData.parcelas).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</strong>.<br/>O vencimento e/ou pagamento será incrementado em 1 mês para cada nova parcela, a partir das datas informadas.
-                                                </div>
+                                                <p className="text-sm text-amber-700 leading-tight">O sistema criará <strong className="text-amber-900">{formData.parcelas} faturas</strong> separadas no Contas a Pagar/Receber, dividindo o valor de R$ {formData.valor || '0.00'}.</p>
                                             </div>
                                         )}
+
+                                        {formData.frequency_mode === 'recorrente' && (
+                                            <div className="animate-fade-in bg-white border border-purple-200 p-4 rounded-xl flex items-center gap-4">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-purple-800 mb-1">Intervalo (Frequência da Conta)</label>
+                                                    <select value={formData.recurrence_period} onChange={e => setFormData({ ...formData, recurrence_period: e.target.value as any })} className="w-36 px-3 py-2 border border-purple-300 rounded-lg outline-none text-center font-bold text-purple-900 font-medium">
+                                                        <option value="mensal">Mensalmente</option>
+                                                        <option value="semestral">A cada 6 meses</option>
+                                                        <option value="anual">Anualmente</option>
+                                                    </select>
+                                                </div>
+                                                <p className="text-sm text-purple-700 leading-tight">Será lançada apenas a primeira fatura agora. <br/>Quando ela for aprovada/paga, o sistema perguntará se pode projetar o mês seguinte automaticamente.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                     </div>
                                 )}
 
