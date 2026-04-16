@@ -147,6 +147,23 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ userRole }) => {
                 Este espaço dedicado à nossa Memória é um convite para que cada sócio e familiar explore suas raízes, 
                 conheça os antepassados que vieram antes de nós e contribua para o futuro desta herança.
               </p>
+              
+              <div className="mt-8 pt-8 border-t border-farm-100 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-bold text-farm-900 mb-1">Árvore Genealógica Oficial</p>
+                  <p className="text-xs text-gray-500">Colabore e ajude a manter nossos registros atualizados</p>
+                </div>
+                <a 
+                  href="https://www.myheritage.com.br/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-orange-200 transition-all text-sm w-full md:w-auto shrink-0"
+                >
+                  <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M13 7h-2v5.41l4.29 4.29 1.41-1.41L13 11.59z"/></svg>
+                  Acessar MyHeritage
+                  <svg className="w-4 h-4 ml-1 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                </a>
+              </div>
             </div>
           </div>
         </div>
