@@ -118,11 +118,14 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
         tag: '',
-        projeto: ''
+        projeto: '',
+        flowType: 'all' as 'all' | 'entrada' | 'saida',
+        categoria: 'all'
     });
     const [viewFilters, setViewFilters] = useState({
         month: new Date().getMonth() + 1,
-        year: new Date().getFullYear()
+        year: new Date().getFullYear(),
+        tipo: 'all' as 'all' | 'entrada' | 'saida'
     });
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -1149,6 +1152,15 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                     >
                                         {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
                                     </select>
+                                    <select 
+                                        value={viewFilters.tipo} 
+                                        onChange={e => setViewFilters({...viewFilters, tipo: e.target.value as any})}
+                                        className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-farm-200"
+                                    >
+                                        <option value="all">TODOS OS LANÇAMENTOS</option>
+                                        <option value="entrada">RECEITAS (ENTRADAS)</option>
+                                        <option value="saida">DESPESAS (SAÍDAS)</option>
+                                    </select>
                                 </div>
                                 <div className="flex gap-2 w-full md:w-auto">
                                     {canApprove && selectedIds.length > 0 && (
@@ -1201,7 +1213,9 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {entries.map((entry) => (
+                                        {entries
+                                          .filter(e => viewFilters.tipo === 'all' || e.tipo === viewFilters.tipo)
+                                          .map((entry) => (
                                             <tr key={entry.id} className={`hover:bg-gray-50 transition-colors group ${selectedIds.includes(entry.id) ? 'bg-farm-50/50' : ''}`}>
                                                 <td className="px-6 py-5 no-print">
                                                     <input 
@@ -1274,6 +1288,8 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                             if (reportFilters.type !== 'all') return e.meio_pagamento === reportFilters.type;
                                             if (reportFilters.tag !== '' && e.tags !== reportFilters.tag) return false;
                                             if (reportFilters.projeto !== '' && e.projeto !== reportFilters.projeto) return false;
+                                            if (reportFilters.flowType !== 'all' && e.tipo !== reportFilters.flowType) return false;
+                                            if (reportFilters.categoria !== 'all' && e.categoria !== reportFilters.categoria) return false;
                                             return true;
                                         });
                                         exportToExcel(filtered, `relatorio_${reportFilters.month}_${reportFilters.year}`);
@@ -1288,7 +1304,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8 no-print">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4 mb-8 no-print">
                             <div>
                                 <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Origem</label>
                                 <select 
@@ -1362,21 +1378,51 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                     {registeredTags.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
                                 </select>
                             </div>
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Fluxo</label>
+                                <select 
+                                    value={reportFilters.flowType} 
+                                    onChange={e => setReportFilters({...reportFilters, flowType: e.target.value as any})}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
+                                >
+                                    <option value="all">TODOS</option>
+                                    <option value="entrada">RECEITAS</option>
+                                    <option value="saida">DESPESAS</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Classificação</label>
+                                <select 
+                                    value={reportFilters.categoria} 
+                                    onChange={e => setReportFilters({...reportFilters, categoria: e.target.value})}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
+                                >
+                                    <option value="all">TODAS</option>
+                                    <optgroup label="Receitas">
+                                        {groupsReceita.flatMap(g => g.items).sort().map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                    </optgroup>
+                                    <optgroup label="Despesas">
+                                        {groupsDespesa.flatMap(g => g.items).sort().map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                    </optgroup>
+                                </select>
+                            </div>
                         </div>
 
                         {(() => {
-                            const filtered = entries.filter(e => {
-                                if (e.status === 'pendente') return false;
-                                const d = new Date(e.data_pagamento + 'T12:00:00');
-                                const matchDate = d.getMonth() + 1 === reportFilters.month && d.getFullYear() === reportFilters.year;
-                                if (!matchDate) return false;
+                                const filtered = entries.filter(e => {
+                                    if (e.status === 'pendente') return false;
+                                    const d = new Date(e.data_pagamento + 'T12:00:00');
+                                    const matchDate = d.getMonth() + 1 === reportFilters.month && d.getFullYear() === reportFilters.year;
+                                    if (!matchDate) return false;
 
-                                if (reportFilters.account !== 'all') return e.conta_origem === reportFilters.account;
-                                if (reportFilters.type !== 'all') return e.meio_pagamento === reportFilters.type;
-                                if (reportFilters.tag !== '' && e.tags !== reportFilters.tag) return false;
-                                if (reportFilters.projeto !== '' && e.projeto !== reportFilters.projeto) return false;
-                                return true;
-                            });
+                                    if (reportFilters.account !== 'all') return e.conta_origem === reportFilters.account;
+                                    if (reportFilters.type !== 'all') return e.meio_pagamento === reportFilters.type;
+                                    if (reportFilters.tag !== '' && e.tags !== reportFilters.tag) return false;
+                                    if (reportFilters.projeto !== '' && e.projeto !== reportFilters.projeto) return false;
+                                    if (reportFilters.flowType !== 'all' && e.tipo !== reportFilters.flowType) return false;
+                                    if (reportFilters.categoria !== 'all' && e.categoria !== reportFilters.categoria) return false;
+                                    return true;
+                                });
 
                             const tEntrada = filtered.reduce((acc, curr) => curr.tipo === 'entrada' ? acc + curr.valor : acc, 0);
                             const tSaida = filtered.reduce((acc, curr) => curr.tipo === 'saida' ? acc + curr.valor : acc, 0);
