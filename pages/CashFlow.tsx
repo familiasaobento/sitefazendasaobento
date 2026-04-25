@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import Papa from 'papaparse';
 import { IconLoader, IconCheck, IconPlus, IconFileText, IconTrash, IconUser, IconRefresh } from '../components/Icons';
 import { BankReconciliation } from '../components/BankReconciliation';
 
@@ -104,6 +105,12 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
     });
     const [isSavingAccount, setIsSavingAccount] = useState(false);
 
+    // CSV Import
+    const [isImportingCsv, setIsImportingCsv] = useState(false);
+
+    // Multi-select
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
     const [activeTab, setActiveTab] = useState<'flow' | 'contacts' | 'accounts' | 'reports' | 'tags'>(isViewOnly ? 'reports' : 'flow');
     const [reportFilters, setReportFilters] = useState({
         account: 'all',
@@ -112,6 +119,10 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         year: new Date().getFullYear(),
         tag: '',
         projeto: ''
+    });
+    const [viewFilters, setViewFilters] = useState({
+        month: new Date().getMonth() + 1,
+        year: new Date().getFullYear()
     });
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -210,13 +221,13 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
     };
 
     useEffect(() => {
-        fetchCashFlow();
+        fetchCashFlow(viewFilters.month, viewFilters.year);
         fetchCategories();
         fetchContacts();
         fetchAccounts();
         fetchTags();
         fetchProjects();
-    }, []);
+    }, [viewFilters.month, viewFilters.year]);
 
     const fetchProjects = async () => {
         const { data } = await supabase.from('finance_projects').select('*').eq('ativo', true).order('nome');
@@ -277,12 +288,21 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         }
     };
 
-    const fetchCashFlow = async () => {
+    const fetchCashFlow = async (month?: number, year?: number) => {
+        const m = month || viewFilters.month;
+        const y = year || viewFilters.year;
+        
         setLoading(true);
         try {
+            const startDate = `${y}-${String(m).padStart(2, '0')}-01`;
+            const lastDay = new Date(y, m, 0).getDate();
+            const endDate = `${y}-${String(m).padStart(2, '0')}-${lastDay}`;
+
             const { data, error } = await supabase
                 .from('fluxo_caixa')
                 .select('*')
+                .gte('data_pagamento', startDate)
+                .lte('data_pagamento', endDate)
                 .order('data_pagamento', { ascending: false });
 
             if (error) throw error;
@@ -327,6 +347,186 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         setShowForm(true);
         setEntryMode('manual');
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        setIsImportingCsv(true);
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            // Removido encoding fixo para evitar quebrar o que já funcionava
+            complete: async (results) => {
+                try {
+                    const rows: any[] = results.data;
+                    const payloads: any[] = [];
+                    let validCount = 0;
+
+                    if (rows.length > 0) {
+                        const headers = Object.keys(rows[0]);
+                        console.log('Colunas identificadas:', headers);
+                        
+                        if (headers.length === 1 && headers[0].includes(';')) {
+                            alert('Erro: Sua planilha usa ";" como separador. Salve como CSV padrão ou tente outro formato.');
+                            setIsImportingCsv(false);
+                            return;
+                        }
+                    }
+
+                    for (const row of rows) {
+                        const getVal = (colNames: string[]) => {
+                            const keys = Object.keys(row);
+                            for (const name of colNames) {
+                                const exactKey = keys.find(k => k.trim().toLowerCase() === name.trim().toLowerCase());
+                                if (exactKey) return row[exactKey];
+                            }
+                            const fuzzyKey = keys.find(k => colNames.some(c => k.toLowerCase().includes(c)));
+                            return fuzzyKey ? row[fuzzyKey] : '';
+                        };
+
+                        const tipoStr = String(getVal(['tipo']));
+                        const conclusaoStr = String(getVal(['conclusão', 'pago', 'status']));
+                        const contaStr = String(getVal(['conta', 'caixa', 'banco']));
+                        const formaStr = String(getVal(['forma', 'pagamento', 'tipo pg']));
+                        const descStr = String(getVal(['descrição', 'descricao', 'historico', 'detalhe']));
+                        const vencStr = String(getVal(['vencimento', 'vcto', 'vencto', 'data_venc']));
+                        const valorStr = String(getVal(['valor', 'montante', 'preço', 'total']));
+                        const criadoStr = String(getVal(['criado em', 'data', 'pagamento', 'atualizadoem', 'lançado']));
+                        const empresaStr = String(getVal(['empres', 'socio', 'visitante', 'cliente', 'fornecedor', 'nome', 'contato']));
+
+                        if (!valorStr && !descStr) continue;
+
+                        const parseDate = (d: any) => {
+                            if (!d) return null;
+                            const dsRaw = String(d).trim();
+                            if(!dsRaw || dsRaw.length < 5) return null;
+                            
+                            // Tradução de meses por extenso
+                            const monthsMap: { [key: string]: string } = {
+                                'janeiro': '01', 'fevereiro': '02', 'março': '03', 'marco': '03',
+                                'abril': '04', 'maio': '05', 'junho': '06', 'julho': '07',
+                                'agosto': '08', 'setembro': '09', 'outubro': '10', 'novembro': '11', 'dezembro': '12'
+                            };
+
+                            // Caso 1: Data por extenso (ex: 01 de janeiro de 2026)
+                            if (dsRaw.toLowerCase().includes(' de ')) {
+                                const parts = dsRaw.toLowerCase().split(' de ');
+                                if (parts.length === 3) {
+                                    const day = parts[0].trim().padStart(2, '0');
+                                    const month = monthsMap[parts[1].trim()];
+                                    const year = parts[2].trim();
+                                    if (day && month && year.length === 4) return `${year}-${month}-${day}`;
+                                }
+                            }
+
+                            // Caso 2: Data numérica (DD/MM/YYYY etc)
+                            let ds = dsRaw.split(' ')[0].replace(/[^0-9/\-.]/g, '');
+                            const sep = ds.includes('/') ? '/' : (ds.includes('-') ? '-' : (ds.includes('.') ? '.' : null));
+                            
+                            if (sep) {
+                                const parts = ds.split(sep);
+                                if (parts.length === 3) {
+                                    let y, m, day;
+                                    if (parts[2].length === 4 || (parts[2].length === 2 && parts[0].length <= 2)) { 
+                                        y = parts[2]; m = parts[1]; day = parts[0];
+                                    } else if (parts[0].length === 4) {
+                                        y = parts[0]; m = parts[1]; day = parts[2];
+                                    } else return null;
+
+                                    if (y.length === 2) y = "20" + y;
+                                    const finalDate = `${y}-${m.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                                    if (!isNaN(Date.parse(finalDate))) return finalDate;
+                                }
+                            }
+
+                            return null;
+                        };
+
+                        const dtVenc = parseDate(vencStr);
+                        const dtPg = parseDate(criadoStr);
+
+                        if (validCount === 0) {
+                            console.log('Debug 1a linha:', { descStr, vencStr, valorStr, dtVenc, dtPg });
+                        }
+
+                        let tipo = 'saida';
+                        if (tipoStr.toLowerCase().includes('receita') || tipoStr.toLowerCase().includes('entrada')) tipo = 'entrada';
+
+                        let status = 'pendente';
+                        let data_aprovacao = null;
+                        if (conclusaoStr.toLowerCase().includes('pago') || conclusaoStr.toLowerCase().includes('conclu')) {
+                            status = 'aprovado';
+                            data_aprovacao = dtPg || dtVenc || new Date().toISOString().split('T')[0];
+                        }
+
+                        let meio_pagamento = 'Banco';
+                        if (contaStr.toLowerCase().includes('caixa') || contaStr.toLowerCase().includes('dinheiro')) meio_pagamento = 'Dinheiro';
+
+                        let v = valorStr.replace(/[R$\s]/g, '').trim();
+                        if (v.includes(',') && v.includes('.')) {
+                            v = v.replace(/\./g, '').replace(',', '.');
+                        } else if (v.includes(',')) {
+                            v = v.replace(',', '.');
+                        }
+                        const valorNum = Math.abs(parseFloat(v) || 0);
+
+                        payloads.push({
+                            tipo,
+                            categoria: 'Geral',
+                            valor: valorNum,
+                            data_pagamento: dtVenc || dtPg || new Date().toISOString().split('T')[0], // Prioriza vencimento se o usuário quer usar essa data
+                            data_vencimento: dtVenc,
+                            descricao: descStr || 'Sem descrição',
+                            meio_pagamento,
+                            conta_origem: meio_pagamento === 'Banco' ? (accounts.find(a => a.tipo === 'Banco')?.nome || 'Banco Padrão') : (accounts.find(a => a.tipo === 'Dinheiro')?.nome || 'Caixa Central'),
+                            forma_pagamento: formaStr || 'Outros',
+                            status,
+                            data_aprovacao,
+                            observacoes: `Importado do sistema anterior. Ref: ${empresaStr}`,
+                            projeto: empresaStr ? empresaStr.substring(0, 50) : null
+                        });
+                        validCount++;
+                    }
+
+                    if (validCount === 0) {
+                        alert('Nenhum dado válido encontrado no CSV.');
+                        setIsImportingCsv(false);
+                        return;
+                    }
+
+                    if (!window.confirm(`Planilha lida! Foram encontrados ${validCount} registros. Deseja iniciar a importação para o sistema?`)) {
+                        setIsImportingCsv(false);
+                        return;
+                    }
+
+                    for (let i = 0; i < payloads.length; i += 50) {
+                        const chunk = payloads.slice(i, i + 50);
+                        const { error } = await supabase.from('fluxo_caixa').insert(chunk);
+                        if (error) {
+                            alert('Erro ao importar parte dos dados: ' + error.message);
+                            break;
+                        }
+                    }
+                    
+                    alert('Importação concluída com sucesso!');
+                    fetchCashFlow();
+                    setActiveTab('flow');
+                    
+                } catch (err: any) {
+                    alert('Erro na leitura: ' + err.message);
+                } finally {
+                    setIsImportingCsv(false);
+                    if (e.target) e.target.value = '';
+                }
+            },
+            error: (err) => {
+                alert('Erro ao analisar o CSV: ' + err.message);
+                setIsImportingCsv(false);
+                if (e.target) e.target.value = '';
+            }
+        });
     };
 
     const handleCancelForm = () => {
@@ -434,6 +634,55 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         } catch (err: any) {
             alert('Erro ao processar: ' + err.message);
         }
+    };
+
+    const handleToggleSelect = (id: number) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    };
+
+    const handleSelectAll = (visibleItems: CashFlowEntry[]) => {
+        if (selectedIds.length === visibleItems.length && visibleItems.length > 0) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(visibleItems.map(e => e.id));
+        }
+    };
+
+    const handleBulkApprove = async () => {
+        if (selectedIds.length === 0) return;
+        if (!window.confirm(`Deseja aprovar os ${selectedIds.length} itens selecionados?`)) return;
+
+        setLoading(true);
+        try {
+            const dataAtual = new Date().toISOString().split('T')[0];
+            const { error } = await supabase
+                .from('fluxo_caixa')
+                .update({ status: 'aprovado', data_aprovacao: dataAtual })
+                .in('id', selectedIds);
+            if (error) throw error;
+            alert('Lançamentos aprovados!');
+            setSelectedIds([]);
+            fetchCashFlow();
+        } catch (err: any) { alert('Erro ao aprovar: ' + err.message); }
+        finally { setLoading(true); fetchCashFlow(); } // Use true to reset state
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedIds.length === 0) return;
+        if (!window.confirm(`AVISO: Deseja EXCLUIR DEFINITIVAMENTE os ${selectedIds.length} itens selecionados? Esta ação não pode ser desfeita.`)) return;
+
+        setLoading(true);
+        try {
+            const { error } = await supabase
+                .from('fluxo_caixa')
+                .delete()
+                .in('id', selectedIds);
+            if (error) throw error;
+            alert('Lançamentos excluídos!');
+            setSelectedIds([]);
+            fetchCashFlow();
+        } catch (err: any) { alert('Erro ao excluir: ' + err.message); }
+        finally { setLoading(false); }
     };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -628,6 +877,10 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                 </div>
                 {!isViewOnly && activeTab === 'flow' && (
                     <div className="flex gap-4 w-full md:w-auto">
+                        <button onClick={() => document.getElementById('csvFileInput')?.click()} disabled={isImportingCsv} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-farm-700 border-2 border-farm-100 font-bold px-6 py-3 rounded-xl hover:bg-farm-50 transition-colors">
+                            {isImportingCsv ? <IconLoader className="w-5 h-5 animate-spin" /> : <IconFileText className="w-5 h-5" />} {isImportingCsv ? 'Importando...' : 'Importar CSV'}
+                        </button>
+                        <input type="file" id="csvFileInput" accept=".csv" className="hidden" onChange={handleCsvImport} disabled={isImportingCsv} />
                         <button onClick={() => setShowReconciliation(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-farm-700 border-2 border-farm-100 font-bold px-6 py-3 rounded-xl hover:bg-farm-50 transition-colors">
                             <IconRefresh className="w-5 h-5" /> Conciliar Extrato
                         </button>
@@ -878,8 +1131,42 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                     {!loading && (
                         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
                             <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50/50 no-print">
-                                <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">Listagem de Lançamentos</span>
+                                <div className="flex items-center gap-4">
+                                    <span className="text-sm font-bold text-gray-500 uppercase tracking-widest hidden lg:inline">Período:</span>
+                                    <select 
+                                        value={viewFilters.month} 
+                                        onChange={e => setViewFilters({...viewFilters, month: parseInt(e.target.value)})}
+                                        className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-farm-200"
+                                    >
+                                        {Array.from({length: 12}).map((_, i) => (
+                                            <option key={i+1} value={i+1}>{new Date(2000, i, 1).toLocaleDateString('pt-BR', {month: 'long'}).toUpperCase()}</option>
+                                        ))}
+                                    </select>
+                                    <select 
+                                        value={viewFilters.year} 
+                                        onChange={e => setViewFilters({...viewFilters, year: parseInt(e.target.value)})}
+                                        className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-farm-200"
+                                    >
+                                        {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                                    </select>
+                                </div>
                                 <div className="flex gap-2 w-full md:w-auto">
+                                    {canApprove && selectedIds.length > 0 && (
+                                        <div className="flex gap-2 animate-fade-in bg-amber-50 p-1 rounded-xl border border-amber-100">
+                                            <button 
+                                                onClick={handleBulkApprove}
+                                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-[10px] shadow-sm"
+                                            >
+                                                Aprovar ({selectedIds.length})
+                                            </button>
+                                            <button 
+                                                onClick={handleBulkDelete}
+                                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-[10px] shadow-sm"
+                                            >
+                                                Excluir ({selectedIds.length})
+                                            </button>
+                                        </div>
+                                    )}
                                     <button 
                                         onClick={() => exportToExcel(entries, 'todos_lancamentos')}
                                         className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-green-700 border border-green-200 font-bold px-4 py-2 rounded-xl hover:bg-green-50 transition-colors text-xs shadow-sm"
@@ -898,6 +1185,14 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                 <table className="w-full text-left">
                                     <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm uppercase tracking-wider">
                                         <tr>
+                                            <th className="px-6 py-4 no-print">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="rounded border-gray-300 text-farm-600 focus:ring-farm-500 w-4 h-4 cursor-pointer"
+                                                    checked={selectedIds.length === entries.length && entries.length > 0}
+                                                    onChange={() => handleSelectAll(entries)}
+                                                />
+                                            </th>
                                             <th className="px-6 py-4 font-semibold">Data</th>
                                             <th className="px-6 py-4 font-semibold">Descrição</th>
                                             <th className="px-6 py-4 font-semibold">Origem / Categoria</th>
@@ -907,7 +1202,15 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                         {entries.map((entry) => (
-                                            <tr key={entry.id} className="hover:bg-gray-50 transition-colors group">
+                                            <tr key={entry.id} className={`hover:bg-gray-50 transition-colors group ${selectedIds.includes(entry.id) ? 'bg-farm-50/50' : ''}`}>
+                                                <td className="px-6 py-5 no-print">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="rounded border-gray-300 text-farm-600 focus:ring-farm-500 w-4 h-4 cursor-pointer"
+                                                        checked={selectedIds.includes(entry.id)}
+                                                        onChange={() => handleToggleSelect(entry.id)}
+                                                    />
+                                                </td>
                                                 <td className="px-6 py-5 text-sm">
                                                     <div>{new Date(entry.data_pagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
                                                     {entry.status === 'pendente' && <span className="px-2 py-0.5 mt-1 bg-amber-100 text-amber-800 text-[10px] font-bold rounded block w-fit">PENDENTE APROVAÇÃO</span>}

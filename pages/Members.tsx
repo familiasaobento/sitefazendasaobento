@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
-import { IconUser, IconPrinter, IconTrash, IconPhone, IconMail, IconCalendar, IconPlus, IconLoader, IconChart, IconUpload } from '../components/Icons';
+import { IconUser, IconPrinter, IconTrash, IconPhone, IconMail, IconCalendar, IconPlus, IconLoader, IconChart, IconUpload, IconEdit, IconX, IconCheck } from '../components/Icons';
 
 interface Dependent {
     name: string;
@@ -340,6 +340,15 @@ export const MembersPage: React.FC = () => {
             console.error('Error updating status:', err);
             alert('Erro ao atualizar status.');
         }
+    };
+
+    const toTitleCase = (name: string) => {
+        if (!name) return '';
+        const exceptions = ['de', 'da', 'do', 'das', 'dos', 'e'];
+        return name.toLowerCase().split(' ').map((word, index) => {
+            if (index > 0 && exceptions.includes(word)) return word;
+            return word.charAt(0).toUpperCase() + word.slice(1);
+        }).join(' ');
     };
 
     const handleDeleteUser = async (id: string, name: string) => {

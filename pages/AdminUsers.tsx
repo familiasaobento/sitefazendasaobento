@@ -115,7 +115,7 @@ export const AdminUsersPage: React.FC = () => {
                     cpf: data.cpf || '',
                     phone: data.phone || '',
                     birth_date: data.birth_date || '',
-                    address_street: data.address_street || '',
+                    address_street: data.address_street || data.address || '',
                     address_number: data.address_number || '',
                     address_complement: data.address_complement || '',
                     address_neighborhood: data.address_neighborhood || '',
@@ -142,11 +142,12 @@ export const AdminUsersPage: React.FC = () => {
 
         try {
             if (!editingUserId) return;
+            const formattedName = toTitleCase(newUser.full_name);
 
             const { error } = await supabase
                 .from('profiles')
                 .update({
-                    full_name: newUser.full_name,
+                    full_name: formattedName,
                     role: newUser.role,
                     member_status: newUser.member_status,
                     cpf: newUser.cpf,
@@ -182,6 +183,15 @@ export const AdminUsersPage: React.FC = () => {
         } finally {
             setRegisterLoading(false);
         }
+    };
+
+    const toTitleCase = (name: string) => {
+        if (!name) return '';
+        const exceptions = ['de', 'da', 'do', 'das', 'dos', 'e'];
+        return name.toLowerCase().split(' ').map((word, index) => {
+            if (index > 0 && exceptions.includes(word)) return word;
+            return word.charAt(0).toUpperCase() + word.slice(1);
+        }).join(' ');
     };
 
     const handleToggleApproval = async (id: string, currentStatus: boolean) => {
@@ -311,8 +321,9 @@ export const AdminUsersPage: React.FC = () => {
         setRegisterSuccess('');
 
         try {
+            const formattedName = toTitleCase(newUser.full_name);
             const { data, error } = await supabase.functions.invoke('admin-register-user', {
-                body: { ...newUser, action: 'register' }
+                body: { ...newUser, full_name: formattedName, action: 'register' }
             });
 
             if (error) throw error;
@@ -423,9 +434,9 @@ export const AdminUsersPage: React.FC = () => {
                                     <div className="flex-1 min-w-0">
                                         <p className="font-bold text-gray-800 truncate">{profile.full_name || '—'}</p>
                                         <div className="flex items-center gap-2 mt-1">
-                                            <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
-                                                profile.member_status === 'Ativo' ? 'bg-green-100 text-green-700' :
-                                                profile.member_status === 'Inativo' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${
+                                                profile.member_status === 'Ativo' ? 'bg-green-100 text-green-700 border-green-200' :
+                                                profile.member_status === 'Inativo' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-orange-100 text-orange-700 border-orange-200'
                                             }`}>
                                                 {profile.member_status || 'Ativo'}
                                             </span>
@@ -516,18 +527,13 @@ export const AdminUsersPage: React.FC = () => {
                                                     </select>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <select
-                                                        value={profile.member_status || 'Ativo'}
-                                                        onChange={(e) => handleUpdateStatus(profile.id, e.target.value)}
-                                                        className={`text-[10px] font-black uppercase rounded-lg px-2 py-1.5 outline-none border border-transparent hover:border-gray-200 transition-all cursor-pointer ${
-                                                            profile.member_status === 'Ativo' ? 'bg-green-50 text-green-700' :
-                                                            profile.member_status === 'Inativo' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700'
-                                                        }`}
-                                                    >
-                                                        <option value="Ativo">🟢 Ativo</option>
-                                                        <option value="Inativo">🔴 Inativo</option>
-                                                        <option value="Licença">🟠 Licença</option>
-                                                    </select>
+                                                    <span className={`text-[10px] font-black uppercase rounded-lg px-3 py-1.5 border ${
+                                                        profile.member_status === 'Ativo' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                        profile.member_status === 'Inativo' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-orange-50 text-orange-700 border-orange-200'
+                                                    }`}>
+                                                        {profile.member_status === 'Ativo' ? '🟢 Ativo' : 
+                                                         profile.member_status === 'Inativo' ? '🔴 Inativo' : '🟠 Licença'}
+                                                    </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
                                                     <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${profile.approved ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -756,12 +762,14 @@ export const AdminUsersPage: React.FC = () => {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Situação do Cadastro</label>
-                                        <select className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none bg-white font-sans" value={newUser.member_status} onChange={e => setNewUser({...newUser, member_status: e.target.value})}>
-                                            <option value="Ativo">🟢 Ativo</option>
-                                            <option value="Inativo">🔴 Inativo</option>
-                                            <option value="Licença">🟠 Licença</option>
-                                        </select>
+                                        <label className="block text-sm font-bold text-gray-400 mb-1">Situação (Gerenciar em Sócios)</label>
+                                        <div className={`w-full px-4 py-3 border rounded-xl font-bold text-sm ${
+                                            newUser.member_status === 'Ativo' ? 'bg-green-50 text-green-700 border-green-200' :
+                                            newUser.member_status === 'Inativo' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-orange-50 text-orange-700 border-orange-200'
+                                        }`}>
+                                            {newUser.member_status === 'Ativo' ? '🟢 Ativo' : 
+                                             newUser.member_status === 'Inativo' ? '🔴 Inativo' : '🟠 Licença'}
+                                        </div>
                                     </div>
                                     <div className="flex items-end">
                                         <label className="flex items-center gap-3 p-3 bg-farm-50 border border-farm-100 rounded-xl w-full cursor-pointer hover:bg-farm-100 transition-all select-none border-dashed">
