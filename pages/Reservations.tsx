@@ -92,6 +92,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [selectedResForCheckin, setSelectedResForCheckin] = useState<any>(null);
   const [wristbandCodes, setWristbandCodes] = useState<string[]>([]);
+  const [faceIds, setFaceIds] = useState<string[]>([]);
   const [isProcessingCheckin, setIsProcessingCheckin] = useState(false);
   const [checkinGuests, setCheckinGuests] = useState<any[]>([]);
 
@@ -380,6 +381,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const handleStartCheckin = (res: any) => {
     setSelectedResForCheckin(res);
     setWristbandCodes(new Array(res.num_guests || 1).fill(''));
+    setFaceIds(new Array(res.num_guests || 1).fill(''));
     // Initialize guests details
     const existing = res.guests_details || [];
     const initialGuests = Array.from({ length: res.num_guests || 1 }).map((_, i) => {
@@ -414,7 +416,8 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
           codigo_pulseira: finalWristband,
           checkin_at: new Date().toISOString(),
           hospede_nome: guest.name || (idx === 0 ? selectedResForCheckin.name : `Hóspede ${idx + 1}`),
-          hospede_idade: guest.age ? parseInt(guest.age) : null
+          hospede_idade: guest.age ? parseInt(guest.age) : null,
+          controlid_id: faceIds[idx] || null
         };
       });
 
@@ -1815,17 +1818,30 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                             </div>
                           </div>
 
-                          <input
-                            type="text"
-                            value={wristbandCodes[idx] || ''}
-                            onChange={(e) => {
-                              const newCodes = [...wristbandCodes];
-                              newCodes[idx] = e.target.value;
-                              setWristbandCodes(newCodes);
-                            }}
-                            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-xs font-mono text-center placeholder:font-sans placeholder:text-gray-300"
-                            placeholder="Código da Pulseira (Ex: 0101)"
-                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              value={wristbandCodes[idx] || ''}
+                              onChange={(e) => {
+                                const newCodes = [...wristbandCodes];
+                                newCodes[idx] = e.target.value;
+                                setWristbandCodes(newCodes);
+                              }}
+                              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-[10px] font-mono text-center placeholder:font-sans placeholder:text-gray-300"
+                              placeholder="Pulseira (QR)"
+                            />
+                            <input
+                              type="text"
+                              value={faceIds[idx] || ''}
+                              onChange={(e) => {
+                                const newFaceIds = [...faceIds];
+                                newFaceIds[idx] = e.target.value;
+                                setFaceIds(newFaceIds);
+                              }}
+                              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-[10px] font-mono text-center placeholder:font-sans placeholder:text-gray-300"
+                              placeholder="Face ID (ControlID)"
+                            />
+                          </div>
                         </div>
                       );
                     })}

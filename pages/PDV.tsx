@@ -114,11 +114,48 @@ export const PDVPage: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        if (!operatingPoint) return;
+
+        const pt = availablePoints.find(p => p.nome === operatingPoint);
+        if (!pt) return;
+
+        console.log(`PDV: Iniciando Realtime para idface_events no PDV ${pt.id}`);
+        
+        const channel = supabase
+            .channel('idface-events')
+            .on('postgres_changes', { 
+                event: 'INSERT', 
+                schema: 'public', 
+                table: 'idface_events',
+                filter: `pdv_id=eq.${pt.id}` 
+            }, payload => {
+                const event = payload.new;
+                if (event.tipo_evento === 'IDENTIFY_SUCCESS') {
+                    setFeedback(`✅ Bem-vindo, ${event.pessoa_nome}!`);
+                    if (!isRestaurante && event.metadata?.estadia_id) {
+                        fetchStayById(event.metadata.estadia_id);
+                    }
+                    setTimeout(() => setFeedback(null), 5000);
+                } else if (event.tipo_evento === 'IDENTIFY_FAIL') {
+                    setFeedback(`⚠️ Identificação falhou: ${event.metadata?.error || 'Desconhecido'}`);
+                    setTimeout(() => setFeedback(null), 5000);
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [operatingPoint, availablePoints]);
+
+    useEffect(() => {
         if (operatingPoint) {
             fetchPdvProducts();
+            /*
             if (isRestaurante) {
                 setTimeout(startScanner, 500);
             }
+            */
         } else {
             if (scannerRef.current) {
                 scannerRef.current.clear().then(() => {
@@ -165,6 +202,37 @@ export const PDVPage: React.FC = () => {
     const setPoint = (point: string) => {
         setOperatingPoint(point);
         localStorage.setItem('pdv_current_point', point);
+    };
+
+    const fetchStayById = async (stayId: number) => {
+        setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('estadias')
+                .select(`
+                    id,
+                    reserva_id,
+                    codigo_pulseira,
+                    status,
+                    hospede_nome,
+                    hospede_idade,
+                    reservations:reserva_id (
+                        num_guests,
+                        accommodation,
+                        check_in,
+                        name,
+                        profiles:profiles!user_id (full_name, role)
+                    )
+                `)
+                .eq('id', stayId)
+                .single();
+
+            if (data) setActiveStay(data);
+        } catch (err) {
+            console.error('Error fetching stay by ID:', err);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const startScanner = async () => {
@@ -459,10 +527,18 @@ export const PDVPage: React.FC = () => {
                         </button>
                         {isRestaurante && (
                             <div className="flex flex-col items-center">
-                                <div className="bg-orange-500 text-white px-6 py-2 rounded-2xl font-black text-xl shadow-lg animate-pulse uppercase tracking-tighter">
-                                    Modo Self-Service: {getCurrentMeal() || 'Fechado'}
+                                <div className="bg-farm-900 text-white px-6 py-2 rounded-2xl font-black text-xl shadow-lg uppercase tracking-tighter border-2 border-farm-500">
+                                    Modo Facial ControlID: {getCurrentMeal() || 'Fechado'}
                                 </div>
-                                <p className="text-gray-400 text-sm mt-2">Aproxime a pulseira da câmera para registrar</p>
+                                <p className="text-farm-600 text-sm mt-2 font-bold animate-pulse">Aguardando identificação facial no hardware...</p>
+                                
+                                {/* Botão de fallback para QR Code oculto por padrão */}
+                                <button 
+                                    onClick={startScanner}
+                                    className="mt-4 text-gray-400 text-xs underline hover:text-gray-600"
+                                >
+                                    Usar Pulseira (Fallback QR)
+                                </button>
                             </div>
                         )}
                     </div>
@@ -498,14 +574,19 @@ export const PDVPage: React.FC = () => {
                         </div>
                     ) : (
                         <>
+                            <div className="bg-blue-50 border border-blue-100 p-6 rounded-3xl text-center max-w-sm mb-4">
+                                <p className="text-blue-800 font-bold mb-2">Reconhecimento Facial Ativo</p>
+                                <p className="text-blue-600 text-sm">O sistema agora valida o consumo automaticamente via hardware ControlID.</p>
+                            </div>
+
                             <button
                                 onClick={startScanner}
-                                className="w-64 h-64 bg-farm-600 text-white rounded-3xl shadow-2xl flex flex-col items-center justify-center gap-4 hover:bg-farm-700 transition-all active:scale-95 group"
+                                className="w-48 h-12 bg-gray-100 text-gray-400 rounded-2xl shadow-sm flex items-center justify-center gap-2 hover:bg-gray-200 transition-all active:scale-95 group"
                             >
-                                <IconCamera className="w-20 h-20 group-hover:scale-110 transition-transform" />
-                                <span className="text-xl font-bold uppercase tracking-widest">Escanear Pulseira</span>
+                                <IconCamera className="w-5 h-5" />
+                                <span className="text-sm font-bold uppercase">Scanner QR (Fallback)</span>
                             </button>
-                            <p className="text-gray-400 text-center max-w-xs font-medium uppercase tracking-tighter">— OU —</p>
+                            <p className="text-gray-400 text-center max-w-xs font-medium uppercase tracking-tighter mt-4">— OU —</p>
                             <div className="flex flex-col gap-3 w-64">
                                 <button
                                     onClick={() => setShowManualSearch(true)}

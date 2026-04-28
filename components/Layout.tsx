@@ -81,6 +81,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
       { page: Page.PRICING_RULES, label: 'Config. de Tarifas', icon: IconMenu },
       { page: Page.COST_CATEGORIES, label: 'Categorias de Custos', icon: IconMenu },
       { page: Page.PDV_CONFIG, label: 'Configuração PDVs', icon: IconMenu },
+      { page: Page.HARDWARE, label: 'Hardware Facial', icon: IconZap },
     ];
   } else if (userRole === 'site_admin') {
     filteredNavItems = [
@@ -98,6 +99,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
       { page: Page.PRICING_RULES, label: 'Config. de Tarifas', icon: IconMenu },
       { page: Page.COST_CATEGORIES, label: 'Categorias de Custos', icon: IconMenu },
       { page: Page.PDV_CONFIG, label: 'Configuração PDVs', icon: IconMenu },
+      { page: Page.HARDWARE, label: 'Hardware Facial', icon: IconZap },
     ];
   }
 

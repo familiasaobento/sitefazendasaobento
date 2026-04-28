@@ -79,6 +79,7 @@ export enum Page {
   PDV_CONFIG = 'pdv_config',
   VISITOR_PROFILE = 'visitor_profile',
   HISTORY = 'history',
+  HARDWARE = 'hardware',
 }
 
 export interface Document {

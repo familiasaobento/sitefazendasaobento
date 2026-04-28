@@ -20,6 +20,7 @@ interface ConsumptionLaunch {
             }
         }
     };
+    notas?: string;
 }
 
 export const ConsumptionReviewPage: React.FC = () => {
@@ -177,8 +178,8 @@ export const ConsumptionReviewPage: React.FC = () => {
                 </div>
             ) : (
                 <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left min-w-[1000px]">
                             <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
                                 <tr>
                                     <th className="px-6 py-5 w-10">
@@ -193,6 +194,7 @@ export const ConsumptionReviewPage: React.FC = () => {
                                     <th className="px-6 py-5 font-black">Hóspede</th>
                                     <th className="px-6 py-5 font-black">Item / Produto</th>
                                     <th className="px-6 py-5 font-black text-center">Qtd</th>
+                                    <th className="px-6 py-5 font-black">Notas / Origem</th>
                                     <th className="px-6 py-5 font-black text-right">Subtotal</th>
                                     <th className="px-6 py-5 font-black text-right">Ações</th>
                                 </tr>
@@ -228,6 +230,15 @@ export const ConsumptionReviewPage: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-5 text-center font-bold text-gray-800">
                                             {launch.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${
+                                                launch.notas?.includes('Facial') 
+                                                ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                                                : 'bg-gray-100 text-gray-500 border border-gray-200'
+                                            }`}>
+                                                {launch.notas || 'Manual'}
+                                            </span>
                                         </td>
                                         <td className="px-6 py-5 text-right font-bold text-gray-900">
                                             R$ {(launch.quantidade * launch.valor_unitario_aplicado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}

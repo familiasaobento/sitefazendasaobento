@@ -28,6 +28,7 @@ interface Profile {
     email?: string;
     member_status?: string;
     dependents?: Dependent[];
+    controlid_id?: string;
 }
 
 interface MemberTitle {
@@ -339,6 +340,24 @@ export const MembersPage: React.FC = () => {
         } catch (err) {
             console.error('Error updating status:', err);
             alert('Erro ao atualizar status.');
+        }
+    };
+    
+    const handleUpdateControlId = async (id: string, newId: string) => {
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ controlid_id: newId })
+                .eq('id', id);
+
+            if (error) throw error;
+
+            setProfiles(profiles.map(p =>
+                p.id === id ? { ...p, controlid_id: newId } : p
+            ));
+        } catch (err) {
+            console.error('Error updating controlid_id:', err);
+            alert('Erro ao atualizar Face ID.');
         }
     };
 
@@ -730,6 +749,7 @@ export const MembersPage: React.FC = () => {
                                             <th className="px-6 py-5 font-black">CPF</th>
                                             <th className="px-6 py-5 font-black">Contato</th>
                                             <th className="px-6 py-5 font-black">E-mail</th>
+                                            <th className="px-6 py-5 font-black">Face ID</th>
                                             <th className="px-6 py-5 font-black text-right">Ações</th>
                                         </tr>
                                     </thead>
@@ -787,6 +807,19 @@ export const MembersPage: React.FC = () => {
                                                             </>
                                                         ) : '—'}
                                                     </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <input 
+                                                        type="text"
+                                                        defaultValue={profile.controlid_id || ''}
+                                                        onBlur={(e) => {
+                                                            if (e.target.value !== (profile.controlid_id || '')) {
+                                                                handleUpdateControlId(profile.id, e.target.value);
+                                                            }
+                                                        }}
+                                                        placeholder="ID Facial..."
+                                                        className="w-24 px-2 py-1 text-[10px] font-mono border border-gray-100 rounded bg-gray-50 focus:bg-white focus:ring-1 focus:ring-farm-500 outline-none transition-all"
+                                                    />
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center justify-end gap-3">

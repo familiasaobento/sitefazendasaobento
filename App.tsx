@@ -22,6 +22,7 @@ import { PricingRulesPage } from './pages/PricingRules';
 import { CostCategoriesPage } from './pages/CostCategories';
 import { PdvConfigPage } from './pages/PdvConfig';
 import { HistoryPage } from './pages/History';
+import { HardwarePage } from './pages/Hardware';
 import { Page, NewsItem } from './types';
 import { IconLock, IconCheck, IconInstagram, IconWhatsapp } from './components/Icons';
 import { supabase } from './lib/supabase';
@@ -567,6 +568,8 @@ const App: React.FC = () => {
         return (isAdmin || isFinanceManager || isSiteAdmin) ? <CostCategoriesPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.PDV_CONFIG:
         return (isAdmin || isFinanceManager) ? <PdvConfigPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.HARDWARE:
+        return (isAdmin || isFinanceManager) ? <HardwarePage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
 
       default:
         return <HomePage isManagement={isManagement} canEditNews={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
@@ -582,7 +585,7 @@ const App: React.FC = () => {
       isVisitor={isVisitor}
       userName={userName}
       userRole={userRole || 'member'}
-      fullWidth={currentPage === Page.RESERVATIONS || currentPage === Page.ACTIVE_STAYS || currentPage === Page.ADMIN_USERS || currentPage === Page.MEMBERS || currentPage === Page.VISITORS}
+      fullWidth={currentPage === Page.RESERVATIONS || currentPage === Page.ACTIVE_STAYS || currentPage === Page.ADMIN_USERS || currentPage === Page.MEMBERS || currentPage === Page.VISITORS || currentPage === Page.HARDWARE}
     >
       {renderContent()}
       {showPasswordSetup && <PasswordSetupModal onComplete={() => setShowPasswordSetup(false)} />}
