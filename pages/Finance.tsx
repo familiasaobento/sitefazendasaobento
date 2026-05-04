@@ -14,7 +14,11 @@ const formatCurrency = (value: number) => {
 // Colors for the charts
 const COLORS = ['#389f76', '#5ebb92', '#2a7f5e', '#23513f', '#95d8b6', '#c3ead4'];
 
-export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = ({ userRole, isAdmin }) => {
+export const FinancePage: React.FC<{ 
+  userRole?: string; 
+  isAdmin?: boolean;
+  onNavigate?: (page: any) => void;
+}> = ({ userRole, isAdmin, onNavigate }) => {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'month' | 'quarter' | 'year'>('month');
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
@@ -30,7 +34,9 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
     balanco: 0,
     ocupacaoAtual: 0,
     consumoPdv: 0,
-    novasReservas: 0
+    novasReservas: 0,
+    inadimplenciaTotal: 0,
+    totalSocios: 0
   });
 
   const [financialData, setFinancialData] = useState<any[]>([]);
@@ -149,6 +155,20 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
         .select('id')
         .eq('status', 'ativa');
 
+      // 5. Fetch Total Delinquency (Inadimplência)
+      const { data: debts } = await supabase
+        .from('member_titles')
+        .select('amount')
+        .eq('status', 'pending');
+      
+      const totalDebts = debts?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
+
+      // 6. Fetch Total Members (Sócios)
+      const { count: membersCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .neq('role', 'visitor');
+
       // --- Processing Logic ---
       const monthsRefShort = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -210,7 +230,9 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
         balanco: totalR - totalD,
         ocupacaoAtual: activeStays?.length || 0,
         consumoPdv: totalPdv,
-        novasReservas: reservations?.length || 0
+        novasReservas: reservations?.length || 0,
+        inadimplenciaTotal: totalDebts,
+        totalSocios: membersCount || 0
       });
 
       // Process Account Balances
@@ -290,26 +312,28 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
           <h2 className="text-4xl font-bold text-farm-900 font-serif">Dashboard Financeiro</h2>
           <p className="text-gray-600 mt-1">Análise baseada em períodos consolidados (fechados).</p>
           
-          {(isAdmin || userRole === 'finance_manager') && (
-              <div className="mt-4 flex items-center gap-3">
-                  {isPrevMonthClosed ? (
-                      <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-green-200">
-                          <span className="w-2 h-2 rounded-full bg-green-500"></span> {labelPrevMonth} Fechado
-                      </span>
-                  ) : (
-                      <button 
-                          onClick={handleCloseMonth}
-                          disabled={isSavingClosing}
-                          className="bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold px-4 py-1.5 rounded-full flex items-center gap-2 border border-amber-300 transition-colors cursor-pointer"
-                      >
-                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> Encerrar {labelPrevMonth}
-                      </button>
-                  )}
-              </div>
-          )}
+          <div className="mt-4 flex items-center gap-3">
+              {isPrevMonthClosed ? (
+                  <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-green-200">
+                      <span className="w-2 h-2 rounded-full bg-green-500"></span> {labelPrevMonth} Fechado
+                  </span>
+              ) : (isAdmin || userRole === 'finance_manager') ? (
+                  <button 
+                      onClick={handleCloseMonth}
+                      disabled={isSavingClosing}
+                      className="bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold px-4 py-1.5 rounded-full flex items-center gap-2 border border-amber-300 transition-colors cursor-pointer"
+                  >
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> Encerrar {labelPrevMonth}
+                  </button>
+              ) : (
+                  <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-amber-200">
+                      <span className="w-2 h-2 rounded-full bg-amber-500"></span> {labelPrevMonth} em Aberto
+                  </span>
+              )}
+          </div>
         </div>
         
-        <div className="flex flex-col md:flex-row gap-4">
+        <div className="flex flex-col md:flex-row gap-4 items-center">
           <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100 items-center overflow-x-auto">
             {(['month', 'quarter', 'year'] as const).map((r) => (
               <button
@@ -361,17 +385,17 @@ export const FinancePage: React.FC<{ userRole?: string; isAdmin?: boolean }> = (
           color="blue"
         />
         <KpiCard 
-          title="Hóspedes Hoje" 
-          value={kpis.ocupacaoAtual} 
-          subValue="Estadias ativas"
+          title="Total de Sócios" 
+          value={kpis.totalSocios} 
+          subValue="Membros da família"
           icon={<IconUser className="w-6 h-6" />}
           color="amber"
         />
         <KpiCard 
-          title="Novas Reservas" 
-          value={kpis.novasReservas} 
-          subValue="No período selecionado"
-          icon={<IconZap className="w-6 h-6" />}
+          title="Inadimplência Total" 
+          value={formatCurrency(kpis.inadimplenciaTotal)} 
+          subValue="Pendências de sócios"
+          icon={<IconShoppingCart className="w-6 h-6" />}
           color="purple"
         />
       </div>

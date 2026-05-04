@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { IconUser, IconCalendar, IconTrash, IconPlus, IconX, IconLoader, IconMail, IconCheck, IconLock, IconEdit } from '../components/Icons';
+import { IconUser, IconCalendar, IconTrash, IconPlus, IconX, IconLoader, IconMail, IconCheck, IconLock, IconEdit, IconDotsVertical } from '../components/Icons';
 
 interface Profile {
     id: string;
@@ -37,6 +37,7 @@ export const AdminUsersPage: React.FC = () => {
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'pending' | 'approved'>('pending');
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     
     // Admin Registration States
     const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -490,7 +491,6 @@ export const AdminUsersPage: React.FC = () => {
                                             <th className="px-6 py-5 text-left">Usuário</th>
                                             <th className="px-6 py-5 text-left">Responsável</th>
                                             <th className="px-6 py-5 text-left">Tipo</th>
-                                            <th className="px-6 py-5 text-center whitespace-nowrap">Situação</th>
                                             <th className="px-6 py-5 text-center">Acesso</th>
                                             <th className="px-6 py-5 text-right pr-8">Ações</th>
                                         </tr>
@@ -527,54 +527,68 @@ export const AdminUsersPage: React.FC = () => {
                                                     </select>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
-                                                    <span className={`text-[10px] font-black uppercase rounded-lg px-3 py-1.5 border ${
-                                                        profile.member_status === 'Ativo' ? 'bg-green-50 text-green-700 border-green-200' :
-                                                        profile.member_status === 'Inativo' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-orange-50 text-orange-700 border-orange-200'
-                                                    }`}>
-                                                        {profile.member_status === 'Ativo' ? '🟢 Ativo' : 
-                                                         profile.member_status === 'Inativo' ? '🔴 Inativo' : '🟠 Licença'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
                                                     <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${profile.approved ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                                                         {profile.approved ? 'Liberado' : 'Pendente'}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right pr-8">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <button
-                                                            onClick={() => handleToggleApproval(profile.id, profile.approved)}
-                                                            className={`px-4 py-2 rounded-lg font-bold text-xs transition-all ${profile.approved ? 'text-yellow-600 bg-yellow-50 hover:bg-yellow-100' : 'bg-farm-700 text-white hover:bg-farm-800 shadow-sm'}`}
+                                                    <div className="relative inline-block text-left">
+                                                        <button 
+                                                            onClick={() => setOpenMenuId(openMenuId === profile.id ? null : profile.id)}
+                                                            className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600"
+                                                            title="Mais opções"
                                                         >
-                                                            {profile.approved ? 'Bloquear' : 'Liberar'}
+                                                            <IconDotsVertical className="w-5 h-5" />
                                                         </button>
-                                                        <button
-                                                            onClick={() => handleOpenEditModal(profile)}
-                                                            className="p-2 text-gray-400 hover:text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all font-sans"
-                                                            title="Editar Informações"
-                                                        >
-                                                            <IconEdit className="w-5 h-5" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleSendInvite(profile)}
-                                                            className="p-2 text-gray-400 hover:text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-all"
-                                                            title="Enviar E-mail de Convite"
-                                                        >
-                                                            <IconMail className="w-5 h-5" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleResetPassword(profile.email || '')}
-                                                            className="p-2 text-gray-400 hover:text-farm-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all border border-transparent hover:border-gray-200"
-                                                            title="Redefinir Senha"
-                                                        >
-                                                            <IconLock className="w-5 h-5" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteUser(profile.id, profile.full_name)}
-                                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                        >
-                                                            <IconTrash className="w-5 h-5" />
-                                                        </button>
+                                                        
+                                                        {openMenuId === profile.id && (
+                                                            <>
+                                                                {/* Backdrop for closing */}
+                                                                <div 
+                                                                    className="fixed inset-0 z-40" 
+                                                                    onClick={() => setOpenMenuId(null)}
+                                                                ></div>
+                                                                
+                                                                <div className="absolute right-0 mt-2 w-56 rounded-2xl shadow-2xl bg-white border border-gray-100 ring-1 ring-black ring-opacity-5 focus:outline-none z-50 overflow-hidden divide-y divide-gray-50 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+                                                                    <div className="py-1">
+                                                                        <button
+                                                                            onClick={() => { handleToggleApproval(profile.id, profile.approved); setOpenMenuId(null); }}
+                                                                            className={`flex items-center gap-3 w-full px-4 py-3 text-sm font-bold transition-colors ${profile.approved ? 'text-yellow-600 hover:bg-yellow-50' : 'text-farm-700 hover:bg-farm-50'}`}
+                                                                        >
+                                                                            <IconCheck className="w-4 h-4" /> {profile.approved ? 'Bloquear Acesso' : 'Liberar Acesso'}
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => { handleOpenEditModal(profile); setOpenMenuId(null); }}
+                                                                            className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                                                                        >
+                                                                            <IconEdit className="w-4 h-4 text-blue-500" /> Editar Perfil
+                                                                        </button>
+                                                                    </div>
+                                                                    <div className="py-1">
+                                                                        <button
+                                                                            onClick={() => { handleSendInvite(profile); setOpenMenuId(null); }}
+                                                                            className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                                                                        >
+                                                                            <IconMail className="w-4 h-4 text-green-500" /> Reenviar Convite
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => { handleResetPassword(profile.email || ''); setOpenMenuId(null); }}
+                                                                            className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                                                                        >
+                                                                            <IconLock className="w-4 h-4 text-amber-500" /> Redefinir Senha
+                                                                        </button>
+                                                                    </div>
+                                                                    <div className="py-1">
+                                                                        <button
+                                                                            onClick={() => { handleDeleteUser(profile.id, profile.full_name); setOpenMenuId(null); }}
+                                                                            className="flex items-center gap-3 w-full px-4 py-3 text-sm text-red-600 hover:bg-red-50 font-bold transition-colors"
+                                                                        >
+                                                                            <IconTrash className="w-4 h-4" /> Excluir Conta
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>

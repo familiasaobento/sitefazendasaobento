@@ -1,7 +1,7 @@
 export interface User {
   id: string;
   name: string;
-  role: 'admin' | 'site_admin' | 'finance_manager' | 'finance' | 'accounting' | 'member' | 'visitor' | 'pdv';
+  role: 'admin' | 'site_admin' | 'finance_manager' | 'finance' | 'accounting' | 'member' | 'visitor' | 'pdv' | 'employee';
 }
 
 export interface NewsItem {
@@ -80,6 +80,8 @@ export enum Page {
   VISITOR_PROFILE = 'visitor_profile',
   HISTORY = 'history',
   HARDWARE = 'hardware',
+  TIME_TRACKING = 'time_tracking',
+  EMPLOYEES = 'employees',
 }
 
 export interface Document {

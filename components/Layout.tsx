@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Page } from '../types';
-import { IconHome, IconCalendar, IconImage, IconChart, IconUser, IconMail, IconMenu, IconFileText, IconShoppingCart, IconZap, IconPackage, IconCheck, IconBook } from './Icons';
+import { IconHome, IconCalendar, IconImage, IconChart, IconUser, IconMail, IconMenu, IconFileText, IconShoppingCart, IconZap, IconPackage, IconCheck, IconBook, IconClock } from './Icons';
 
 interface LayoutProps {
   children: React.ReactNode;
   currentPage: Page;
   onNavigate: (page: Page) => void;
   onLogout: () => void;
-  userRole: 'admin' | 'site_admin' | 'finance_manager' | 'finance' | 'accounting' | 'member' | 'visitor' | 'pdv';
+  userRole: 'admin' | 'site_admin' | 'finance_manager' | 'finance' | 'accounting' | 'member' | 'visitor' | 'pdv' | 'employee';
   isAdmin?: boolean;
   isVisitor?: boolean;
   userName?: string;
@@ -51,6 +51,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
     { page: Page.ADMIN_USERS, label: 'Controle de Acesso', icon: IconUser },
     { page: Page.MEMBERS, label: 'Gestão de Sócios', icon: IconUser },
     { page: Page.VISITORS, label: 'Cadastro de Visitantes', icon: IconUser },
+    { page: Page.EMPLOYEES, label: 'Gestão de Funcionários', icon: IconUser },
+    { page: Page.TIME_TRACKING, label: 'Controle de Ponto', icon: IconClock },
   ];
 
   if (userRole === 'visitor') {
@@ -112,6 +114,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
     'visitor': 'Visitante/Convidado',
     'pdv': 'Operador de PDV',
     'accounting': 'Contabilidade',
+    'employee': 'Colaborador',
   };
 
   const displayRole = roleLabels[userRole] || 'Usuário';

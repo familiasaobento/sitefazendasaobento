@@ -52,7 +52,7 @@ serve(async (req) => {
                         'Authorization': `Bearer ${resendApiKey}`
                     },
                     body: JSON.stringify({
-                        from: 'Fazenda São Bento <reservas@familiasaobento.com>',
+                        from: 'Fazenda São Bento <onboarding@resend.dev>',
                         to: ['admin@fazendasaobento.com'], // In production, this should be configurable
                         subject: `🔔 Nova Solicitação de Reserva de Convidado: ${request.full_name}`,
                         html: `
@@ -333,7 +333,7 @@ serve(async (req) => {
                 `;
 
                 const emailPayload = {
-                    from: 'Fazenda São Bento <reservas@familiasaobento.com>',
+                    from: 'Fazenda São Bento <onboarding@resend.dev>',
                     to: [request.email],
                     subject: `✅ Reserva Confirmada - Voucher Fazenda São Bento`,
                     html: emailHtml

@@ -23,6 +23,8 @@ import { CostCategoriesPage } from './pages/CostCategories';
 import { PdvConfigPage } from './pages/PdvConfig';
 import { HistoryPage } from './pages/History';
 import { HardwarePage } from './pages/Hardware';
+import { TimeTrackingPage } from './pages/TimeTracking';
+import { EmployeesPage } from './pages/Employees';
 import { Page, NewsItem } from './types';
 import { IconLock, IconCheck, IconInstagram, IconWhatsapp } from './components/Icons';
 import { supabase } from './lib/supabase';
@@ -310,7 +312,7 @@ const ApprovalPending = ({ onSignOut }: { onSignOut: () => void }) => (
 const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isApproved, setIsApproved] = useState<boolean | null>(null);
-  const [userRole, setUserRole] = useState<'admin' | 'site_admin' | 'finance_manager' | 'finance' | 'accounting' | 'member' | 'visitor' | 'pdv' | null>(null);
+  const [userRole, setUserRole] = useState<'admin' | 'site_admin' | 'finance_manager' | 'finance' | 'accounting' | 'member' | 'visitor' | 'pdv' | 'employee' | null>(null);
   const [userName, setUserName] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<Page>(Page.HOME);
   const [loading, setLoading] = useState(true);
@@ -544,7 +546,7 @@ const App: React.FC = () => {
 
       // FINANCEIRO (Grupo 3 e 4)
       case Page.FINANCE: // Painel Financeiro
-        return (isAdmin || isMember || isSiteAdmin || isFinanceManager || isAccounting) ? <FinancePage isAdmin={isAdmin || isFinanceManager} userRole={userRole || 'member'} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+        return (isAdmin || isMember || isSiteAdmin || isFinanceManager || isAccounting) ? <FinancePage isAdmin={isAdmin || isFinanceManager} userRole={userRole || 'member'} onNavigate={setCurrentPage} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.CASH_FLOW: // Transações
         return (isManagement || isAccounting) ? <CashFlowPage canApprove={canApproveTransactions} isViewOnly={isAccounting} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.CONSUMPTION_REVIEW: // Conferência e aprovação
@@ -570,6 +572,10 @@ const App: React.FC = () => {
         return (isAdmin || isFinanceManager) ? <PdvConfigPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.HARDWARE:
         return (isAdmin || isFinanceManager) ? <HardwarePage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.TIME_TRACKING:
+        return (isManagement) ? <TimeTrackingPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+      case Page.EMPLOYEES:
+        return (isManagement) ? <EmployeesPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
 
       default:
         return <HomePage isManagement={isManagement} canEditNews={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
@@ -585,7 +591,7 @@ const App: React.FC = () => {
       isVisitor={isVisitor}
       userName={userName}
       userRole={userRole || 'member'}
-      fullWidth={currentPage === Page.RESERVATIONS || currentPage === Page.ACTIVE_STAYS || currentPage === Page.ADMIN_USERS || currentPage === Page.MEMBERS || currentPage === Page.VISITORS || currentPage === Page.HARDWARE}
+      fullWidth={currentPage === Page.RESERVATIONS || currentPage === Page.ACTIVE_STAYS || currentPage === Page.ADMIN_USERS || currentPage === Page.MEMBERS || currentPage === Page.VISITORS || currentPage === Page.HARDWARE || currentPage === Page.TIME_TRACKING || currentPage === Page.EMPLOYEES}
     >
       {renderContent()}
       {showPasswordSetup && <PasswordSetupModal onComplete={() => setShowPasswordSetup(false)} />}
