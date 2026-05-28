@@ -7,7 +7,7 @@ interface LayoutProps {
   currentPage: Page;
   onNavigate: (page: Page) => void;
   onLogout: () => void;
-  userRole: 'admin' | 'site_admin' | 'finance_manager' | 'finance' | 'accounting' | 'member' | 'visitor' | 'pdv' | 'employee';
+  userRole: 'admin' | 'site_admin' | 'finance_manager' | 'finance' | 'accounting' | 'member' | 'visitor' | 'pdv' | 'employee' | 'consu';
   isAdmin?: boolean;
   isVisitor?: boolean;
   userName?: string;
@@ -62,7 +62,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
       { page: Page.HOME, label: 'Início', icon: IconHome },
       { page: Page.PDV, label: 'PDV / Consumo', icon: IconShoppingCart },
     ];
-  } else if (userRole === 'member') {
+  } else if (userRole === 'member' || userRole === 'consu') {
     filteredNavItems = sosoItems;
   } else if (userRole === 'accounting') {
     filteredNavItems = [
@@ -71,12 +71,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
     ];
   } else if (userRole === 'finance') {
     filteredNavItems = [
+      { page: Page.FINANCE, label: 'Painel Financeiro', icon: IconChart },
       { page: Page.RESERVATIONS, label: 'Ocupação e Reservas', icon: IconCalendar },
       ...commonFinanceItems.filter(i => i.page !== Page.HOME && i.page !== Page.EVENTS),
       ...peopleManagementItems.filter(i => i.page !== Page.ADMIN_USERS)
     ];
   } else if (userRole === 'finance_manager') {
     filteredNavItems = [
+      { page: Page.FINANCE, label: 'Painel Financeiro', icon: IconChart },
       ...commonFinanceItems,
       ...peopleManagementItems.filter(i => i.page !== Page.ADMIN_USERS),
       { page: Page.RESERVATIONS, label: 'Ocupação e Reservas', icon: IconCalendar },
@@ -115,6 +117,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
     'pdv': 'Operador de PDV',
     'accounting': 'Contabilidade',
     'employee': 'Colaborador',
+    'consu': 'Membro do CONSU',
   };
 
   const displayRole = roleLabels[userRole] || 'Usuário';

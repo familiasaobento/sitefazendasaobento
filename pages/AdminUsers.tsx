@@ -524,6 +524,8 @@ export const AdminUsersPage: React.FC = () => {
                                                         <option value="site_admin">Site Admin</option>
                                                         <option value="admin">Admin Geral</option>
                                                         <option value="pdv">Operador PDV</option>
+                                                        <option value="consu">CONSU</option>
+                                                        <option value="manutencao">Manutenção</option>
                                                     </select>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
@@ -773,6 +775,8 @@ export const AdminUsersPage: React.FC = () => {
                                             <option value="site_admin">Site Admin</option>
                                             <option value="admin">Admin Geral</option>
                                             <option value="pdv">Operador PDV</option>
+                                            <option value="consu">CONSU</option>
+                                            <option value="manutencao">Manutenção</option>
                                         </select>
                                     </div>
                                     <div>

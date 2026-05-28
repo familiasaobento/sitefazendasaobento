@@ -312,7 +312,7 @@ const ApprovalPending = ({ onSignOut }: { onSignOut: () => void }) => (
 const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isApproved, setIsApproved] = useState<boolean | null>(null);
-  const [userRole, setUserRole] = useState<'admin' | 'site_admin' | 'finance_manager' | 'finance' | 'accounting' | 'member' | 'visitor' | 'pdv' | 'employee' | null>(null);
+  const [userRole, setUserRole] = useState<'admin' | 'site_admin' | 'finance_manager' | 'finance' | 'accounting' | 'member' | 'visitor' | 'pdv' | 'employee' | 'consu' | 'manutencao' | null>(null);
   const [userName, setUserName] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<Page>(Page.HOME);
   const [loading, setLoading] = useState(true);
@@ -477,6 +477,8 @@ const App: React.FC = () => {
   const isMember = userRole === 'member';
   const isPDV = userRole === 'pdv';
   const isAccounting = userRole === 'accounting';
+  const isConsu = userRole === 'consu';
+  const isManutencao = userRole === 'manutencao';
 
   // Management broadly includes anyone who isn't just a visitor or standard member
   const isManagement = isAdmin || isSiteAdmin || isFinanceManager || isFinance || isAccounting;
@@ -538,7 +540,7 @@ const App: React.FC = () => {
           ? <MembersPage />
           : <HomePage isManagement={isManagement} canEditNews={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.CONTACT:
-        return <ContactPage isAdmin={isAdmin || isSiteAdmin} />;
+        return <ContactPage userRole={userRole || 'member'} canViewMessages={isAdmin || isSiteAdmin || isFinance || isFinanceManager || isAccounting || isConsu || isManutencao} />;
       case Page.ADMIN_USERS:
         return (isAdmin || isSiteAdmin) ? <AdminUsersPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.HISTORY:
@@ -546,7 +548,7 @@ const App: React.FC = () => {
 
       // FINANCEIRO (Grupo 3 e 4)
       case Page.FINANCE: // Painel Financeiro
-        return (isAdmin || isMember || isSiteAdmin || isFinanceManager || isAccounting) ? <FinancePage isAdmin={isAdmin || isFinanceManager} userRole={userRole || 'member'} onNavigate={setCurrentPage} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+        return (isAdmin || isMember || isConsu || isSiteAdmin || isFinanceManager || isAccounting || isFinance) ? <FinancePage isAdmin={isAdmin || isFinanceManager} userRole={userRole || 'member'} onNavigate={setCurrentPage} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.CASH_FLOW: // Transações
         return (isManagement || isAccounting) ? <CashFlowPage canApprove={canApproveTransactions} isViewOnly={isAccounting} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.CONSUMPTION_REVIEW: // Conferência e aprovação

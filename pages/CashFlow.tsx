@@ -72,6 +72,82 @@ interface CatGroup { groupName: string; items: string[]; }
 
 const FALLBACK_GROUPS: CatGroup[] = [{ groupName: 'Geral', items: ['Geral', 'Outros'] }];
 
+const matchCategory = (
+    csvCategory: string,
+    desc: string,
+    tipoArg: string,
+    categoriesList: { id: number; nome: string; tipo: string }[]
+): string => {
+    // Normaliza o tipo vindo da transação ('entrada'/'saida') para o tipo cadastrado na categoria ('receita'/'despesa')
+    const tipo = tipoArg === 'entrada' ? 'receita' : (tipoArg === 'saida' ? 'despesa' : tipoArg);
+
+    // 1. Tentar correspondência exata ou parcial com a categoria do CSV
+    if (csvCategory) {
+        const cleanCsv = csvCategory.trim().toLowerCase();
+        const found = categoriesList.find(c => 
+            c.tipo === tipo && 
+            (c.nome.toLowerCase() === cleanCsv || c.nome.toLowerCase().includes(cleanCsv) || cleanCsv.includes(c.nome.toLowerCase()))
+        );
+        if (found) return found.nome;
+    }
+
+    // 2. Tentar correspondência por palavras-chave na descrição
+    const cleanDesc = desc.toLowerCase();
+    
+    // Regras específicas de despesas
+    if (tipo === 'despesa') {
+        const rules = [
+            { keywords: ['energia', 'luz', 'enel', 'equatorial', 'cpfl', 'eletropaulo', 'cemig'], category: 'Energia Elétrica' },
+            { keywords: ['internet', 'telefone', 'wifi', 'claro', 'vivo', 'tim', 'telecom', 'link'], category: 'Internet e Telefone' },
+            { keywords: ['mercado', 'supermercado', 'açougue', 'acougue', 'padaria', 'pão', 'alimentação', 'horti', 'carrefour', 'pao de', 'comida', 'assai', 'atacad', 'hortifruti'], category: 'Supermercado' },
+            { keywords: ['combustivel', 'gasolina', 'diesel', 'etanol', 'posto', 'br', 'ipiranga', 'shell'], category: 'Combustível' },
+            { keywords: ['salario', 'folha', 'adiantamento', 'décimo', 'rescisão', 'contra-cheque', 'ferias', 'férias', '13º'], category: 'Salários' },
+            { keywords: ['tarifa', 'mensalidade conta', 'banco', 'ted', 'doc', 'pix', 'manutenção de conta', 'deb.tar.', 'tar.banc'], category: 'Tarifa manutenção de conta' },
+            { keywords: ['contabilidade', 'contabil', 'escritório contábil'], category: 'Contabilidade' },
+            { keywords: ['software', 'site', 'hospedagem', 'nuvem', 'aws', 'mensalidade sistema', 'sistema', 'licença', 'licenca', 'controlid', 'api'], category: 'Despesa com softwares' },
+            { keywords: ['imposto', 'das', 'simples', 'darf', 'tributo', 'gps', 'fgts', 'inss', 'irrf', 'iss', 'pis', 'cofins'], category: 'Impostos e taxas' },
+            { keywords: ['ração', 'racao', 'gado', 'veterinario', 'vacina', 'medicamento animal', 'boi', 'bezerro'], category: 'Ração e Alimentação Animal' },
+            { keywords: ['cimento', 'tinta', 'construção', 'reforma', 'ferragem', 'civil', 'pedreiro', 'telha', 'tijolo', 'areia', 'brita', 'madeira'], category: 'Material de construção' },
+            { keywords: ['piscina', 'cloro', 'limpeza piscina', 'hth'], category: 'Piscina e Lazer' },
+            { keywords: ['jardim', 'grama', 'roçada', 'rocada', 'muda', 'planta', 'adubo', 'fertilizante', 'veneno'], category: 'Jardinagem e Área Verde' },
+            { keywords: ['manutenção', 'reparo', 'conserto', 'assistência', 'instal', 'chaves', 'cadeado', 'revisão'], category: 'Conservação e Reparos' },
+            { keywords: ['copa', 'cozinha', 'limpeza', 'desinfetante', 'detergente', 'sabão', 'higiene', 'papel hig', 'amaciante'], category: 'Cozinha e Alimentação' },
+            { keywords: ['refeição', 'almoço', 'janta', 'restaurante', 'churrascaria', 'pizzaria'], category: 'Alimentos e Bebidas' }
+        ];
+
+        for (const rule of rules) {
+            if (rule.keywords.some(k => cleanDesc.includes(k))) {
+                const found = categoriesList.find(c => c.tipo === tipo && c.nome === rule.category);
+                if (found) return found.nome;
+            }
+        }
+    } else {
+        // Regras específicas de receitas
+        const rules = [
+            { keywords: ['hospedagem', 'diária', 'reserva', 'chalé', 'aluguel', 'sede', 'estadia'], category: 'Receitas de Hospedagem' },
+            { keywords: ['mensalidade', 'sócio', 'socio', 'taxa condomínio', 'condomínio', 'condominio', 'contribuição', 'titulo', 'título'], category: 'Mensalidade Sócio' },
+            { keywords: ['day use', 'dayuse', 'lazer dia'], category: 'Day Use' },
+            { keywords: ['consumo', 'bebida', 'pdv', 'restaurante', 'queijo', 'doce', 'sorvete', 'cerveja', 'refrigerante'], category: 'PDV / Consumo' },
+            { keywords: ['evento', 'festa', 'casamento', 'aniversário', 'ingresso', 'bilheteria'], category: 'Receitas com Eventos' }
+        ];
+
+        for (const rule of rules) {
+            if (rule.keywords.some(k => cleanDesc.includes(k))) {
+                const found = categoriesList.find(c => c.tipo === tipo && c.nome === rule.category);
+                if (found) return found.nome;
+            }
+        }
+    }
+
+    // Fallback para uma categoria existente no banco compatível com o tipo
+    const defaultCat = tipo === 'receita' ? 'Outras Receitas' : 'Outras despesas';
+    const hasDefault = categoriesList.find(c => c.tipo === tipo && c.nome === defaultCat);
+    if (hasDefault) return hasDefault.nome;
+
+    const firstActive = categoriesList.find(c => c.tipo === tipo);
+    return firstActive ? firstActive.nome : 'Geral';
+};
+
 export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean }> = ({ canApprove, isViewOnly }) => {
     const [entries, setEntries] = useState<CashFlowEntry[]>([]);
     const [loading, setLoading] = useState(true);
@@ -80,6 +156,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
     const [stats, setStats] = useState({ totalEntradas: 0, totalSaidas: 0 });
     const [groupsReceita, setGroupsReceita] = useState<CatGroup[]>(FALLBACK_GROUPS);
     const [groupsDespesa, setGroupsDespesa] = useState<CatGroup[]>(FALLBACK_GROUPS);
+    const [flatCategories, setFlatCategories] = useState<any[]>([]);
     const [contacts, setContacts] = useState<Record<string, FinanceContact>>({});
     const [accounts, setAccounts] = useState<FinanceAccount[]>([]);
     const [activeBankInfo, setActiveBankInfo] = useState<FinanceContact | null>(null);
@@ -113,14 +190,14 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
 
     const [activeTab, setActiveTab] = useState<'flow' | 'contacts' | 'accounts' | 'reports' | 'tags'>(isViewOnly ? 'reports' : 'flow');
     const [reportFilters, setReportFilters] = useState({
-        account: 'all',
-        type: 'all' as 'all' | 'Banco' | 'Dinheiro',
+        origem: 'all',
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
         tag: '',
         projeto: '',
         flowType: 'all' as 'all' | 'entrada' | 'saida',
-        categoria: 'all'
+        categoria: 'all',
+        isYtd: false
     });
     const [viewFilters, setViewFilters] = useState({
         month: new Date().getMonth() + 1,
@@ -274,6 +351,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                 .order('nome', { ascending: true });
 
             if (data) {
+                setFlatCategories(data);
                 const buildGroups = (tipo: string): CatGroup[] => {
                     const parents = data.filter(c => c.tipo === tipo && c.parent_id === null);
                     return parents.map(p => ({
@@ -297,9 +375,8 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         
         setLoading(true);
         try {
-            const startDate = `${y}-${String(m).padStart(2, '0')}-01`;
-            const lastDay = new Date(y, m, 0).getDate();
-            const endDate = `${y}-${String(m).padStart(2, '0')}-${lastDay}`;
+            const startDate = `${y}-01-01`;
+            const endDate = `${y}-12-31`;
 
             const { data, error } = await supabase
                 .from('fluxo_caixa')
@@ -313,6 +390,8 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
 
             const totals = (data || []).reduce((acc, curr) => {
                 if (curr.status === 'pendente') return acc;
+                const d = new Date(curr.data_pagamento + 'T12:00:00');
+                if (d.getMonth() + 1 !== m) return acc;
                 if (curr.tipo === 'entrada') acc.totalEntradas += Number(curr.valor);
                 else acc.totalSaidas += Number(curr.valor);
                 return acc;
@@ -378,6 +457,8 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                         }
                     }
 
+                    const usedIds = new Set<string>();
+
                     for (const row of rows) {
                         const getVal = (colNames: string[]) => {
                             const keys = Object.keys(row);
@@ -398,6 +479,8 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                         const valorStr = String(getVal(['valor', 'montante', 'preço', 'total']));
                         const criadoStr = String(getVal(['criado em', 'data', 'pagamento', 'atualizadoem', 'lançado']));
                         const empresaStr = String(getVal(['empres', 'socio', 'visitante', 'cliente', 'fornecedor', 'nome', 'contato']));
+                        const categoriaCsvStr = String(getVal(['categoria', 'classe', 'classificação', 'classificacao', 'natureza', 'grupo', 'plano']));
+                        const idCsvStr = String(getVal(['id', 'código', 'codigo', 'referência', 'referencia', 'nº doc', 'nº documento', 'numero_documento', 'documento', 'transação', 'transacao', 'ref']));
 
                         if (!valorStr && !descStr) continue;
 
@@ -475,9 +558,34 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                         }
                         const valorNum = Math.abs(parseFloat(v) || 0);
 
+                        // Categorização Inteligente
+                        const finalCategory = matchCategory(categoriaCsvStr, descStr || 'Sem descrição', tipo, flatCategories);
+
+                        // Determinação do external_id único
+                        let external_id = idCsvStr ? idCsvStr.trim() : null;
+                        if (external_id) {
+                            if (usedIds.has(external_id)) {
+                                console.warn(`ID explícito duplicado no CSV: ${external_id}. Ignorando linha.`);
+                                continue;
+                            }
+                            usedIds.add(external_id);
+                        } else {
+                            // Assinatura baseada em dados chave se não houver ID explícito
+                            const cleanDescSignature = (descStr || 'sem_descricao').trim().toLowerCase().substring(0, 30).replace(/[^a-z0-9]/g, '_');
+                            const baseId = `${tipo}_${dtVenc || dtPg || 'nodate'}_${valorNum}_${cleanDescSignature}`;
+                            let candidateId = baseId;
+                            let suffix = 1;
+                            while (usedIds.has(candidateId)) {
+                                candidateId = `${baseId}_${suffix}`;
+                                suffix++;
+                            }
+                            external_id = candidateId;
+                            usedIds.add(external_id);
+                        }
+
                         payloads.push({
                             tipo,
-                            categoria: 'Geral',
+                            categoria: finalCategory,
                             valor: valorNum,
                             data_pagamento: dtVenc || dtPg || new Date().toISOString().split('T')[0], // Prioriza vencimento se o usuário quer usar essa data
                             data_vencimento: dtVenc,
@@ -488,7 +596,8 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                             status,
                             data_aprovacao,
                             observacoes: `Importado do sistema anterior. Ref: ${empresaStr}`,
-                            projeto: empresaStr ? empresaStr.substring(0, 50) : null
+                            projeto: empresaStr ? empresaStr.substring(0, 50) : null,
+                            external_id
                         });
                         validCount++;
                     }
@@ -499,26 +608,71 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                         return;
                     }
 
-                    if (!window.confirm(`Planilha lida! Foram encontrados ${validCount} registros. Deseja iniciar a importação para o sistema?`)) {
+                    if (!window.confirm(`Planilha lida! Foram encontrados ${validCount} registros. Deseja iniciar a importação/reconciliação para o sistema?`)) {
                         setIsImportingCsv(false);
                         return;
                     }
 
-                    for (let i = 0; i < payloads.length; i += 50) {
-                        const chunk = payloads.slice(i, i + 50);
-                        const { error } = await supabase.from('fluxo_caixa').insert(chunk);
+                    // --- Mesclagem e Upsert Inteligente ---
+                    const externalIds = payloads.map(p => p.external_id).filter(Boolean);
+                    const existingMap: Record<string, any> = {};
+
+                    if (externalIds.length > 0) {
+                        for (let i = 0; i < externalIds.length; i += 500) {
+                            const chunkIds = externalIds.slice(i, i + 500);
+                            const { data: existingData, error: existingError } = await supabase
+                                .from('fluxo_caixa')
+                                .select('id, external_id, status, data_aprovacao, categoria')
+                                .in('external_id', chunkIds);
+                            
+                            if (existingError) {
+                                console.error('Erro ao buscar transações existentes:', existingError);
+                                throw existingError;
+                            }
+                            if (existingData) {
+                                existingData.forEach(row => {
+                                    existingMap[row.external_id] = row;
+                                });
+                            }
+                        }
+                    }
+
+                    const finalPayloads = payloads.map(payload => {
+                        const existing = existingMap[payload.external_id];
+                        if (existing) {
+                            return {
+                                ...payload,
+                                id: existing.id, // Associa o ID do banco para atualizar via upsert
+                                status: existing.status === 'aprovado' ? 'aprovado' : payload.status,
+                                data_aprovacao: existing.status === 'aprovado' ? existing.data_aprovacao : payload.data_aprovacao,
+                                // Preserva a categoria se já tiver sido alterada de 'Geral' pelo usuário no sistema
+                                categoria: (existing.categoria && existing.categoria !== 'Geral') ? existing.categoria : payload.categoria
+                            };
+                        }
+                        return payload;
+                    });
+
+                    // Gravar os dados em lotes via upsert
+                    let successCount = 0;
+                    for (let i = 0; i < finalPayloads.length; i += 50) {
+                        const chunk = finalPayloads.slice(i, i + 50);
+                        const { error } = await supabase
+                            .from('fluxo_caixa')
+                            .upsert(chunk, { onConflict: 'external_id' });
+                        
                         if (error) {
                             alert('Erro ao importar parte dos dados: ' + error.message);
                             break;
                         }
+                        successCount += chunk.length;
                     }
                     
-                    alert('Importação concluída com sucesso!');
+                    alert(`Importação concluída! ${successCount} lançamentos foram importados ou atualizados com sucesso.`);
                     fetchCashFlow();
                     setActiveTab('flow');
                     
                 } catch (err: any) {
-                    alert('Erro na leitura: ' + err.message);
+                    alert('Erro na leitura/gravação: ' + err.message);
                 } finally {
                     setIsImportingCsv(false);
                     if (e.target) e.target.value = '';
@@ -871,6 +1025,13 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         }
     };
 
+    const visibleEntries = entries.filter(e => {
+        const d = new Date(e.data_pagamento + 'T12:00:00');
+        const matchMonth = d.getMonth() + 1 === viewFilters.month;
+        const matchTipo = viewFilters.tipo === 'all' || e.tipo === viewFilters.tipo;
+        return matchMonth && matchTipo;
+    });
+
     return (
         <div className="space-y-8 pb-20">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 no-print">
@@ -1180,10 +1341,10 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                         </div>
                                     )}
                                     <button 
-                                        onClick={() => exportToExcel(entries, 'todos_lancamentos')}
+                                        onClick={() => exportToExcel(visibleEntries, 'lancamentos_filtrados')}
                                         className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-green-700 border border-green-200 font-bold px-4 py-2 rounded-xl hover:bg-green-50 transition-colors text-xs shadow-sm"
                                     >
-                                        Excel (Tudo)
+                                        Excel (Filtrado)
                                     </button>
                                     <button 
                                         onClick={() => window.print()}
@@ -1201,8 +1362,8 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                                 <input 
                                                     type="checkbox" 
                                                     className="rounded border-gray-300 text-farm-600 focus:ring-farm-500 w-4 h-4 cursor-pointer"
-                                                    checked={selectedIds.length === entries.length && entries.length > 0}
-                                                    onChange={() => handleSelectAll(entries)}
+                                                    checked={selectedIds.length === visibleEntries.length && visibleEntries.length > 0}
+                                                    onChange={() => handleSelectAll(visibleEntries)}
                                                 />
                                             </th>
                                             <th className="px-6 py-4 font-semibold">Data</th>
@@ -1213,9 +1374,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {entries
-                                          .filter(e => viewFilters.tipo === 'all' || e.tipo === viewFilters.tipo)
-                                          .map((entry) => (
+                                        {visibleEntries.map((entry) => (
                                             <tr key={entry.id} className={`hover:bg-gray-50 transition-colors group ${selectedIds.includes(entry.id) ? 'bg-farm-50/50' : ''}`}>
                                                 <td className="px-6 py-5 no-print">
                                                     <input 
@@ -1268,185 +1427,182 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                         </div>
                     )}
                 </>
-            ) : activeTab === 'reports' ? (
-                <div className="space-y-6 animate-fade-in">
-                    <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 pb-6 border-b border-gray-100">
-                            <div>
-                                <h3 className="text-2xl font-bold text-gray-800 font-serif italic">Relatório de Movimentação</h3>
-                                <p className="text-gray-500">Filtragem avançada por banco, caixa ou visão consolidada.</p>
-                            </div>
-                            <div className="flex gap-3 w-full md:w-auto overflow-x-auto no-print">
-                                <button 
-                                    onClick={() => {
-                                        const filtered = entries.filter(e => {
-                                            if (e.status === 'pendente') return false;
-                                            const d = new Date(e.data_pagamento + 'T12:00:00');
-                                            const matchDate = d.getMonth() + 1 === reportFilters.month && d.getFullYear() === reportFilters.year;
-                                            if (!matchDate) return false;
-                                            if (reportFilters.account !== 'all') return e.conta_origem === reportFilters.account;
-                                            if (reportFilters.type !== 'all') return e.meio_pagamento === reportFilters.type;
-                                            if (reportFilters.tag !== '' && e.tags !== reportFilters.tag) return false;
-                                            if (reportFilters.projeto !== '' && e.projeto !== reportFilters.projeto) return false;
-                                            if (reportFilters.flowType !== 'all' && e.tipo !== reportFilters.flowType) return false;
-                                            if (reportFilters.categoria !== 'all' && e.categoria !== reportFilters.categoria) return false;
-                                            return true;
-                                        });
-                                        exportToExcel(filtered, `relatorio_${reportFilters.month}_${reportFilters.year}`);
-                                    }} 
-                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-50 text-green-800 border-2 border-green-100 px-6 py-3 rounded-xl font-bold text-sm hover:bg-green-100 transition-all shadow-md"
-                                >
-                                    📥 Excel
-                                </button>
-                                <button onClick={() => window.print()} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-800 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-black transition-all shadow-lg">
-                                    <IconFileText className="w-4 h-4" /> Imprimir / PDF
-                                </button>
-                            </div>
-                        </div>
+            ) : activeTab === 'reports' ? (() => {
+                const filteredReports = entries.filter(e => {
+                    if (e.status === 'pendente') return false;
+                    const d = new Date(e.data_pagamento + 'T12:00:00');
+                    
+                    if (d.getFullYear() !== reportFilters.year) return false;
+                    
+                    const matchMonth = reportFilters.isYtd
+                        ? (d.getMonth() + 1 <= reportFilters.month)
+                        : (d.getMonth() + 1 === reportFilters.month);
+                    
+                    if (!matchMonth) return false;
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4 mb-8 no-print">
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Origem</label>
-                                <select 
-                                    value={reportFilters.account} 
-                                    onChange={e => setReportFilters({...reportFilters, account: e.target.value, type: e.target.value === 'all' ? 'all' : reportFilters.type})}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
-                                >
-                                    <option value="all">TODAS AS CONTAS</option>
-                                    <optgroup label="Bancos">
-                                        {accounts.filter(a => a.tipo === 'Banco').map(a => <option key={a.id} value={a.nome}>🏦 {a.nome}</option>)}
-                                    </optgroup>
-                                    <optgroup label="Caixa / Dinheiro">
-                                        {accounts.filter(a => a.tipo === 'Dinheiro').map(a => <option key={a.id} value={a.nome}>💵 {a.nome}</option>)}
-                                    </optgroup>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Tipo Consolidado</label>
-                                <select 
-                                    value={reportFilters.type} 
-                                    disabled={reportFilters.account !== 'all'}
-                                    onChange={e => setReportFilters({...reportFilters, type: e.target.value as any})}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200 disabled:opacity-50"
-                                >
-                                    <option value="all">GERAL CONSOLIDADO</option>
-                                    <option value="Banco">APENAS BANCOS 🏦</option>
-                                    <option value="Dinheiro">APENAS DINHEIRO 💵</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Mês</label>
-                                <select 
-                                    value={reportFilters.month} 
-                                    onChange={e => setReportFilters({...reportFilters, month: parseInt(e.target.value)})}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
-                                >
-                                    {Array.from({length: 12}).map((_, i) => (
-                                        <option key={i+1} value={i+1}>{new Date(2000, i, 1).toLocaleDateString('pt-BR', {month: 'long'}).toUpperCase()}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Ano</label>
-                                <select 
-                                    value={reportFilters.year} 
-                                    onChange={e => setReportFilters({...reportFilters, year: parseInt(e.target.value)})}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
-                                >
-                                    {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Projeto</label>
-                                <select 
-                                    value={reportFilters.projeto} 
-                                    onChange={e => setReportFilters({...reportFilters, projeto: e.target.value})}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200 text-amber-800"
-                                >
-                                    <option value="">-- TODOS OS PROJETOS --</option>
-                                    {registeredProjects.map(p => <option key={p.id} value={p.nome}>{p.nome}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Área (Tag)</label>
-                                <select 
-                                    value={reportFilters.tag} 
-                                    onChange={e => setReportFilters({...reportFilters, tag: e.target.value})}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200 text-indigo-800"
-                                >
-                                    <option value="">-- TODAS AS ÁREAS --</option>
-                                    {registeredTags.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Fluxo</label>
-                                <select 
-                                    value={reportFilters.flowType} 
-                                    onChange={e => setReportFilters({...reportFilters, flowType: e.target.value as any})}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
-                                >
-                                    <option value="all">TODOS</option>
-                                    <option value="entrada">RECEITAS</option>
-                                    <option value="saida">DESPESAS</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Classificação</label>
-                                <select 
-                                    value={reportFilters.categoria} 
-                                    onChange={e => setReportFilters({...reportFilters, categoria: e.target.value})}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
-                                >
-                                    <option value="all">TODAS</option>
-                                    <optgroup label="Receitas">
-                                        {groupsReceita.flatMap(g => g.items).sort().map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                    </optgroup>
-                                    <optgroup label="Despesas">
-                                        {groupsDespesa.flatMap(g => g.items).sort().map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                    </optgroup>
-                                </select>
-                            </div>
-                        </div>
+                    if (reportFilters.origem.startsWith('type:')) {
+                        if (e.meio_pagamento !== reportFilters.origem.substring(5)) return false;
+                    } else if (reportFilters.origem.startsWith('account:')) {
+                        if (e.conta_origem !== reportFilters.origem.substring(8)) return false;
+                    }
 
-                        {(() => {
-                                const filtered = entries.filter(e => {
-                                    if (e.status === 'pendente') return false;
-                                    const d = new Date(e.data_pagamento + 'T12:00:00');
-                                    const matchDate = d.getMonth() + 1 === reportFilters.month && d.getFullYear() === reportFilters.year;
-                                    if (!matchDate) return false;
+                    if (reportFilters.tag !== '' && e.tags !== reportFilters.tag) return false;
+                    if (reportFilters.projeto !== '' && e.projeto !== reportFilters.projeto) return false;
+                    if (reportFilters.flowType !== 'all' && e.tipo !== reportFilters.flowType) return false;
+                    if (reportFilters.categoria !== 'all' && e.categoria !== reportFilters.categoria) return false;
+                    return true;
+                });
 
-                                    if (reportFilters.account !== 'all') return e.conta_origem === reportFilters.account;
-                                    if (reportFilters.type !== 'all') return e.meio_pagamento === reportFilters.type;
-                                    if (reportFilters.tag !== '' && e.tags !== reportFilters.tag) return false;
-                                    if (reportFilters.projeto !== '' && e.projeto !== reportFilters.projeto) return false;
-                                    if (reportFilters.flowType !== 'all' && e.tipo !== reportFilters.flowType) return false;
-                                    if (reportFilters.categoria !== 'all' && e.categoria !== reportFilters.categoria) return false;
-                                    return true;
-                                });
+                const tEntrada = filteredReports.reduce((acc, curr) => curr.tipo === 'entrada' ? acc + curr.valor : acc, 0);
+                const tSaida = filteredReports.reduce((acc, curr) => curr.tipo === 'saida' ? acc + curr.valor : acc, 0);
 
-                            const tEntrada = filtered.reduce((acc, curr) => curr.tipo === 'entrada' ? acc + curr.valor : acc, 0);
-                            const tSaida = filtered.reduce((acc, curr) => curr.tipo === 'saida' ? acc + curr.valor : acc, 0);
+                return (
+                    <div className="space-y-6 animate-fade-in">
+                        <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 pb-6 border-b border-gray-100">
+                                <div>
+                                    <h3 className="text-2xl font-bold text-gray-800 font-serif italic">Relatório de Movimentação</h3>
+                                    <p className="text-gray-500">Filtragem avançada por banco, caixa ou visão consolidada.</p>
+                                </div>
+                                <div className="flex gap-3 w-full md:w-auto overflow-x-auto no-print">
+                                    <button 
+                                        onClick={() => exportToExcel(filteredReports, `relatorio_${reportFilters.isYtd ? 'YTD_' : ''}${reportFilters.month}_${reportFilters.year}`)} 
+                                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-50 text-green-800 border-2 border-green-100 px-6 py-3 rounded-xl font-bold text-sm hover:bg-green-100 transition-all shadow-md"
+                                    >
+                                        📥 Excel
+                                    </button>
+                                    <button onClick={() => window.print()} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-800 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-black transition-all shadow-lg">
+                                        <IconFileText className="w-4 h-4" /> Imprimir / PDF
+                                    </button>
+                                </div>
+                            </div>
 
-                            return (
-                                <div className="space-y-6">
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
-                                            <p className="text-[10px] font-black text-green-700 uppercase mb-1 tracking-widest">Entradas no Período</p>
-                                            <p className="text-2xl font-black text-green-800">R$ {tEntrada.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                                        </div>
-                                        <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
-                                            <p className="text-[10px] font-black text-red-700 uppercase mb-1 tracking-widest">Saídas no Período</p>
-                                            <p className="text-2xl font-black text-red-800">R$ {tSaida.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                                        </div>
-                                        <div className="bg-farm-50 p-6 rounded-2xl border border-farm-100">
-                                            <p className="text-[10px] font-black text-farm-700 uppercase mb-1 tracking-widest">Saldo do Período</p>
-                                            <p className="text-2xl font-black text-farm-800">R$ {(tEntrada - tSaida).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                                        </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9 gap-4 mb-8 no-print">
+                                <div className="xl:col-span-2">
+                                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Origem / Conta</label>
+                                    <select 
+                                        value={reportFilters.origem} 
+                                        onChange={e => setReportFilters({...reportFilters, origem: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
+                                    >
+                                        <option value="all">CONSOLIDADO (TODAS)</option>
+                                        <optgroup label="Grupos">
+                                            <option value="type:Banco">APENAS BANCOS 🏦</option>
+                                            <option value="type:Dinheiro">APENAS DINHEIRO 💵</option>
+                                        </optgroup>
+                                        <optgroup label="Contas Específicas">
+                                            {accounts.map(a => (
+                                                <option key={a.id} value={`account:${a.nome}`}>
+                                                    {a.tipo === 'Banco' ? '🏦' : '💵'} {a.nome}
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Mês</label>
+                                    <select 
+                                        value={reportFilters.month} 
+                                        onChange={e => setReportFilters({...reportFilters, month: parseInt(e.target.value)})}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
+                                    >
+                                        {Array.from({length: 12}).map((_, i) => (
+                                            <option key={i+1} value={i+1}>{new Date(2000, i, 1).toLocaleDateString('pt-BR', {month: 'long'}).toUpperCase()}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Ano</label>
+                                    <select 
+                                        value={reportFilters.year} 
+                                        onChange={e => setReportFilters({...reportFilters, year: parseInt(e.target.value)})}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
+                                    >
+                                        {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex items-center pt-6">
+                                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={reportFilters.isYtd} 
+                                            onChange={e => setReportFilters({...reportFilters, isYtd: e.target.checked})}
+                                            className="rounded border-gray-300 text-farm-600 focus:ring-farm-500 w-4 h-4 cursor-pointer"
+                                        />
+                                        <span className="text-xs font-bold text-gray-700">Acumulado (YTD)</span>
+                                    </label>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Projeto</label>
+                                    <select 
+                                        value={reportFilters.projeto} 
+                                        onChange={e => setReportFilters({...reportFilters, projeto: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200 text-amber-800"
+                                    >
+                                        <option value="">-- TODOS OS PROJETOS --</option>
+                                        {registeredProjects.map(p => <option key={p.id} value={p.nome}>{p.nome}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Área (Tag)</label>
+                                    <select 
+                                        value={reportFilters.tag} 
+                                        onChange={e => setReportFilters({...reportFilters, tag: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200 text-indigo-800"
+                                    >
+                                        <option value="">-- TODAS AS ÁREAS --</option>
+                                        {registeredTags.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Fluxo</label>
+                                    <select 
+                                        value={reportFilters.flowType} 
+                                        onChange={e => setReportFilters({...reportFilters, flowType: e.target.value as any})}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
+                                    >
+                                        <option value="all">TODOS</option>
+                                        <option value="entrada">RECEITAS</option>
+                                        <option value="saida">DESPESAS</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Classificação</label>
+                                    <select 
+                                        value={reportFilters.categoria} 
+                                        onChange={e => setReportFilters({...reportFilters, categoria: e.target.value})}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
+                                    >
+                                        <option value="all">TODAS</option>
+                                        <optgroup label="Receitas">
+                                            {groupsReceita.flatMap(g => g.items).sort().map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                        </optgroup>
+                                        <optgroup label="Despesas">
+                                            {groupsDespesa.flatMap(g => g.items).sort().map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                        </optgroup>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
+                                        <p className="text-[10px] font-black text-green-700 uppercase mb-1 tracking-widest">{reportFilters.isYtd ? 'Entradas Acumuladas (YTD)' : 'Entradas no Período'}</p>
+                                        <p className="text-2xl font-black text-green-800">R$ {tEntrada.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
                                     </div>
+                                    <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
+                                        <p className="text-[10px] font-black text-red-700 uppercase mb-1 tracking-widest">{reportFilters.isYtd ? 'Saídas Acumuladas (YTD)' : 'Saídas no Período'}</p>
+                                        <p className="text-2xl font-black text-red-800">R$ {tSaida.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                    </div>
+                                    <div className="bg-farm-50 p-6 rounded-2xl border border-farm-100">
+                                        <p className="text-[10px] font-black text-farm-700 uppercase mb-1 tracking-widest">{reportFilters.isYtd ? 'Saldo Acumulado (YTD)' : 'Saldo do Período'}</p>
+                                        <p className="text-2xl font-black text-farm-800">R$ {(tEntrada - tSaida).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                    </div>
+                                </div>
 
-                                    <div className="bg-gray-50 rounded-2xl overflow-hidden border">
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-xs min-w-[600px]">
+                                <div className="bg-gray-50 rounded-2xl overflow-hidden border">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs min-w-[600px]">
                                             <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
                                                 <tr>
                                                     <th className="px-6 py-5 text-left">Data</th>
@@ -1456,10 +1612,10 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100 bg-white">
-                                                {filtered.length === 0 ? (
+                                                {filteredReports.length === 0 ? (
                                                     <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400 italic">Nenhuma movimentação encontrada para este filtro.</td></tr>
                                                 ) : (
-                                                    filtered.map(e => (
+                                                    filteredReports.map(e => (
                                                         <tr key={e.id} className="hover:bg-gray-50">
                                                             <td className="px-4 py-3 whitespace-nowrap">
                                                                 {new Date(e.data_pagamento + 'T12:00:00').toLocaleDateString('pt-BR')}
@@ -1481,14 +1637,14 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                                 )}
                                             </tbody>
                                         </table>
-                                        </div>
                                     </div>
                                 </div>
-                            );
-                        })()}
+                            </div>
+                        </div>
                     </div>
-                </div>
-            ) : activeTab === 'accounts' ? (
+                );
+            })()
+            : activeTab === 'accounts' ? (
                 <div className="bg-white rounded-3xl shadow-xl border overflow-hidden animate-fade-in">
                     <div className="p-8 border-b flex justify-between items-center bg-gray-50">
                         <div>

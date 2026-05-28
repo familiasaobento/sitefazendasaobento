@@ -9,31 +9,38 @@ interface Message {
     subject: string;
     message: string;
     created_at: string;
+    department?: string;
     profiles?: {
         full_name: string;
     };
 }
 
-export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
+export const ContactPage: React.FC<{
+    userRole: string;
+    canViewMessages: boolean;
+}> = ({ userRole, canViewMessages }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [fetchingMessages, setFetchingMessages] = useState(false);
     const [type, setType] = useState('Sugestão');
+    const [department, setDepartment] = useState('');
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'view' | 'send'>(canViewMessages ? 'view' : 'send');
 
     useEffect(() => {
-        if (isAdmin) {
+        if (canViewMessages) {
             fetchMessages();
         }
-    }, [isAdmin]);
+    }, [canViewMessages]);
 
     const fetchMessages = async () => {
         setFetchingMessages(true);
         try {
-            // Buscamos todas as mensagens e trazemos o nome do sócio da tabela profiles
+            // Buscamos todas as mensagens e trazemos o nome do sócio da tabela profiles.
+            // As políticas de RLS no banco filtrarão os dados automaticamente com base no perfil logado.
             const { data, error } = await supabase
                 .from('contact_messages')
                 .select(`
@@ -44,7 +51,6 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
 
             if (error) throw error;
 
-            // Garantimos que profiles seja tratado corretamente, seja objeto ou array
             const formattedMessages = (data || []).map((msg: any) => ({
                 ...msg,
                 profiles: Array.isArray(msg.profiles) ? msg.profiles[0] : msg.profiles
@@ -90,7 +96,8 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                     user_id: user?.id,
                     type,
                     subject,
-                    message
+                    message,
+                    department: department || null
                 }]);
 
             if (insertError) throw insertError;
@@ -98,6 +105,7 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
             setSubmitted(true);
             setSubject('');
             setMessage('');
+            setDepartment('');
             setTimeout(() => setSubmitted(false), 5000);
         } catch (err: any) {
             console.error('Erro ao enviar mensagem:', err);
@@ -107,15 +115,38 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
         }
     };
 
-    if (isAdmin) {
-        return (
-            <div className="space-y-8">
-                <header>
-                    <h1 className="text-4xl font-bold text-gray-900 font-serif">Mensagens e Sugestões</h1>
-                    <p className="text-gray-500 mt-2 text-lg">Visualize as comunicações enviadas pelos sócios pelo portal.</p>
-                </header>
+    return (
+        <div className="space-y-8">
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-4xl font-bold text-gray-900 font-serif">Contatos e Sugestões</h1>
+                    <p className="text-gray-500 mt-2 text-lg">
+                        {canViewMessages 
+                            ? 'Gerencie as comunicações enviadas pelos sócios e visitantes.'
+                            : 'Envie sua mensagem direta para a administração da fazenda.'}
+                    </p>
+                </div>
+            </header>
 
-                {fetchingMessages ? (
+            {canViewMessages && (
+                <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100 w-full sm:w-fit">
+                    <button
+                        onClick={() => setActiveTab('view')}
+                        className={`flex-1 sm:flex-initial px-6 py-2.5 rounded-lg font-bold text-sm transition-all ${activeTab === 'view' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        Mensagens Recebidas
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('send')}
+                        className={`flex-1 sm:flex-initial px-6 py-2.5 rounded-lg font-bold text-sm transition-all ${activeTab === 'send' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        Enviar Nova Mensagem
+                    </button>
+                </div>
+            )}
+
+            {activeTab === 'view' && canViewMessages ? (
+                fetchingMessages ? (
                     <div className="flex justify-center p-12">
                         <IconLoader className="w-12 h-12 text-farm-700 animate-spin" />
                     </div>
@@ -136,27 +167,40 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                                             </div>
                                             <div>
                                                 <p className="font-bold text-gray-900">{msg.profiles?.full_name || 'Usuário Desconhecido'}</p>
-                                                <div className="flex items-center gap-3 text-xs text-gray-500">
+                                                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 mt-0.5">
                                                     <span className="flex items-center gap-1">
                                                         <IconCalendar className="w-3 h-3" />
                                                         {new Date(msg.created_at).toLocaleString('pt-BR')}
                                                     </span>
-                                                    <span className={`px-2 py-0.5 rounded-full font-medium ${msg.type === 'Elogio' ? 'bg-green-100 text-green-700' :
+                                                    <span className={`px-2 py-0.5 rounded-full font-medium ${
+                                                        msg.type === 'Elogio' ? 'bg-green-100 text-green-700' :
                                                         msg.type === 'Crítica/Reclamação' ? 'bg-red-100 text-red-700' :
-                                                            'bg-blue-100 text-blue-700'
-                                                        }`}>
+                                                        'bg-blue-100 text-blue-700'
+                                                    }`}>
                                                         {msg.type}
                                                     </span>
+                                                    {msg.department && (
+                                                        <span className={`px-2 py-0.5 rounded-full font-bold uppercase tracking-wider text-[9px] ${
+                                                            msg.department === 'financeiro' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
+                                                            msg.department === 'manutencao' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                                                            'bg-teal-100 text-teal-700 border border-teal-200'
+                                                        }`}>
+                                                            {msg.department === 'financeiro' ? 'Financeiro' :
+                                                             msg.department === 'manutencao' ? 'Manutenção' : 'CONSU'}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
-                                        <button
-                                            onClick={() => handleDeleteMessage(msg.id)}
-                                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
-                                            title="Excluir Mensagem"
-                                        >
-                                            <IconTrash className="w-5 h-5" />
-                                        </button>
+                                        {(userRole === 'admin' || userRole === 'site_admin') && (
+                                            <button
+                                                onClick={() => handleDeleteMessage(msg.id)}
+                                                className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
+                                                title="Excluir Mensagem"
+                                            >
+                                                <IconTrash className="w-5 h-5" />
+                                            </button>
+                                        )}
                                     </div>
                                     <h4 className="text-lg font-bold text-gray-800 mb-2">{msg.subject}</h4>
                                     <p className="text-gray-600 whitespace-pre-wrap leading-relaxed bg-gray-50 p-4 rounded-xl border border-gray-100 italic">
@@ -166,94 +210,105 @@ export const ContactPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin }) => {
                             </div>
                         ))}
                     </div>
-                )}
-            </div>
-        );
-    }
-
-    if (submitted) {
-        return (
-            <div className="max-w-2xl mx-auto text-center py-12">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Mensagem Enviada!</h2>
-                <p className="text-gray-500">Obrigado pelo seu contato. Sua sugestão foi registrada com sucesso.</p>
-                <button
-                    onClick={() => setSubmitted(false)}
-                    className="mt-6 text-farm-600 font-bold hover:underline"
-                >
-                    Enviar outra mensagem
-                </button>
-            </div>
-        );
-    }
-
-    return (
-        <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-8 border-b border-gray-100 bg-farm-50">
-                <h2 className="text-2xl font-bold text-farm-900 font-serif">Críticas e Sugestões</h2>
-                <p className="text-gray-600 mt-1">Este canal é direto com a administração da fazenda.</p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="p-8 space-y-6">
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                        {error}
+                )
+            ) : submitted ? (
+                <div className="max-w-2xl mx-auto text-center py-12 bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
                     </div>
-                )}
-
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Tipo de Mensagem</label>
-                    <select
-                        value={type}
-                        onChange={(e) => setType(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none bg-white transition-all"
-                    >
-                        <option>Sugestão</option>
-                        <option>Crítica/Reclamação</option>
-                        <option>Elogio</option>
-                        <option>Outro</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Assunto</label>
-                    <input
-                        type="text"
-                        required
-                        value={subject}
-                        onChange={(e) => setSubject(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none transition-all"
-                        placeholder="Ex: Melhoria na portaria"
-                    />
-                </div>
-
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Mensagem</label>
-                    <textarea
-                        required
-                        rows={6}
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none transition-all resize-none"
-                        placeholder="Descreva detalhadamente sua sugestão ou crítica..."
-                    ></textarea>
-                </div>
-
-                <div className="pt-2">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Mensagem Enviada!</h2>
+                    <p className="text-gray-500">Obrigado pelo seu contato. Sua sugestão foi registrada com sucesso.</p>
                     <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full bg-farm-600 hover:bg-farm-700 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                        onClick={() => setSubmitted(false)}
+                        className="mt-6 text-farm-600 font-bold hover:underline"
                     >
-                        {loading ? 'Enviando...' : 'Enviar Mensagem para Administração'}
+                        Enviar outra mensagem
                     </button>
-                    <p className="text-[10px] text-gray-400 text-center mt-3">
-                        * Sua mensagem será lida pela diretoria e levada em consideração nas próximas reuniões.
-                    </p>
                 </div>
-            </form>
+            ) : (
+                <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="p-8 border-b border-gray-100 bg-farm-50">
+                        <h2 className="text-2xl font-bold text-farm-900 font-serif">Críticas e Sugestões</h2>
+                        <p className="text-gray-600 mt-1">Este canal é direto com a administração da fazenda.</p>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                                {error}
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1.5">Enviar para (Setor de Destino)</label>
+                                <select
+                                    value={department}
+                                    onChange={(e) => setDepartment(e.target.value)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none bg-white transition-all"
+                                    required
+                                >
+                                    <option value="">Selecione o setor...</option>
+                                    <option value="financeiro">Financeiro</option>
+                                    <option value="manutencao">Manutenção</option>
+                                    <option value="consu">CONSU</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1.5">Tipo de Mensagem</label>
+                                <select
+                                    value={type}
+                                    onChange={(e) => setType(e.target.value)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none bg-white transition-all"
+                                >
+                                    <option>Sugestão</option>
+                                    <option>Crítica/Reclamação</option>
+                                    <option>Elogio</option>
+                                    <option>Outro</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1.5">Assunto</label>
+                            <input
+                                type="text"
+                                required
+                                value={subject}
+                                onChange={(e) => setSubject(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none transition-all"
+                                placeholder="Ex: Melhoria na portaria"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1.5">Mensagem</label>
+                            <textarea
+                                required
+                                rows={6}
+                                value={message}
+                                onChange={(e) => setMessage(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-farm-500 outline-none transition-all resize-none font-sans"
+                                placeholder="Descreva detalhadamente sua sugestão ou crítica..."
+                            ></textarea>
+                        </div>
+
+                        <div className="pt-2">
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full bg-farm-600 hover:bg-farm-700 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                            >
+                                {loading ? 'Enviando...' : 'Enviar Mensagem'}
+                            </button>
+                            <p className="text-[10px] text-gray-400 text-center mt-3">
+                                * Sua mensagem será lida pelo setor responsável e levada em consideração.
+                            </p>
+                        </div>
+                    </form>
+                </div>
+            )}
         </div>
     );
 };
