@@ -11,6 +11,34 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
+const parseBrlValue = (val: string | number | undefined | null): number => {
+  if (val === undefined || val === null || val === '') return 0;
+  if (typeof val === 'number') return val;
+  
+  let clean = val.trim();
+  // Remove currency symbol if present
+  clean = clean.replace(/R\$\s*/g, '');
+  
+  // If there's a comma, we assume BRL format: dots are thousands, comma is decimal
+  if (clean.includes(',')) {
+    clean = clean.replace(/\./g, '').replace(',', '.');
+  } else {
+    // If there is no comma but there is a dot, check if it's a thousand separator
+    const dotCount = (clean.match(/\./g) || []).length;
+    if (dotCount > 1) {
+      clean = clean.replace(/\./g, '');
+    } else if (dotCount === 1) {
+      const parts = clean.split('.');
+      if (parts[1].length === 3) {
+        clean = clean.replace(/\./g, '');
+      }
+    }
+  }
+  
+  const parsed = parseFloat(clean);
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 // Colors for the charts (Earthy palette matching site's brand colors: green, blue, amber, purple, rose, orange, teal, cyan)
 const COLORS = [
   '#389f76', // Green (farm brand)
@@ -62,7 +90,7 @@ export const FinancePage: React.FC<{
   const [activeTab, setActiveTab] = useState<'dashboard' | 'budget'>('dashboard');
   const [dbCategories, setDbCategories] = useState<any[]>([]);
   const [budgets, setBudgets] = useState<any[]>([]);
-  const [editingBudgets, setEditingBudgets] = useState<Record<number, Record<number, number>>>({});
+  const [editingBudgets, setEditingBudgets] = useState<Record<number, Record<number, string | number>>>({});
   const [isSavingBudget, setIsSavingBudget] = useState(false);
   const [activeMonths, setActiveMonths] = useState<number[]>([]);
   const [cashFlowRaw, setCashFlowRaw] = useState<any[]>([]);
@@ -193,7 +221,7 @@ export const FinancePage: React.FC<{
 
       // Initialize editing budgets
       if (catData) {
-        const initialEditing: Record<number, Record<number, number>> = {};
+        const initialEditing: Record<number, Record<number, string | number>> = {};
         catData.forEach(c => {
           initialEditing[c.id] = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0, 11: 0, 12: 0 };
         });
@@ -454,7 +482,7 @@ export const FinancePage: React.FC<{
         const categoria_id = parseInt(catIdStr);
         Object.entries(monthsMap).forEach(([mesStr, valor]) => {
           const mes = parseInt(mesStr);
-          const valor_orcado = Number(valor) || 0;
+          const valor_orcado = parseBrlValue(valor);
           upsertData.push({
             ano: parseInt(selectedYear),
             mes,
@@ -1065,7 +1093,7 @@ export const FinancePage: React.FC<{
                   {orderedCategories.map(cat => {
                     const isParent = cat.parent_id === null;
                     const annualTotal = Array.from({ length: 12 }, (_, i) => i + 1)
-                      .reduce((sum, m) => sum + (editingBudgets[cat.id]?.[m] ?? 0), 0);
+                      .reduce((sum, m) => sum + parseBrlValue(editingBudgets[cat.id]?.[m] ?? 0), 0);
 
                     return (
                       <tr 
@@ -1079,11 +1107,10 @@ export const FinancePage: React.FC<{
                           <td key={mes} className="py-2 px-1">
                             {canEditBudget ? (
                               <input
-                                type="number"
-                                step="any"
-                                value={editingBudgets[cat.id]?.[mes] === 0 ? '' : (editingBudgets[cat.id]?.[mes] ?? '')}
+                                type="text"
+                                value={editingBudgets[cat.id]?.[mes] === 0 || editingBudgets[cat.id]?.[mes] === '0' ? '' : (editingBudgets[cat.id]?.[mes] ?? '')}
                                 onChange={(e) => {
-                                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                  const val = e.target.value;
                                   setEditingBudgets(prev => ({
                                     ...prev,
                                     [cat.id]: {
