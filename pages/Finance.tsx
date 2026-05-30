@@ -87,7 +87,14 @@ export const FinancePage: React.FC<{
   const [isSavingClosing, setIsSavingClosing] = useState(false);
   
   // Budget & Tabs States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'budget'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'budget'>(() => {
+    const saved = localStorage.getItem('finance_active_tab');
+    return (saved === 'dashboard' || saved === 'budget') ? saved : 'dashboard';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('finance_active_tab', activeTab);
+  }, [activeTab]);
   const [dbCategories, setDbCategories] = useState<any[]>([]);
   const [budgets, setBudgets] = useState<any[]>([]);
   const [editingBudgets, setEditingBudgets] = useState<Record<number, Record<number, string | number>>>({});
@@ -211,13 +218,25 @@ export const FinancePage: React.FC<{
 
       setDbCategories(catData || []);
 
-      // Fetch budgets for the selected year
-      const { data: budgetData } = await supabase
-        .from('finance_budget')
-        .select('*')
-        .eq('ano', targetYear);
+      // Fetch budgets for the selected year with pagination to avoid 1000 row limits
+      let budgetData: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data } = await supabase
+          .from('finance_budget')
+          .select('*')
+          .eq('ano', targetYear)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        
+        if (data && data.length > 0) {
+          budgetData = [...budgetData, ...data];
+        }
+        if (!data || data.length < pageSize) break;
+        page++;
+      }
 
-      setBudgets(budgetData || []);
+      setBudgets(budgetData);
 
       // Initialize editing budgets
       if (catData) {
@@ -494,11 +513,17 @@ export const FinancePage: React.FC<{
 
       if (upsertData.length === 0) return;
 
-      const { error } = await supabase
-        .from('finance_budget')
-        .upsert(upsertData, { onConflict: 'ano,mes,categoria_id' });
+      // Chunk upsertData to avoid large payload limits
+      const chunkSize = 500;
+      for (let i = 0; i < upsertData.length; i += chunkSize) {
+        const chunk = upsertData.slice(i, i + chunkSize);
+        const { error } = await supabase
+          .from('finance_budget')
+          .upsert(chunk, { onConflict: 'ano,mes,categoria_id' });
 
-      if (error) throw error;
+        if (error) throw error;
+      }
+
       alert('Orçamento salvo com sucesso!');
       await fetchDashboardData();
     } catch (err: any) {
@@ -1057,7 +1082,7 @@ export const FinancePage: React.FC<{
       ) : (
         /* Orçamento Mensal Grid */
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col min-w-max">
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h3 className="text-xl font-bold text-gray-800 font-serif">Planilha de Orçamento Mensal</h3>
@@ -1068,7 +1093,7 @@ export const FinancePage: React.FC<{
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-visible">
               <table className="w-full min-w-[1200px] border-collapse text-left">
                 <thead>
                   <tr className="border-b border-gray-100 text-gray-400 text-[10px] font-bold uppercase tracking-wider">
@@ -1092,20 +1117,39 @@ export const FinancePage: React.FC<{
                 <tbody className="divide-y divide-gray-50">
                   {orderedCategories.map(cat => {
                     const isParent = cat.parent_id === null;
+                    const childrenIds = dbCategories.filter(c => c.parent_id === cat.id).map(c => c.id);
+                    const isGroupSum = isParent && childrenIds.length > 0;
+
                     const annualTotal = Array.from({ length: 12 }, (_, i) => i + 1)
-                      .reduce((sum, m) => sum + parseBrlValue(editingBudgets[cat.id]?.[m] ?? 0), 0);
+                      .reduce((sum, m) => {
+                         if (isGroupSum) {
+                           return sum + childrenIds.reduce((cSum, childId) => cSum + parseBrlValue(editingBudgets[childId]?.[m] ?? 0), 0);
+                         }
+                         return sum + parseBrlValue(editingBudgets[cat.id]?.[m] ?? 0);
+                      }, 0);
 
                     return (
                       <tr 
                         key={cat.id} 
                         className={`hover:bg-gray-50/50 transition-colors ${isParent ? 'bg-gray-50/40 font-bold' : ''}`}
                       >
-                        <td className={`py-3 pr-4 sticky left-0 z-10 border-r border-gray-100 ${isParent ? 'bg-[#fcfdfd]' : 'bg-white'} ${isParent ? 'pl-2 text-gray-800' : 'pl-6 text-gray-600 text-xs'}`}>
+                        <td className={`py-3 pr-4 sticky left-0 z-10 border-r border-gray-100 ${isParent ? 'bg-[#fcfdfd]' : 'bg-white'} ${isParent ? 'pl-2 text-gray-900 text-sm font-bold' : 'pl-6 text-gray-600 text-xs'}`}>
                           {cat.nome}
                         </td>
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map(mes => (
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(mes => {
+                          const childrenIds = dbCategories.filter(c => c.parent_id === cat.id).map(c => c.id);
+                          const isGroupSum = isParent && childrenIds.length > 0;
+                          
+                          let displayValue = 0;
+                          if (isGroupSum) {
+                             displayValue = childrenIds.reduce((sum, childId) => sum + parseBrlValue(editingBudgets[childId]?.[mes] ?? 0), 0);
+                          } else {
+                             displayValue = parseBrlValue(editingBudgets[cat.id]?.[mes] ?? 0);
+                          }
+
+                          return (
                           <td key={mes} className="py-2 px-1">
-                            {canEditBudget ? (
+                            {canEditBudget && !isGroupSum ? (
                               <input
                                 type="text"
                                 value={editingBudgets[cat.id]?.[mes] === 0 || editingBudgets[cat.id]?.[mes] === '0' ? '' : (editingBudgets[cat.id]?.[mes] ?? '')}
@@ -1123,37 +1167,62 @@ export const FinancePage: React.FC<{
                                 placeholder="0"
                               />
                             ) : (
-                              <span className="text-xs text-gray-600 block text-right font-medium font-mono">
-                                {formatCurrency(editingBudgets[cat.id]?.[mes] ?? 0)}
+                              <span className={`block text-right font-mono text-gray-800 ${isParent ? 'text-sm font-bold' : 'text-xs font-medium'}`}>
+                                {formatCurrency(displayValue)}
                               </span>
                             )}
                           </td>
-                        ))}
-                        <td className="py-2 pl-2 pr-4 text-right text-xs font-bold text-gray-700 font-mono">
+                        )})}
+                        <td className={`py-2 pl-2 pr-4 text-right font-bold font-mono text-gray-800 ${isParent ? 'text-sm' : 'text-xs'}`}>
                           {formatCurrency(annualTotal)}
                         </td>
                         {canEditBudget && (
                           <td className="py-2 px-2 text-center">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const janVal = editingBudgets[cat.id]?.[1] ?? 0;
-                                setEditingBudgets(prev => {
-                                  const updatedMonths = { ...prev[cat.id] };
-                                  for (let m = 2; m <= 12; m++) {
-                                    updatedMonths[m] = janVal;
-                                  }
-                                  return {
-                                    ...prev,
-                                    [cat.id]: updatedMonths
-                                  };
-                                });
-                              }}
-                              title="Replicar valor de Janeiro para os outros meses"
-                              className="px-2 py-1 text-[10px] font-bold text-farm-600 hover:text-farm-700 hover:bg-farm-50 rounded transition-colors cursor-pointer border border-farm-200"
-                            >
-                              Replicar
-                            </button>
+                            {!isGroupSum && (
+                              <div className="flex gap-1.5 justify-center">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const janVal = editingBudgets[cat.id]?.[1] ?? 0;
+                                    setEditingBudgets(prev => {
+                                      const updatedMonths = { ...prev[cat.id] };
+                                      for (let m = 2; m <= 12; m++) {
+                                        updatedMonths[m] = janVal;
+                                      }
+                                      return {
+                                        ...prev,
+                                        [cat.id]: updatedMonths
+                                      };
+                                    });
+                                  }}
+                                  title="Replicar valor de Janeiro para os outros meses"
+                                  className="px-2 py-1 text-[10px] font-bold text-farm-600 hover:text-farm-700 hover:bg-farm-50 rounded transition-colors cursor-pointer border border-farm-200"
+                                >
+                                  Replicar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (confirm(`Deseja limpar todos os meses da categoria "${cat.nome}"?`)) {
+                                      setEditingBudgets(prev => {
+                                        const updatedMonths = { ...prev[cat.id] };
+                                        for (let m = 1; m <= 12; m++) {
+                                          updatedMonths[m] = '';
+                                        }
+                                        return {
+                                          ...prev,
+                                          [cat.id]: updatedMonths
+                                        };
+                                      });
+                                    }
+                                  }}
+                                  title="Limpar todos os meses desta categoria"
+                                  className="px-2 py-1 text-[10px] font-bold text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors cursor-pointer border border-red-200"
+                                >
+                                  Limpar
+                                </button>
+                              </div>
+                            )}
                           </td>
                         )}
                       </tr>
@@ -1165,14 +1234,34 @@ export const FinancePage: React.FC<{
           </div>
 
           {canEditBudget && (
-            <div className="flex flex-wrap gap-4 justify-between items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-              <button
-                type="button"
-                onClick={handleCopyFromPreviousYear}
-                className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl border border-gray-200 transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                📋 Copiar do Ano Anterior
-              </button>
+            <div className="flex flex-wrap gap-4 justify-between items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm min-w-max">
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleCopyFromPreviousYear}
+                  className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl border border-gray-200 transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  📋 Copiar do Ano Anterior
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Deseja limpar todos os valores de orçamento exibidos nesta tela? Atenção: isso não salvará no banco de dados automaticamente, você precisará clicar em "Salvar Orçamento" para gravar.')) {
+                      setEditingBudgets(prev => {
+                        const cleared = { ...prev };
+                        Object.keys(cleared).forEach(catIdStr => {
+                          const catId = parseInt(catIdStr);
+                          cleared[catId] = { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '', 9: '', 10: '', 11: '', 12: '' };
+                        });
+                        return cleared;
+                      });
+                    }
+                  }}
+                  className="px-5 py-2.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-xl border border-red-200 transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  🗑️ Limpar Todos os Valores
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={handleSaveBudget}

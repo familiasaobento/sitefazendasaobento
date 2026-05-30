@@ -417,7 +417,7 @@ const App: React.FC = () => {
 
   const checkUserInfo = async (userId: string) => {
     if (!userId) return;
-    setLoading(true);
+    if (!userRole) setLoading(true);
     try {
       // Try to fetch the profile. We use limit(1) instead of single() 
       // to avoid throwing an error if nothing is found (it just returns an empty array).
@@ -593,7 +593,7 @@ const App: React.FC = () => {
       isVisitor={isVisitor}
       userName={userName}
       userRole={userRole || 'member'}
-      fullWidth={currentPage === Page.RESERVATIONS || currentPage === Page.ACTIVE_STAYS || currentPage === Page.ADMIN_USERS || currentPage === Page.MEMBERS || currentPage === Page.VISITORS || currentPage === Page.HARDWARE || currentPage === Page.TIME_TRACKING || currentPage === Page.EMPLOYEES}
+      fullWidth={currentPage === Page.RESERVATIONS || currentPage === Page.ACTIVE_STAYS || currentPage === Page.ADMIN_USERS || currentPage === Page.MEMBERS || currentPage === Page.VISITORS || currentPage === Page.HARDWARE || currentPage === Page.TIME_TRACKING || currentPage === Page.EMPLOYEES || currentPage === Page.FINANCE}
     >
       {renderContent()}
       {showPasswordSetup && <PasswordSetupModal onComplete={() => setShowPasswordSetup(false)} />}
