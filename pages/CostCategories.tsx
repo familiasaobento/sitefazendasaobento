@@ -16,6 +16,9 @@ const IconCheck = ({ className }: { className?: string }) => (
 const IconX = ({ className }: { className?: string }) => (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
 );
+const IconGrip = ({ className }: { className?: string }) => (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M8.5 7a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 6.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 6.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm7-13a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 6.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 6.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" /></svg>
+);
 
 interface Category {
     id: number;
@@ -41,6 +44,15 @@ interface ParentCardProps {
     handleToggleChildActive: (child: Category) => void;
     setConfirmDeleteId: (id: number | null) => void;
     openNewChild: (parent: Category) => void;
+    
+    // Drag and drop props
+    index: number;
+    onParentDragStart: (index: number, tipo: 'receita' | 'despesa') => void;
+    onParentDragOver: (e: React.DragEvent) => void;
+    onParentDrop: (index: number, tipo: 'receita' | 'despesa') => void;
+    onChildDragStart: (parentId: number, index: number) => void;
+    onChildDragOver: (e: React.DragEvent) => void;
+    onChildDrop: (parentId: number, index: number) => void;
 }
 
 const ParentCard: React.FC<ParentCardProps> = ({
@@ -54,15 +66,35 @@ const ParentCard: React.FC<ParentCardProps> = ({
     handleToggleActive,
     handleToggleChildActive,
     setConfirmDeleteId,
-    openNewChild
+    openNewChild,
+    
+    index,
+    onParentDragStart,
+    onParentDragOver,
+    onParentDrop,
+    onChildDragStart,
+    onChildDragOver,
+    onChildDrop
 }) => {
     const activeChildren = group.children?.filter(c => c.ativo).length ?? 0;
     const totalChildren = group.children?.length ?? 0;
 
     return (
-        <div className={`bg-white rounded-2xl border overflow-hidden shadow-sm ${group.ativo ? 'border-gray-100' : 'border-gray-100 opacity-60'}`}>
+        <div 
+            draggable={editingId === null}
+            onDragStart={() => onParentDragStart(index, group.tipo)}
+            onDragOver={onParentDragOver}
+            onDrop={() => onParentDrop(index, group.tipo)}
+            className={`bg-white rounded-2xl border overflow-hidden shadow-sm transition-all ${group.ativo ? 'border-gray-100' : 'border-gray-100 opacity-60'}`}
+        >
             {/* Parent Header */}
             <div className={`bg-gradient-to-r ${colors.header} px-5 py-4 border-b flex items-center gap-3 group`}>
+                {editingId === null && (
+                    <div className="cursor-grab text-gray-300 hover:text-gray-500 mr-1 flex-shrink-0" title="Arraste para reordenar o grupo">
+                        <IconGrip className="w-4 h-4" />
+                    </div>
+                )}
+                
                 <div className={`w-3 h-3 rounded-full flex-shrink-0 ${colors.dot} ${!group.ativo ? 'opacity-30' : ''}`} />
 
                 {editingId === group.id ? (
@@ -115,8 +147,21 @@ const ParentCard: React.FC<ParentCardProps> = ({
             {/* Children list */}
             <div className="divide-y divide-gray-50">
                 {(group.children ?? []).map((child, idx) => (
-                    <div key={child.id} className={`flex items-center gap-3 px-5 py-3 group hover:bg-gray-50 transition-colors border-l-4 ${colors.accent} ${!child.ativo ? 'opacity-50' : ''}`}>
-                        <span className="text-xs text-gray-300 font-mono w-12 flex-shrink-0">
+                    <div 
+                        key={child.id} 
+                        draggable={editingId === null}
+                        onDragStart={() => onChildDragStart(group.id, idx)}
+                        onDragOver={onChildDragOver}
+                        onDrop={() => onChildDrop(group.id, idx)}
+                        className={`flex items-center gap-3 px-5 py-3 group hover:bg-gray-50 transition-colors border-l-4 ${colors.accent} ${!child.ativo ? 'opacity-50' : ''}`}
+                    >
+                        {editingId === null && (
+                            <div className="cursor-grab text-gray-200 hover:text-gray-400 mr-1 flex-shrink-0" title="Arraste para reordenar a subcategoria">
+                                <IconGrip className="w-3.5 h-3.5" />
+                            </div>
+                        )}
+
+                        <span className="text-xs text-gray-300 font-mono w-8 flex-shrink-0">
                             {String(idx + 1).padStart(2, '0')}
                         </span>
 
@@ -182,6 +227,98 @@ export const CostCategoriesPage: React.FC = () => {
 
     // Delete confirm
     const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+    // Drag and drop states
+    const [draggedParentIndex, setDraggedParentIndex] = useState<number | null>(null);
+    const [draggedParentType, setDraggedParentType] = useState<'receita' | 'despesa' | null>(null);
+    const [draggedChildIndex, setDraggedChildIndex] = useState<number | null>(null);
+    const [draggedChildParentId, setDraggedChildParentId] = useState<number | null>(null);
+
+    // Drag handlers for parents
+    const handleParentDragStart = (index: number, tipo: 'receita' | 'despesa') => {
+        setDraggedParentIndex(index);
+        setDraggedParentType(tipo);
+    };
+
+    const handleParentDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+    };
+
+    const handleParentDrop = async (dropIndex: number, tipo: 'receita' | 'despesa') => {
+        if (draggedParentIndex === null || draggedParentType !== tipo || draggedParentIndex === dropIndex) return;
+
+        const list = tipo === 'receita' ? receitas : despesas;
+        const reorderedList = Array.from(list);
+        const [draggedItem] = reorderedList.splice(draggedParentIndex, 1);
+        reorderedList.splice(dropIndex, 0, draggedItem);
+
+        try {
+            const updates = reorderedList.map((item, idx) => ({
+                id: item.id,
+                nome: item.nome,
+                tipo: item.tipo,
+                ativo: item.ativo,
+                parent_id: item.parent_id,
+                display_order: idx + 1
+            }));
+
+            const { error } = await supabase
+                .from('categorias_financeiras')
+                .upsert(updates);
+
+            if (error) throw error;
+            fetchCategories();
+        } catch (err: any) {
+            alert('Erro ao reordenar grupo: ' + err.message);
+        } finally {
+            setDraggedParentIndex(null);
+            setDraggedParentType(null);
+        }
+    };
+
+    // Drag handlers for children
+    const handleChildDragStart = (parentId: number, index: number) => {
+        setDraggedChildParentId(parentId);
+        setDraggedChildIndex(index);
+    };
+
+    const handleChildDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+    };
+
+    const handleChildDrop = async (parentId: number, dropIndex: number) => {
+        if (draggedChildIndex === null || draggedChildParentId !== parentId || draggedChildIndex === dropIndex) return;
+
+        const parent = categories.find(c => c.id === parentId);
+        if (!parent || !parent.children) return;
+
+        const reorderedChildren = Array.from(parent.children);
+        const [draggedItem] = reorderedChildren.splice(draggedChildIndex, 1);
+        reorderedChildren.splice(dropIndex, 0, draggedItem);
+
+        try {
+            const updates = reorderedChildren.map((item, idx) => ({
+                id: item.id,
+                nome: item.nome,
+                tipo: item.tipo,
+                ativo: item.ativo,
+                parent_id: item.parent_id,
+                display_order: idx + 1
+            }));
+
+            const { error } = await supabase
+                .from('categorias_financeiras')
+                .upsert(updates);
+
+            if (error) throw error;
+            fetchCategories();
+        } catch (err: any) {
+            alert('Erro ao reordenar subcategoria: ' + err.message);
+        } finally {
+            setDraggedChildIndex(null);
+            setDraggedChildParentId(null);
+        }
+    };
 
     const fetchCategories = useCallback(async () => {
         setLoading(true);
@@ -364,7 +501,7 @@ export const CostCategoriesPage: React.FC = () => {
                             </button>
                         </div>
                         <div className="space-y-4">
-                            {receitas.map(g => (
+                            {receitas.map((g, idx) => (
                                 <ParentCard
                                     key={g.id}
                                     group={g}
@@ -378,6 +515,14 @@ export const CostCategoriesPage: React.FC = () => {
                                     handleToggleChildActive={handleToggleChildActive}
                                     setConfirmDeleteId={setConfirmDeleteId}
                                     openNewChild={openNewChild}
+                                    
+                                    index={idx}
+                                    onParentDragStart={handleParentDragStart}
+                                    onParentDragOver={handleParentDragOver}
+                                    onParentDrop={handleParentDrop}
+                                    onChildDragStart={handleChildDragStart}
+                                    onChildDragOver={handleChildDragOver}
+                                    onChildDrop={handleChildDrop}
                                 />
                             ))}
                             {receitas.length === 0 && (
@@ -406,7 +551,7 @@ export const CostCategoriesPage: React.FC = () => {
                             </button>
                         </div>
                         <div className="space-y-4">
-                            {despesas.map(g => (
+                            {despesas.map((g, idx) => (
                                 <ParentCard
                                     key={g.id}
                                     group={g}
@@ -420,6 +565,14 @@ export const CostCategoriesPage: React.FC = () => {
                                     handleToggleChildActive={handleToggleChildActive}
                                     setConfirmDeleteId={setConfirmDeleteId}
                                     openNewChild={openNewChild}
+                                    
+                                    index={idx}
+                                    onParentDragStart={handleParentDragStart}
+                                    onParentDragOver={handleParentDragOver}
+                                    onParentDrop={handleParentDrop}
+                                    onChildDragStart={handleChildDragStart}
+                                    onChildDragOver={handleChildDragOver}
+                                    onChildDrop={handleChildDrop}
                                 />
                             ))}
                             {despesas.length === 0 && (

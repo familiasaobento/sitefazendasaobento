@@ -87,9 +87,11 @@ export const FinancePage: React.FC<{
   const [isSavingClosing, setIsSavingClosing] = useState(false);
   
   // Budget & Tabs States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'budget'>(() => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'approved_budget' | 'draft_budget'>(() => {
     const saved = localStorage.getItem('finance_active_tab');
-    return (saved === 'dashboard' || saved === 'budget') ? saved : 'dashboard';
+    if (saved === 'dashboard' || saved === 'approved_budget' || saved === 'draft_budget') return saved;
+    if (saved === 'budget') return 'approved_budget';
+    return 'dashboard';
   });
 
   useEffect(() => {
@@ -102,6 +104,11 @@ export const FinancePage: React.FC<{
   const [activeMonths, setActiveMonths] = useState<number[]>([]);
   const [cashFlowRaw, setCashFlowRaw] = useState<any[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Record<number, boolean>>({});
+  
+  // Budget Approval States
+  const [isApproved, setIsApproved] = useState(false);
+  const [approvedInfo, setApprovedInfo] = useState<any>(null);
+  const [isApproving, setIsApproving] = useState(false);
 
   // Data States
   const [kpis, setKpis] = useState({
@@ -139,6 +146,21 @@ export const FinancePage: React.FC<{
 
       const targetYear = parseInt(selectedYear);
       const isCurrentYear = targetYear === now.getFullYear();
+
+      // Fetch budget approval status
+      const { data: statusData } = await supabase
+        .from('finance_budget_status')
+        .select('*, profiles(full_name)')
+        .eq('ano', targetYear)
+        .limit(1);
+
+      if (statusData && statusData.length > 0) {
+        setIsApproved(statusData[0].aprovado);
+        setApprovedInfo(statusData[0]);
+      } else {
+        setIsApproved(false);
+        setApprovedInfo(null);
+      }
 
       if (timeRange === 'month') {
         if (isCurrentYear) {
@@ -451,7 +473,7 @@ export const FinancePage: React.FC<{
     const getBudgetValue = (catIds: number[]) => {
       return budgets
         .filter(b => catIds.includes(b.categoria_id) && activeMonths.includes(b.mes))
-        .reduce((sum, b) => sum + Number(b.valor_orcado), 0);
+        .reduce((sum, b) => sum + Number(b.valor_aprovado ?? 0), 0);
     };
 
     return dbCategories.map(cat => {
@@ -483,14 +505,65 @@ export const FinancePage: React.FC<{
   const activeBudgetR = useMemo(() => {
     return budgets
       .filter(b => activeMonths.includes(b.mes) && dbCategories.find(c => c.id === b.categoria_id)?.tipo === 'receita')
-      .reduce((sum, b) => sum + Number(b.valor_orcado), 0);
+      .reduce((sum, b) => sum + Number(b.valor_aprovado ?? 0), 0);
   }, [budgets, activeMonths, dbCategories]);
 
   const activeBudgetD = useMemo(() => {
     return budgets
       .filter(b => activeMonths.includes(b.mes) && dbCategories.find(c => c.id === b.categoria_id)?.tipo === 'despesa')
-      .reduce((sum, b) => sum + Number(b.valor_orcado), 0);
+      .reduce((sum, b) => sum + Number(b.valor_aprovado ?? 0), 0);
   }, [budgets, activeMonths, dbCategories]);
+
+  // Memoized budget totals for the selected year
+  const budgetTotals = useMemo(() => {
+    let totalReceita = 0;
+    let totalDespesa = 0;
+
+    dbCategories.forEach(cat => {
+      const isParent = cat.parent_id === null;
+      const childrenIds = dbCategories.filter(c => c.parent_id === cat.id).map(c => c.id);
+      const isGroupSum = isParent && childrenIds.length > 0;
+
+      if (!isGroupSum) {
+        for (let m = 1; m <= 12; m++) {
+          const val = parseBrlValue(editingBudgets[cat.id]?.[m] ?? 0);
+          if (cat.tipo === 'receita') {
+            totalReceita += val;
+          } else if (cat.tipo === 'despesa') {
+            totalDespesa += val;
+          }
+        }
+      }
+    });
+
+    return { totalReceita, totalDespesa };
+  }, [dbCategories, editingBudgets]);
+
+  // Memoized approved budget totals for the selected year
+  const approvedBudgetTotals = useMemo(() => {
+    let totalReceita = 0;
+    let totalDespesa = 0;
+
+    dbCategories.forEach(cat => {
+      const isParent = cat.parent_id === null;
+      const childrenIds = dbCategories.filter(c => c.parent_id === cat.id).map(c => c.id);
+      const isGroupSum = isParent && childrenIds.length > 0;
+
+      if (!isGroupSum) {
+        for (let m = 1; m <= 12; m++) {
+          const record = budgets.find(b => b.categoria_id === cat.id && b.mes === m);
+          const val = record ? Number(record.valor_aprovado ?? 0) : 0;
+          if (cat.tipo === 'receita') {
+            totalReceita += val;
+          } else if (cat.tipo === 'despesa') {
+            totalDespesa += val;
+          }
+        }
+      }
+    });
+
+    return { totalReceita, totalDespesa };
+  }, [dbCategories, budgets]);
 
   // Save budget
   const handleSaveBudget = async () => {
@@ -534,6 +607,63 @@ export const FinancePage: React.FC<{
     }
   };
 
+  // Approve and lock budget
+  const handleApproveBudget = async () => {
+    if (!confirm(`Deseja realmente aprovar e consolidar o orçamento para o ano de ${selectedYear}? Uma vez aprovado, este passará a ser o oficial da comparação no Dashboard e não poderá ser alterado.`)) {
+      return;
+    }
+    setIsApproving(true);
+    try {
+      const upsertData: any[] = [];
+      Object.entries(editingBudgets).forEach(([catIdStr, monthsMap]) => {
+        const categoria_id = parseInt(catIdStr);
+        Object.entries(monthsMap).forEach(([mesStr, valor]) => {
+          const mes = parseInt(mesStr);
+          const valor_orcado = parseBrlValue(valor);
+          upsertData.push({
+            ano: parseInt(selectedYear),
+            mes,
+            categoria_id,
+            valor_orcado,
+            valor_aprovado: valor_orcado
+          });
+        });
+      });
+
+      if (upsertData.length > 0) {
+        const chunkSize = 500;
+        for (let i = 0; i < upsertData.length; i += chunkSize) {
+          const chunk = upsertData.slice(i, i + chunkSize);
+          const { error } = await supabase
+            .from('finance_budget')
+            .upsert(chunk, { onConflict: 'ano,mes,categoria_id' });
+
+          if (error) throw error;
+        }
+      }
+
+      const { data: user } = await supabase.auth.getUser();
+      const { error: statusError } = await supabase
+        .from('finance_budget_status')
+        .upsert({
+          ano: parseInt(selectedYear),
+          aprovado: true,
+          aprovado_em: new Date().toISOString(),
+          aprovado_por: user.user?.id
+        }, { onConflict: 'ano' });
+
+      if (statusError) throw statusError;
+
+      alert('Orçamento aprovado e consolidado com sucesso!');
+      await fetchDashboardData();
+    } catch (err: any) {
+      console.error('Erro ao aprovar orçamento:', err);
+      alert('Erro ao aprovar orçamento: ' + err.message);
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
   // Copy from previous year
   const handleCopyFromPreviousYear = async () => {
     try {
@@ -565,15 +695,27 @@ export const FinancePage: React.FC<{
     }
   };
 
-  // Flattened & sorted categories for the spreadsheet
+  // Flattened & sorted categories for the spreadsheet (grouped by tipo: receitas first, then despesas)
   const orderedCategories = useMemo(() => {
-    const parents = dbCategories.filter(c => c.parent_id === null);
+    const parentReceitas = dbCategories.filter(c => c.parent_id === null && c.tipo === 'receita');
+    const parentDespesas = dbCategories.filter(c => c.parent_id === null && c.tipo === 'despesa');
+    
     const result: any[] = [];
-    parents.forEach(p => {
+    
+    // Process Receitas first
+    parentReceitas.forEach(p => {
       result.push(p);
       const children = dbCategories.filter(c => c.parent_id === p.id);
       result.push(...children);
     });
+    
+    // Process Despesas second
+    parentDespesas.forEach(p => {
+      result.push(p);
+      const children = dbCategories.filter(c => c.parent_id === p.id);
+      result.push(...children);
+    });
+    
     return result;
   }, [dbCategories]);
 
@@ -699,22 +841,28 @@ export const FinancePage: React.FC<{
       </div>
 
       {/* Tab Switcher */}
-      <div className="flex border-b border-gray-200 mt-6 mb-4">
+      <div className="flex border-b border-gray-200 mt-6 mb-4 overflow-x-auto">
         <button
           onClick={() => setActiveTab('dashboard')}
-          className={`px-6 py-3 text-sm font-bold border-b-2 transition-all ${activeTab === 'dashboard' ? 'border-farm-600 text-farm-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+          className={`px-6 py-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'border-farm-600 text-farm-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
         >
           Painel Geral
         </button>
         <button
-          onClick={() => setActiveTab('budget')}
-          className={`px-6 py-3 text-sm font-bold border-b-2 transition-all ${activeTab === 'budget' ? 'border-farm-600 text-farm-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+          onClick={() => setActiveTab('approved_budget')}
+          className={`px-6 py-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'approved_budget' ? 'border-farm-600 text-farm-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
         >
-          Orçamento Mensal
+          Orçamento Aprovado
+        </button>
+        <button
+          onClick={() => setActiveTab('draft_budget')}
+          className={`px-6 py-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'draft_budget' ? 'border-farm-600 text-farm-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+        >
+          Elaboração de Orçamento
         </button>
       </div>
 
-      {activeTab === 'dashboard' ? (
+      {activeTab === 'dashboard' && (
         <>
           {/* KPI Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1079,17 +1227,69 @@ export const FinancePage: React.FC<{
             </div>
           </div>
         </>
-      ) : (
-        /* Orçamento Mensal Grid */
+      )}
+      {activeTab === 'approved_budget' && (
         <div className="space-y-6">
+          {isApproved && approvedInfo && (
+            <div className="bg-green-50 text-green-800 p-4 rounded-3xl border border-green-100 flex items-center gap-3 text-sm">
+              <span className="text-xl">✅</span>
+              <div>
+                <strong>Orçamento Oficial Consolidado.</strong> Aprovado em {new Date(approvedInfo.aprovado_em).toLocaleDateString('pt-BR')} {approvedInfo.profiles?.full_name ? `por ${approvedInfo.profiles.full_name}` : ''}.
+              </div>
+            </div>
+          )}
+          {!isApproved && (
+            <div className="bg-amber-50 text-amber-800 p-4 rounded-3xl border border-amber-100 flex items-center gap-3 text-sm">
+              <span className="text-xl">⚠️</span>
+              <div>
+                <strong>Orçamento Oficial Pendente.</strong> O orçamento para o ano de {selectedYear} ainda não foi aprovado. Acesse a aba <strong>Elaboração de Orçamento</strong> para preencher e realizar a aprovação.
+              </div>
+            </div>
+          )}
+
+          {/* Cards de Resumo do Orçamento Aprovado */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-4">
+                <div className="bg-farm-50 p-3 rounded-2xl text-farm-700 text-2xl">
+                  📈
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Total de Receitas Aprovadas</p>
+                  <h4 className="text-2xl font-black text-gray-800">{formatCurrency(approvedBudgetTotals.totalReceita)}</h4>
+                  <p className="text-gray-400 text-[10px] mt-1 italic">Meta anual oficial para {selectedYear}</p>
+                </div>
+              </div>
+              <div className="text-[10px] bg-farm-50 text-farm-700 px-2.5 py-1 rounded-full font-bold border border-farm-100">
+                RECEITAS
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-4">
+                <div className="bg-red-50 p-3 rounded-2xl text-red-700 text-2xl">
+                  📉
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Total de Despesas Aprovadas</p>
+                  <h4 className="text-2xl font-black text-gray-800">{formatCurrency(approvedBudgetTotals.totalDespesa)}</h4>
+                  <p className="text-gray-400 text-[10px] mt-1 italic">Limite anual oficial para {selectedYear}</p>
+                </div>
+              </div>
+              <div className="text-[10px] bg-red-50 text-red-700 px-2.5 py-1 rounded-full font-bold border border-red-100">
+                DESPESAS
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col min-w-max">
             <div className="flex justify-between items-center mb-6">
               <div>
-                <h3 className="text-xl font-bold text-gray-800 font-serif">Planilha de Orçamento Mensal</h3>
-                <p className="text-gray-500 text-xs mt-1">Preencha as metas mensais para o ano de {selectedYear}.</p>
+                <h3 className="text-xl font-bold text-gray-800 font-serif">Planilha de Orçamento Aprovado</h3>
+                <p className="text-gray-500 text-xs mt-1">Valores oficiais e consolidados para o ano de {selectedYear}.</p>
               </div>
               <div className="text-xs font-semibold text-gray-400">
-                {canEditBudget ? '✍️ Modo de Edição Habilitado' : '👁️ Modo Somente Leitura'}
+                🔒 Somente Leitura
               </div>
             </div>
 
@@ -1111,7 +1311,143 @@ export const FinancePage: React.FC<{
                     <th className="py-3 px-2 text-right">Nov</th>
                     <th className="py-3 px-2 text-right">Dez</th>
                     <th className="py-3 pl-2 pr-4 text-right">Total</th>
-                    {canEditBudget && <th className="py-3 px-2 text-center w-24">Ações</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {orderedCategories.map(cat => {
+                    const isParent = cat.parent_id === null;
+                    const childrenIds = dbCategories.filter(c => c.parent_id === cat.id).map(c => c.id);
+                    const isGroupSum = isParent && childrenIds.length > 0;
+
+                    const annualTotal = Array.from({ length: 12 }, (_, i) => i + 1)
+                      .reduce((sum, m) => {
+                         if (isGroupSum) {
+                           return sum + childrenIds.reduce((cSum, childId) => {
+                             const record = budgets.find(b => b.categoria_id === childId && b.mes === m);
+                             return cSum + (record ? Number(record.valor_aprovado ?? 0) : 0);
+                           }, 0);
+                         }
+                         const record = budgets.find(b => b.categoria_id === cat.id && b.mes === m);
+                         return sum + (record ? Number(record.valor_aprovado ?? 0) : 0);
+                      }, 0);
+
+                    return (
+                      <tr 
+                        key={cat.id} 
+                        className={`hover:bg-gray-50/50 transition-colors ${isParent ? 'bg-gray-50/40 font-bold' : ''}`}
+                      >
+                        <td className={`py-3 pr-4 sticky left-0 z-10 border-r border-gray-100 ${isParent ? 'bg-[#fcfdfd]' : 'bg-white'} ${isParent ? 'pl-2 text-gray-900 text-sm font-bold' : 'pl-6 text-gray-600 text-xs'}`}>
+                          {cat.nome}
+                        </td>
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(mes => {
+                          let displayValue = 0;
+                          if (isGroupSum) {
+                             displayValue = childrenIds.reduce((sum, childId) => {
+                               const record = budgets.find(b => b.categoria_id === childId && b.mes === mes);
+                               return sum + (record ? Number(record.valor_aprovado ?? 0) : 0);
+                             }, 0);
+                          } else {
+                             const record = budgets.find(b => b.categoria_id === cat.id && b.mes === mes);
+                             displayValue = record ? Number(record.valor_aprovado ?? 0) : 0;
+                          }
+
+                          return (
+                            <td key={mes} className="py-2 px-1">
+                              <span className={`block text-right font-mono text-gray-800 ${isParent ? 'text-sm font-bold' : 'text-xs font-medium'}`}>
+                                {formatCurrency(displayValue)}
+                              </span>
+                            </td>
+                          );
+                        })}
+                        <td className={`py-2 pl-2 pr-4 text-right font-bold font-mono text-gray-800 ${isParent ? 'text-sm' : 'text-xs'}`}>
+                          {formatCurrency(annualTotal)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'draft_budget' && (
+        <div className="space-y-6">
+          {isApproved && (
+            <div className="bg-gray-50 text-gray-700 p-4 rounded-3xl border border-gray-200 flex items-center gap-3 text-sm">
+              <span className="text-xl">🔒</span>
+              <div>
+                <strong>Elaboração Bloqueada.</strong> O orçamento de {selectedYear} já foi aprovado e consolidado oficialmente. Não é possível fazer alterações no rascunho de elaboração.
+              </div>
+            </div>
+          )}
+
+          {/* Cards de Resumo do Orçamento em Elaboração */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-4">
+                <div className="bg-farm-50 p-3 rounded-2xl text-farm-700 text-2xl">
+                  📈
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Total de Receitas Orçadas (Draft)</p>
+                  <h4 className="text-2xl font-black text-gray-800">{formatCurrency(budgetTotals.totalReceita)}</h4>
+                  <p className="text-gray-400 text-[10px] mt-1 italic">Meta anual em elaboração para {selectedYear}</p>
+                </div>
+              </div>
+              <div className="text-[10px] bg-farm-50 text-farm-700 px-2.5 py-1 rounded-full font-bold border border-farm-100">
+                RASCUNHO
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-4">
+                <div className="bg-red-50 p-3 rounded-2xl text-red-700 text-2xl">
+                  📉
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Total de Despesas Orçadas (Draft)</p>
+                  <h4 className="text-2xl font-black text-gray-800">{formatCurrency(budgetTotals.totalDespesa)}</h4>
+                  <p className="text-gray-400 text-[10px] mt-1 italic">Limite anual em elaboração para {selectedYear}</p>
+                </div>
+              </div>
+              <div className="text-[10px] bg-red-50 text-red-700 px-2.5 py-1 rounded-full font-bold border border-red-100">
+                RASCUNHO
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col min-w-max">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-gray-800 font-serif">Planilha de Elaboração de Orçamento</h3>
+                <p className="text-gray-500 text-xs mt-1">Edite as metas de orçamento para o ano de {selectedYear}. Após a conclusão, clique em Aprovar Orçamento para torná-lo oficial.</p>
+              </div>
+              <div className="text-xs font-semibold text-gray-400">
+                {canEditBudget && !isApproved ? '✍️ Modo de Edição Habilitado' : '👁️ Modo Somente Leitura'}
+              </div>
+            </div>
+
+            <div className="overflow-x-visible">
+              <table className="w-full min-w-[1200px] border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-gray-100 text-gray-400 text-[10px] font-bold uppercase tracking-wider">
+                    <th className="py-3 pr-4 sticky left-0 bg-white z-10 w-48 border-r border-gray-100">Categoria</th>
+                    <th className="py-3 px-2 text-right">Jan</th>
+                    <th className="py-3 px-2 text-right">Fev</th>
+                    <th className="py-3 px-2 text-right">Mar</th>
+                    <th className="py-3 px-2 text-right">Abr</th>
+                    <th className="py-3 px-2 text-right">Mai</th>
+                    <th className="py-3 px-2 text-right">Jun</th>
+                    <th className="py-3 px-2 text-right">Jul</th>
+                    <th className="py-3 px-2 text-right">Ago</th>
+                    <th className="py-3 px-2 text-right">Set</th>
+                    <th className="py-3 px-2 text-right">Out</th>
+                    <th className="py-3 px-2 text-right">Nov</th>
+                    <th className="py-3 px-2 text-right">Dez</th>
+                    <th className="py-3 pl-2 pr-4 text-right">Total</th>
+                    {canEditBudget && !isApproved && <th className="py-3 px-2 text-center w-24">Ações</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -1149,7 +1485,7 @@ export const FinancePage: React.FC<{
 
                           return (
                           <td key={mes} className="py-2 px-1">
-                            {canEditBudget && !isGroupSum ? (
+                            {canEditBudget && !isGroupSum && !isApproved ? (
                               <input
                                 type="text"
                                 value={editingBudgets[cat.id]?.[mes] === 0 || editingBudgets[cat.id]?.[mes] === '0' ? '' : (editingBudgets[cat.id]?.[mes] ?? '')}
@@ -1206,7 +1542,7 @@ export const FinancePage: React.FC<{
                         <td className={`py-2 pl-2 pr-4 text-right font-bold font-mono text-gray-800 ${isParent ? 'text-sm' : 'text-xs'}`}>
                           {formatCurrency(annualTotal)}
                         </td>
-                        {canEditBudget && (
+                        {canEditBudget && !isApproved && (
                           <td className="py-2 px-2 text-center">
                             {!isGroupSum && (
                               <div className="flex gap-1.5 justify-center">
@@ -1263,7 +1599,7 @@ export const FinancePage: React.FC<{
             </div>
           </div>
 
-          {canEditBudget && (
+          {canEditBudget && !isApproved && (
             <div className="flex flex-wrap gap-4 justify-between items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm min-w-max">
               <div className="flex flex-wrap gap-3">
                 <button
@@ -1292,14 +1628,26 @@ export const FinancePage: React.FC<{
                   🗑️ Limpar Todos os Valores
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={handleSaveBudget}
-                disabled={isSavingBudget}
-                className="px-6 py-2.5 bg-farm-600 hover:bg-farm-700 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {isSavingBudget ? 'Salvando...' : '💾 Salvar Orçamento'}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleSaveBudget}
+                  disabled={isSavingBudget}
+                  className="px-6 py-2.5 bg-farm-600 hover:bg-farm-700 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingBudget ? 'Salvando...' : '💾 Salvar Orçamento'}
+                </button>
+                {(isAdmin || userRole === 'finance_manager') && (
+                  <button
+                    type="button"
+                    onClick={handleApproveBudget}
+                    disabled={isApproving}
+                    className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isApproving ? 'Aprovando...' : '✅ Aprovar Orçamento Oficial'}
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
