@@ -1163,6 +1163,36 @@ export const FinancePage: React.FC<{
                                     }
                                   }));
                                 }}
+                                onPaste={(e) => {
+                                  const pasteData = e.clipboardData.getData('text');
+                                  let values: string[] = [];
+                                  if (pasteData.includes('\t')) {
+                                    values = pasteData.split('\t');
+                                  } else if (pasteData.includes('\n')) {
+                                    values = pasteData.split(/\r?\n/);
+                                  } else if (pasteData.includes(';')) {
+                                    values = pasteData.split(';');
+                                  }
+                                  
+                                  if (values.length > 1) {
+                                    e.preventDefault();
+                                    setEditingBudgets(prev => {
+                                      const updatedMonths = { ...prev[cat.id] };
+                                      let currentMonth = mes;
+                                      values.forEach(val => {
+                                        const cleanVal = val.trim();
+                                        if (currentMonth <= 12) {
+                                          updatedMonths[currentMonth] = cleanVal;
+                                          currentMonth++;
+                                        }
+                                      });
+                                      return {
+                                        ...prev,
+                                        [cat.id]: updatedMonths
+                                      };
+                                    });
+                                  }
+                                }}
                                 className="w-16 px-1.5 py-1 text-xs text-right border border-gray-200 rounded focus:border-farm-500 focus:ring-1 focus:ring-farm-100 outline-none transition-all font-mono"
                                 placeholder="0"
                               />
