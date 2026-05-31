@@ -550,6 +550,14 @@ export const FinancePage: React.FC<{
       .reduce((sum, b) => sum + Number(b.valor_aprovado ?? 0), 0);
   }, [budgets, activeMonths, dbCategories]);
 
+  const activeBudgetBal = useMemo(() => {
+    return activeBudgetR - activeBudgetD;
+  }, [activeBudgetR, activeBudgetD]);
+
+  const balanceDeviation = useMemo(() => {
+    return kpis.balanco - activeBudgetBal;
+  }, [kpis.balanco, activeBudgetBal]);
+
   // Memoized budget totals for the selected year
   const budgetTotals = useMemo(() => {
     let totalReceita = 0;
@@ -961,6 +969,62 @@ export const FinancePage: React.FC<{
                   </div>
                   <div className="text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded font-bold">ESPÉCIE</div>
               </div>
+          </div>
+
+          {/* Comparativo de Saldos Orçado vs Real */}
+          <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+            <div>
+              <h3 className="text-xl font-bold text-gray-800 font-serif">Desempenho de Saldo (Orçado vs. Real)</h3>
+              <p className="text-gray-500 text-xs mt-1">Comparativo de metas planejadas em relação ao resultado consolidado do período.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Card 1: Saldo Orçado */}
+              <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="bg-blue-50 p-3 rounded-xl text-blue-600 text-xl">⚖️</div>
+                  <div>
+                    <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-1">Saldo Orçado Oficial</p>
+                    <h4 className="text-xl font-black text-gray-800">{formatCurrency(activeBudgetBal)}</h4>
+                    <p className="text-gray-400 text-[9px] mt-0.5 italic">Meta oficial acumulada</p>
+                  </div>
+                </div>
+                <div className="text-[9px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold border border-blue-100 uppercase">ORÇADO</div>
+              </div>
+
+              {/* Card 2: Saldo Real */}
+              <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-xl text-xl ${kpis.balanco >= 0 ? 'bg-farm-50 text-farm-600' : 'bg-red-50 text-red-600'}`}>📈</div>
+                  <div>
+                    <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-1">Saldo Realizado</p>
+                    <h4 className={`text-xl font-black ${kpis.balanco >= 0 ? 'text-gray-800' : 'text-red-600'}`}>{formatCurrency(kpis.balanco)}</h4>
+                    <p className="text-gray-400 text-[9px] mt-0.5 italic">Acumulado do período</p>
+                  </div>
+                </div>
+                <div className={`text-[9px] px-2 py-0.5 rounded font-bold border ${kpis.balanco >= 0 ? 'bg-farm-50 text-farm-700 border-farm-100' : 'bg-red-50 text-red-700 border-red-100'} uppercase`}>REAL</div>
+              </div>
+
+              {/* Card 3: Desvio do Saldo */}
+              <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-xl text-xl ${balanceDeviation >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                    {balanceDeviation >= 0 ? '🏆' : '⚠️'}
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-1">Desvio do Saldo</p>
+                    <h4 className={`text-xl font-black ${balanceDeviation >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {balanceDeviation >= 0 ? '+' : ''}{formatCurrency(balanceDeviation)}
+                    </h4>
+                    <p className="text-gray-400 text-[9px] mt-0.5 italic">
+                      {balanceDeviation >= 0 ? 'Resultado favorável' : 'Resultado desfavorável'}
+                    </p>
+                  </div>
+                </div>
+                <div className={`text-[9px] px-2 py-0.5 rounded font-bold border ${balanceDeviation >= 0 ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'} uppercase`}>
+                  {balanceDeviation >= 0 ? 'FAVORÁVEL' : 'DESFAVORÁVEL'}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Acompanhamento Orçamentário */}
