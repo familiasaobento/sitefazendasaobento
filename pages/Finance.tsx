@@ -261,11 +261,16 @@ export const FinancePage: React.FC<{
       let page = 0;
       const pageSize = 1000;
       while (true) {
-        const { data } = await supabase
+        const { data, error: budgetErr } = await supabase
           .from('finance_budget')
           .select('*')
           .eq('ano', targetYear)
           .range(page * pageSize, (page + 1) * pageSize - 1);
+        
+        if (budgetErr) {
+          console.error('Erro ao buscar budgets:', budgetErr);
+          break;
+        }
         
         if (data && data.length > 0) {
           budgetData = [...budgetData, ...data];
@@ -1303,7 +1308,7 @@ export const FinancePage: React.FC<{
                   ⚖️
                 </div>
                 <div>
-                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Saldo Orçado Oficial</p>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Saldo Final Orçado</p>
                   <h4 className={`text-2xl font-black ${approvedBudgetTotals.totalReceita - approvedBudgetTotals.totalDespesa >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
                     {formatCurrency(approvedBudgetTotals.totalReceita - approvedBudgetTotals.totalDespesa)}
                   </h4>
@@ -1457,7 +1462,7 @@ export const FinancePage: React.FC<{
                   ⚖️
                 </div>
                 <div>
-                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Saldo Orçado (Draft)</p>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Saldo Final Orçado (Draft)</p>
                   <h4 className={`text-2xl font-black ${budgetTotals.totalReceita - budgetTotals.totalDespesa >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
                     {formatCurrency(budgetTotals.totalReceita - budgetTotals.totalDespesa)}
                   </h4>
