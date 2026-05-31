@@ -72,8 +72,36 @@ interface CatGroup { groupName: string; items: string[]; }
 
 const FALLBACK_GROUPS: CatGroup[] = [{ groupName: 'Geral', items: ['Geral', 'Outros'] }];
 
-const matchCategory = (
-    csvCategory: string,
+const normalizeWord = (w: string) => 
+    w.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+export const matchCategoryName = (dbName: string, inputName: string): boolean => {
+    const cleanDb = dbName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const cleanInput = inputName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+    // Verificação simples exata ou de inclusão
+    if (cleanDb === cleanInput || cleanDb.includes(cleanInput) || cleanInput.includes(cleanDb)) {
+        return true;
+    }
+
+    // Decomposição em palavras significativas (tamanho > 2 e não conectivo comum)
+    const getWords = (str: string) => 
+        str.split(/\s+/).map(normalizeWord).filter(w => w.length > 2 && !['com', 'para', 'dos', 'das', 'uma', 'sob'].includes(w));
+
+    const dbWords = getWords(cleanDb);
+    const inputWords = getWords(cleanInput);
+
+    if (dbWords.length === 0 || inputWords.length === 0) return false;
+
+    // Verifica se um conjunto de palavras é subconjunto ou coincide parcialmente com o outro
+    const isSubset = (listA: string[], listB: string[]) => 
+        listA.every(wa => listB.some(wb => wb.includes(wa) || wa.includes(wb)));
+
+    return isSubset(dbWords, inputWords) || isSubset(inputWords, dbWords);
+};
+
+export const matchCategory = (
+    csvCategory: string | null,
     desc: string,
     tipoArg: string,
     categoriesList: { id: number; nome: string; tipo: string }[]
@@ -83,10 +111,8 @@ const matchCategory = (
 
     // 1. Tentar correspondência exata ou parcial com a categoria do CSV
     if (csvCategory) {
-        const cleanCsv = csvCategory.trim().toLowerCase();
         const found = categoriesList.find(c => 
-            c.tipo === tipo && 
-            (c.nome.toLowerCase() === cleanCsv || c.nome.toLowerCase().includes(cleanCsv) || cleanCsv.includes(c.nome.toLowerCase()))
+            c.tipo === tipo && matchCategoryName(c.nome, csvCategory)
         );
         if (found) return found.nome;
     }
@@ -686,6 +712,21 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         });
     };
 
+    const handleToggleForm = () => {
+        if (showForm) {
+            handleCancelForm();
+        } else {
+            setEditingEntry(null);
+            const defaultCat = groupsDespesa[0]?.items[0] || 'Outras despesas';
+            setFormData({
+                ...defaultFormData,
+                tipo: 'saida',
+                categoria: defaultCat
+            });
+            setShowForm(true);
+        }
+    };
+
     const handleCancelForm = () => {
         setShowForm(false);
         setEditingEntry(null);
@@ -1048,7 +1089,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                         <button onClick={() => setShowReconciliation(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-farm-700 border-2 border-farm-100 font-bold px-6 py-3 rounded-xl hover:bg-farm-50 transition-colors">
                             <IconRefresh className="w-5 h-5" /> Conciliar Extrato
                         </button>
-                        <button onClick={() => { if (showForm && editingEntry) handleCancelForm(); else { setEditingEntry(null); setFormData(defaultFormData); setShowForm(!showForm); } }} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-farm-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-farm-700 transition-colors shadow-lg shadow-farm-200">
+                        <button onClick={handleToggleForm} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-farm-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-farm-700 transition-colors shadow-lg shadow-farm-200">
                             {showForm ? 'Cancelar' : <><IconPlus className="w-5 h-5" /> Novo Lançamento</>}
                         </button>
                     </div>
@@ -1126,8 +1167,14 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">Tipo</label>
                                     <div className="flex bg-gray-100 p-1 rounded-xl">
-                                        <button type="button" onClick={() => setFormData({ ...formData, tipo: 'entrada' })} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${formData.tipo === 'entrada' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500'}`}>Entrada</button>
-                                        <button type="button" onClick={() => setFormData({ ...formData, tipo: 'saida' })} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${formData.tipo === 'saida' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}>Saída</button>
+                                        <button type="button" onClick={() => {
+                                            const defaultCat = groupsReceita[0]?.items[0] || 'Outras Receitas';
+                                            setFormData({ ...formData, tipo: 'entrada', categoria: defaultCat });
+                                        }} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${formData.tipo === 'entrada' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500'}`}>Entrada</button>
+                                        <button type="button" onClick={() => {
+                                            const defaultCat = groupsDespesa[0]?.items[0] || 'Outras despesas';
+                                            setFormData({ ...formData, tipo: 'saida', categoria: defaultCat });
+                                        }} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${formData.tipo === 'saida' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}>Saída</button>
                                     </div>
                                 </div>
                                 <div>

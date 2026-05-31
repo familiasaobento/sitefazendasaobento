@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Papa from 'papaparse';
 import { supabase } from '../lib/supabase';
+import { matchCategory } from '../pages/CashFlow';
 import { IconLoader, IconCheck, IconPlus, IconFileText, IconRefresh } from './Icons';
 
 interface BankTransaction {
@@ -31,6 +32,18 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ onReconc
   const [mapping, setMapping] = useState({ date: '', description: '', amount: '' });
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvData, setCsvData] = useState<any[]>([]);
+  const [categoriesList, setCategoriesList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const { data } = await supabase
+        .from('categorias_financeiras')
+        .select('id, nome, tipo, parent_id, ativo')
+        .eq('ativo', true);
+      if (data) setCategoriesList(data);
+    };
+    fetchCategories();
+  }, []);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
@@ -151,6 +164,8 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ onReconc
         return d;
       };
 
+      const finalCategory = matchCategory(null, tx.description, tx.type, categoriesList);
+
       const { error } = await supabase
         .from('fluxo_caixa')
         .insert({
@@ -158,7 +173,7 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ onReconc
           valor: tx.amount,
           data_pagamento: parseDate(tx.date),
           descricao: `[EXTRATO] ${tx.description}`,
-          categoria: 'Geral' // Default category
+          categoria: finalCategory
         });
 
       if (error) throw error;
