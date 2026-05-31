@@ -148,15 +148,31 @@ export const FinancePage: React.FC<{
       const isCurrentYear = targetYear === now.getFullYear();
 
       // Fetch budget approval status
-      const { data: statusData } = await supabase
+      const { data: statusData, error: statusErr } = await supabase
         .from('finance_budget_status')
-        .select('*, profiles(full_name)')
+        .select('*')
         .eq('ano', targetYear)
         .limit(1);
 
+      if (statusErr) console.error('Erro ao buscar status do orçamento:', statusErr);
+
       if (statusData && statusData.length > 0) {
-        setIsApproved(statusData[0].aprovado);
-        setApprovedInfo(statusData[0]);
+        const statusRecord = statusData[0];
+        setIsApproved(statusRecord.aprovado);
+        
+        // Fetch profile separately to avoid join errors
+        if (statusRecord.aprovado_por) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', statusRecord.aprovado_por)
+            .limit(1);
+          
+          if (profileData && profileData.length > 0) {
+            statusRecord.profiles = { full_name: profileData[0].full_name };
+          }
+        }
+        setApprovedInfo(statusRecord);
       } else {
         setIsApproved(false);
         setApprovedInfo(null);
@@ -1248,7 +1264,7 @@ export const FinancePage: React.FC<{
           )}
 
           {/* Cards de Resumo do Orçamento Aprovado */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
               <div className="flex items-center gap-4">
                 <div className="bg-farm-50 p-3 rounded-2xl text-farm-700 text-2xl">
@@ -1278,6 +1294,24 @@ export const FinancePage: React.FC<{
               </div>
               <div className="text-[10px] bg-red-50 text-red-700 px-2.5 py-1 rounded-full font-bold border border-red-100">
                 DESPESAS
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-2xl text-2xl ${approvedBudgetTotals.totalReceita - approvedBudgetTotals.totalDespesa >= 0 ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'}`}>
+                  ⚖️
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Saldo Orçado Oficial</p>
+                  <h4 className={`text-2xl font-black ${approvedBudgetTotals.totalReceita - approvedBudgetTotals.totalDespesa >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
+                    {formatCurrency(approvedBudgetTotals.totalReceita - approvedBudgetTotals.totalDespesa)}
+                  </h4>
+                  <p className="text-gray-400 text-[10px] mt-1 italic">Resultado consolidado para {selectedYear}</p>
+                </div>
+              </div>
+              <div className={`text-[10px] px-2.5 py-1 rounded-full font-bold border ${approvedBudgetTotals.totalReceita - approvedBudgetTotals.totalDespesa >= 0 ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                {approvedBudgetTotals.totalReceita - approvedBudgetTotals.totalDespesa >= 0 ? 'SUPERÁVIT' : 'DÉFICIT'}
               </div>
             </div>
           </div>
@@ -1384,7 +1418,7 @@ export const FinancePage: React.FC<{
           )}
 
           {/* Cards de Resumo do Orçamento em Elaboração */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
               <div className="flex items-center gap-4">
                 <div className="bg-farm-50 p-3 rounded-2xl text-farm-700 text-2xl">
@@ -1414,6 +1448,24 @@ export const FinancePage: React.FC<{
               </div>
               <div className="text-[10px] bg-red-50 text-red-700 px-2.5 py-1 rounded-full font-bold border border-red-100">
                 RASCUNHO
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-2xl text-2xl ${budgetTotals.totalReceita - budgetTotals.totalDespesa >= 0 ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'}`}>
+                  ⚖️
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Saldo Orçado (Draft)</p>
+                  <h4 className={`text-2xl font-black ${budgetTotals.totalReceita - budgetTotals.totalDespesa >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
+                    {formatCurrency(budgetTotals.totalReceita - budgetTotals.totalDespesa)}
+                  </h4>
+                  <p className="text-gray-400 text-[10px] mt-1 italic">Resultado planejado para {selectedYear}</p>
+                </div>
+              </div>
+              <div className={`text-[10px] px-2.5 py-1 rounded-full font-bold border ${budgetTotals.totalReceita - budgetTotals.totalDespesa >= 0 ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                {budgetTotals.totalReceita - budgetTotals.totalDespesa >= 0 ? 'SUPERÁVIT' : 'DÉFICIT'}
               </div>
             </div>
           </div>
