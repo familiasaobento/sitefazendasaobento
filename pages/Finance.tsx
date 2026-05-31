@@ -132,6 +132,21 @@ export const FinancePage: React.FC<{
      fetchDashboardData();
    }, [timeRange, selectedProject, selectedYear]);
 
+  // Auto-switch year to next year when drafting budget if current year is approved,
+  // and auto-switch back to current year when viewing dashboard or approved budget.
+  useEffect(() => {
+    const currentYear = new Date().getFullYear();
+    if (activeTab === 'draft_budget') {
+      if (isApproved && selectedYear === currentYear.toString()) {
+        setSelectedYear((currentYear + 1).toString());
+      }
+    } else {
+      if (selectedYear === (currentYear + 1).toString()) {
+        setSelectedYear(currentYear.toString());
+      }
+    }
+  }, [activeTab, isApproved, selectedYear]);
+
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
@@ -676,7 +691,12 @@ export const FinancePage: React.FC<{
       if (statusError) throw statusError;
 
       alert('Orçamento aprovado e consolidado com sucesso!');
-      await fetchDashboardData();
+      const currentYear = new Date().getFullYear();
+      if (parseInt(selectedYear) === currentYear) {
+        setSelectedYear((currentYear + 1).toString());
+      } else {
+        await fetchDashboardData();
+      }
     } catch (err: any) {
       console.error('Erro ao aprovar orçamento:', err);
       alert('Erro ao aprovar orçamento: ' + err.message);
@@ -845,7 +865,7 @@ export const FinancePage: React.FC<{
             onChange={e => setSelectedYear(e.target.value)}
             className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 text-xs font-bold text-gray-500 outline-none focus:ring-2 focus:ring-farm-200"
           >
-            {Array.from({length: 5}, (_, i) => new Date().getFullYear() - i).map(y => (
+            {Array.from({length: 6}, (_, i) => (new Date().getFullYear() + 1) - i).map(y => (
                 <option key={y} value={y.toString()}>{y}</option>
             ))}
           </select>
