@@ -767,8 +767,9 @@ export const FinancePage: React.FC<{
 
   // Helper to render progress bar
   const renderProgressBar = (actual: number, budget: number, tipo: 'receita' | 'despesa') => {
-    const pct = budget > 0 ? (actual / budget) * 100 : (actual > 0 ? 100 : 0);
-    const formattedPct = pct > 100 ? '100%+' : `${pct.toFixed(0)}%`;
+    const hasBudget = budget > 0;
+    const pct = hasBudget ? (actual / budget) * 100 : (actual > 0 ? 100 : 0);
+    const formattedPct = hasBudget ? `${pct.toFixed(0)}%` : (actual > 0 ? '100%+' : '0%');
     
     let barColor = 'bg-farm-600';
     if (tipo === 'despesa') {
@@ -1006,13 +1007,17 @@ export const FinancePage: React.FC<{
                 <div>
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Desvio Receitas</p>
                   <p className={`text-sm font-bold ${kpis.receitaTotal >= activeBudgetR ? 'text-green-600' : 'text-amber-600'}`}>
-                    {activeBudgetR > 0 ? `${((kpis.receitaTotal / activeBudgetR - 1) * 100).toFixed(1)}%` : '0.0%'}
+                    {activeBudgetR > 0 
+                      ? `${kpis.receitaTotal >= activeBudgetR ? '+' : ''}${((kpis.receitaTotal / activeBudgetR - 1) * 100).toFixed(1)}%` 
+                      : '0.0%'}
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Desvio Despesas</p>
                   <p className={`text-sm font-bold ${kpis.despesaTotal <= activeBudgetD ? 'text-green-600' : 'text-red-600'}`}>
-                    {activeBudgetD > 0 ? `${((kpis.despesaTotal / activeBudgetD - 1) * 100).toFixed(1)}%` : '0.0%'}
+                    {activeBudgetD > 0 
+                      ? `${kpis.despesaTotal >= activeBudgetD ? '+' : ''}${((kpis.despesaTotal / activeBudgetD - 1) * 100).toFixed(1)}%` 
+                      : '0.0%'}
                   </p>
                 </div>
               </div>
