@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
     IconUser, IconPlus, IconTrash, IconCheck, IconX, 
     IconLoader, IconClock, IconZap, IconCalendar, IconAlertTriangle,
-    IconChart, IconBriefcase
+    IconChart, IconBriefcase, IconEdit
 } from '../components/Icons';
 
 interface Employee {
@@ -19,6 +19,12 @@ interface Employee {
     controlid_id: string;
     active: boolean;
     participates_product_rateio: boolean;
+    area?: string;
+    journey_type?: 'integral' | 'parcial' | 'horista' | 'diarista';
+    daily_min_hours?: number;
+    daily_rate?: number;
+    half_saturday?: boolean;
+    default_day_off?: number;
 }
 
 interface Vacation {
@@ -36,9 +42,12 @@ interface Vacation {
 export const EmployeesPage: React.FC = () => {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [vacations, setVacations] = useState<Vacation[]>([]);
+    const [categories, setCategories] = useState<{id: number, nome: string}[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAdding, setIsAdding] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'team' | 'vacations' | 'banco' | 'rateio' | 'producao'>('team');
+    const [teamFilter, setTeamFilter] = useState<'fixos' | 'diaristas'>('fixos');
     const [feedback, setFeedback] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
 
     // Form state for Employee
@@ -51,7 +60,13 @@ export const EmployeesPage: React.FC = () => {
         work_end: '17:00',
         break_start: '12:00',
         break_end: '13:00',
-        controlid_id: ''
+        controlid_id: '',
+        area: '',
+        journey_type: 'integral' as 'integral' | 'parcial' | 'horista' | 'diarista',
+        daily_min_hours: 5,
+        daily_rate: 0,
+        half_saturday: false,
+        default_day_off: 0
     });
 
     // Form state for Vacation
@@ -83,8 +98,16 @@ export const EmployeesPage: React.FC = () => {
 
     const fetchData = async () => {
         setLoading(true);
-        await Promise.all([fetchEmployees(), fetchVacations()]);
+        await Promise.all([fetchEmployees(), fetchVacations(), fetchCategories()]);
         setLoading(false);
+    };
+
+    const fetchCategories = async () => {
+        const { data, error } = await supabase
+            .from('finance_tags')
+            .select('id, nome')
+            .order('nome');
+        if (!error && data) setCategories(data);
     };
 
     const fetchEmployees = async () => {
@@ -213,7 +236,21 @@ export const EmployeesPage: React.FC = () => {
         return h + (m || 0) / 60;
     };
 
-    const getExpectedHours = (emp: Employee) => {
+    const getExpectedHours = (emp: Employee, dateStr?: string) => {
+        if (emp.journey_type === 'horista' || emp.journey_type === 'diarista') {
+            if (dateStr) {
+                const dayOfWeek = new Date(dateStr + 'T12:00:00Z').getUTCDay();
+                if (dayOfWeek === (emp.default_day_off ?? 0)) return 0;
+            }
+            return emp.journey_type === 'horista' ? (Number(emp.daily_min_hours) || 0) : 0;
+        }
+
+        if (dateStr) {
+            const dayOfWeek = new Date(dateStr + 'T12:00:00Z').getUTCDay();
+            if (dayOfWeek === (emp.default_day_off ?? 0)) return 0;
+            if (emp.half_saturday && dayOfWeek === 6) return 4;
+        }
+
         const work = timeToHours(emp.work_end) - timeToHours(emp.work_start);
         const breakTime = timeToHours(emp.break_end) - timeToHours(emp.break_start);
         return Math.max(0, work - breakTime);
@@ -221,7 +258,7 @@ export const EmployeesPage: React.FC = () => {
 
     const calculateDailyBalance = (emp: Employee, dateStr: string) => {
         const isDayOff = daysOff.some(d => d.employee_id === emp.id && d.date === dateStr);
-        const expected = isDayOff ? 0 : getExpectedHours(emp);
+        const expected = isDayOff ? 0 : getExpectedHours(emp, dateStr);
 
         const dayEntries = timeEntries.filter(e => {
             const localDate = new Date(e.timestamp).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }); // 'DD/MM/YYYY'
@@ -258,6 +295,7 @@ export const EmployeesPage: React.FC = () => {
         let totalBalance = 0;
         let totalWorked = 0;
         let totalExpected = 0;
+        let totalDaysWorked = 0;
 
         for (let i = 1; i <= daysInMonth; i++) {
             const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
@@ -267,9 +305,10 @@ export const EmployeesPage: React.FC = () => {
             totalBalance += daily.balance;
             totalWorked += daily.workedHours;
             totalExpected += daily.expected;
+            if (daily.workedHours > 0) totalDaysWorked++;
         }
 
-        return { totalBalance, totalWorked, totalExpected };
+        return { totalBalance, totalWorked, totalExpected, totalDaysWorked };
     };
 
     const formatHours = (hours: number) => {
@@ -289,7 +328,7 @@ export const EmployeesPage: React.FC = () => {
         const qEnd = new Date(`${selectedRateioYear}${quarterEnds[selectedRateioQuarter]}T23:59:59`);
         const totalQuarterDays = Math.ceil((qEnd.getTime() - qStart.getTime()) / (1000 * 60 * 60 * 24));
 
-        const eligibleEmployees = employees.filter(emp => emp.active && (!onlyParticipants || emp.participates_product_rateio));
+        const eligibleEmployees = employees.filter(emp => emp.active && emp.journey_type !== 'diarista' && (!onlyParticipants || emp.participates_product_rateio));
         
         const distribution = eligibleEmployees.map(emp => {
             const admission = new Date(emp.admission_date);
@@ -316,26 +355,87 @@ export const EmployeesPage: React.FC = () => {
         }));
     };
 
+    const handleDeleteEmployee = async (id: string) => {
+        if (!confirm('Tem certeza que deseja excluir este colaborador? Esta ação não pode ser desfeita.')) return;
+        const { error } = await supabase.from('employees').delete().eq('id', id);
+        if (error) {
+            console.error('Error deleting employee:', error);
+            setFeedback({ type: 'error', msg: 'Erro ao excluir colaborador.' });
+            setTimeout(() => setFeedback(null), 3000);
+        } else {
+            setFeedback({ type: 'success', msg: 'Colaborador excluído com sucesso!' });
+            setTimeout(() => setFeedback(null), 3000);
+            fetchEmployees();
+        }
+    };
+
     const handleEmployeeSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        const { error } = await supabase.from('employees').insert([formData]);
-        if (error) {
-            setFeedback({ type: 'error', msg: 'Erro ao cadastrar: ' + error.message });
+        
+        const payload = {
+            ...formData,
+            cpf: formData.cpf || null,
+            controlid_id: formData.controlid_id || null,
+            work_start: formData.work_start || null,
+            work_end: formData.work_end || null,
+            break_start: formData.break_start || null,
+            break_end: formData.break_end || null,
+            daily_min_hours: formData.journey_type === 'horista' ? Number(formData.daily_min_hours) : 0,
+            daily_rate: formData.journey_type === 'diarista' ? Number(formData.daily_rate) : 0,
+            half_saturday: formData.half_saturday,
+            default_day_off: Number(formData.default_day_off)
+        };
+
+        let error;
+        if (editingId) {
+            const { error: updateError } = await supabase.from('employees').update(payload).eq('id', editingId);
+            error = updateError;
         } else {
-            setFeedback({ type: 'success', msg: 'Funcionário cadastrado!' });
+            const { error: insertError } = await supabase.from('employees').insert([payload]);
+            error = insertError;
+        }
+
+        if (error) {
+            setFeedback({ type: 'error', msg: (editingId ? 'Erro ao atualizar: ' : 'Erro ao cadastrar: ') + error.message });
+        } else {
+            setFeedback({ type: 'success', msg: editingId ? 'Funcionário atualizado!' : 'Funcionário cadastrado!' });
             setIsAdding(false);
+            setEditingId(null);
             setFormData({
                 full_name: '', cpf: '', position: '', 
                 admission_date: new Date().toISOString().split('T')[0],
                 work_start: '08:00', work_end: '17:00', 
                 break_start: '12:00', break_end: '13:00', 
-                controlid_id: ''
+                controlid_id: '', area: '', journey_type: 'integral', daily_min_hours: 5, daily_rate: 0,
+                half_saturday: false, default_day_off: 0
             });
             fetchEmployees();
         }
         setLoading(false);
         setTimeout(() => setFeedback(null), 3000);
+    };
+
+    const handleEditEmployee = (emp: Employee) => {
+        setFormData({
+            full_name: emp.full_name,
+            cpf: emp.cpf || '',
+            position: emp.position,
+            admission_date: emp.admission_date.split('T')[0],
+            work_start: emp.work_start,
+            work_end: emp.work_end,
+            break_start: emp.break_start || '',
+            break_end: emp.break_end || '',
+            controlid_id: emp.controlid_id || '',
+            area: emp.area || '',
+            journey_type: emp.journey_type || 'integral',
+            daily_min_hours: emp.daily_min_hours || 5,
+            daily_rate: emp.daily_rate || 0,
+            half_saturday: emp.half_saturday || false,
+            default_day_off: emp.default_day_off ?? 0
+        });
+        setEditingId(emp.id);
+        setIsAdding(true);
     };
 
     const handleVacationSubmit = async (e: React.FormEvent) => {
@@ -391,10 +491,10 @@ export const EmployeesPage: React.FC = () => {
                 <div className="flex gap-3">
                     {activeTab === 'team' ? (
                         <button 
-                            onClick={() => setIsAdding(true)}
+                            onClick={() => { setEditingId(null); setFormData({ full_name: '', cpf: '', position: '', admission_date: new Date().toISOString().split('T')[0], work_start: '08:00', work_end: '17:00', break_start: '12:00', break_end: '13:00', controlid_id: '', area: '', journey_type: teamFilter === 'diaristas' ? 'diarista' : 'integral', daily_min_hours: 5, daily_rate: 0, half_saturday: false, default_day_off: 0 }); setIsAdding(true); }}
                             className="bg-farm-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-farm-700 transition-all shadow-lg"
                         >
-                            <IconPlus className="w-5 h-5" /> Novo Funcionário
+                            <IconPlus className="w-5 h-5" /> {teamFilter === 'diaristas' ? 'Novo Diarista' : 'Novo Funcionário'}
                         </button>
                     ) : activeTab === 'vacations' ? (
                         <button 
@@ -454,11 +554,26 @@ export const EmployeesPage: React.FC = () => {
 
             {activeTab === 'team' && (
                 <>
+                    <div className="flex gap-4 mb-4 border-b border-gray-100 pb-2">
+                        <button 
+                            onClick={() => setTeamFilter('fixos')}
+                            className={`font-bold pb-2 transition-colors ${teamFilter === 'fixos' ? 'text-farm-600 border-b-2 border-farm-600' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            Funcionários Fixos
+                        </button>
+                        <button 
+                            onClick={() => setTeamFilter('diaristas')}
+                            className={`font-bold pb-2 transition-colors ${teamFilter === 'diaristas' ? 'text-farm-600 border-b-2 border-farm-600' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            Diaristas
+                        </button>
+                    </div>
+
                     {isAdding && (
                         <div className="bg-white p-8 rounded-3xl border-2 border-farm-100 shadow-xl animate-scale-in">
                             <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-xl font-bold text-gray-800">Cadastrar Colaborador</h3>
-                                <button onClick={() => setIsAdding(false)} className="text-gray-400 hover:text-red-500 transition-colors">
+                                <h3 className="text-xl font-bold text-gray-800">{editingId ? 'Editar Colaborador' : 'Cadastrar Colaborador'}</h3>
+                                <button onClick={() => { setIsAdding(false); setEditingId(null); }} className="text-gray-400 hover:text-red-500 transition-colors">
                                     <IconX className="w-6 h-6" />
                                 </button>
                             </div>
@@ -472,9 +587,57 @@ export const EmployeesPage: React.FC = () => {
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">CPF</label>
                                         <input value={formData.cpf} onChange={e => setFormData({...formData, cpf: e.target.value})} className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none" />
                                     </div>
+                                    <div className="space-y-1 col-span-2 md:col-span-1">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Tipo de Jornada</label>
+                                        <select 
+                                            value={formData.journey_type} 
+                                            onChange={e => {
+                                                const type = e.target.value as any;
+                                                setFormData(prev => {
+                                                    let updates = { journey_type: type, work_start: prev.work_start, work_end: prev.work_end, break_start: prev.break_start, break_end: prev.break_end };
+                                                    if (type === 'parcial') {
+                                                        updates.work_end = '12:00';
+                                                        updates.break_start = '';
+                                                        updates.break_end = '';
+                                                    } else if (type === 'horista' || type === 'diarista') {
+                                                        updates.work_start = '';
+                                                        updates.work_end = '';
+                                                        updates.break_start = '';
+                                                        updates.break_end = '';
+                                                    } else if (type === 'integral' && (!prev.work_start || !prev.work_end)) {
+                                                        updates.work_start = '08:00';
+                                                        updates.work_end = '17:00';
+                                                        updates.break_start = '12:00';
+                                                        updates.break_end = '13:00';
+                                                    }
+                                                    return { ...prev, ...updates };
+                                                });
+                                            }} 
+                                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none"
+                                        >
+                                            <option value="integral">Integral (8h/dia com almoço)</option>
+                                            <option value="parcial">Parcial (Ex: 4h direto sem almoço)</option>
+                                            <option value="horista">Horista (Flexível)</option>
+                                            <option value="diarista">Diarista (Diárias / Freelancer)</option>
+                                        </select>
+                                    </div>
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Cargo</label>
-                                        <input value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none" />
+                                        {formData.journey_type === 'horista' ? (
+                                            <>
+                                                <label className="text-[10px] font-black text-purple-500 uppercase tracking-widest px-1">Horas Mínimas Dia</label>
+                                                <input type="number" min="0" step="0.5" value={formData.daily_min_hours} onChange={e => setFormData({...formData, daily_min_hours: Number(e.target.value)})} className="w-full px-4 py-3 bg-purple-50 border border-purple-100 rounded-xl outline-none font-bold text-purple-700" />
+                                            </>
+                                        ) : formData.journey_type === 'diarista' ? (
+                                            <>
+                                                <label className="text-[10px] font-black text-green-600 uppercase tracking-widest px-1">Valor da Diária (R$)</label>
+                                                <input type="number" min="0" step="0.01" value={formData.daily_rate} onChange={e => setFormData({...formData, daily_rate: Number(e.target.value)})} className="w-full px-4 py-3 bg-green-50 border border-green-100 rounded-xl outline-none font-bold text-green-700" />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Cargo</label>
+                                                <input value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none" />
+                                            </>
+                                        )}
                                     </div>
                                     <div className="space-y-1">
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Data Admissão</label>
@@ -484,18 +647,57 @@ export const EmployeesPage: React.FC = () => {
                                 <div className="bg-gray-50 p-6 rounded-2xl grid grid-cols-2 md:grid-cols-4 gap-4">
                                     <div className="space-y-1">
                                         <label className="text-[9px] font-bold text-gray-500 uppercase">Entrada</label>
-                                        <input type="time" value={formData.work_start} onChange={e => setFormData({...formData, work_start: e.target.value})} className="w-full px-3 py-2 rounded-lg border" />
+                                        <input type="time" disabled={formData.journey_type === 'horista' || formData.journey_type === 'diarista'} value={formData.work_start} onChange={e => setFormData({...formData, work_start: e.target.value})} className="w-full px-3 py-2 rounded-lg border disabled:opacity-50" />
                                     </div>
                                     <div className="space-y-1">
                                         <label className="text-[9px] font-bold text-gray-500 uppercase">Saída</label>
-                                        <input type="time" value={formData.work_end} onChange={e => setFormData({...formData, work_end: e.target.value})} className="w-full px-3 py-2 rounded-lg border" />
+                                        <input type="time" disabled={formData.journey_type === 'horista' || formData.journey_type === 'diarista'} value={formData.work_end} onChange={e => setFormData({...formData, work_end: e.target.value})} className="w-full px-3 py-2 rounded-lg border disabled:opacity-50" />
                                     </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-bold text-gray-500 uppercase">Saída Almoço</label>
+                                        <input type="time" disabled={formData.journey_type === 'horista' || formData.journey_type === 'parcial' || formData.journey_type === 'diarista'} value={formData.break_start} onChange={e => setFormData({...formData, break_start: e.target.value})} className="w-full px-3 py-2 rounded-lg border disabled:opacity-50" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-bold text-gray-500 uppercase">Retorno Almoço</label>
+                                        <input type="time" disabled={formData.journey_type === 'horista' || formData.journey_type === 'parcial' || formData.journey_type === 'diarista'} value={formData.break_end} onChange={e => setFormData({...formData, break_end: e.target.value})} className="w-full px-3 py-2 rounded-lg border disabled:opacity-50" />
+                                    </div>
+                                    <div className="space-y-1 col-span-2">
+                                        <label className="text-[9px] font-bold text-gray-500 uppercase">Área/Departamento</label>
+                                        <select value={formData.area} onChange={e => setFormData({...formData, area: e.target.value})} className="w-full px-4 py-3 bg-white border border-gray-100 rounded-xl outline-none">
+                                            <option value="">Selecione uma área...</option>
+                                            {categories.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+                                        </select>
+                                    </div>
+                                    
+                                    {formData.journey_type !== 'diarista' && (
+                                        <div className="col-span-2 md:col-span-4 bg-white/50 p-4 rounded-xl border border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                            <div className="space-y-1">
+                                                <label className="text-[9px] font-bold text-gray-500 uppercase">Dia de Folga Padrão</label>
+                                                <select value={formData.default_day_off} onChange={e => setFormData({...formData, default_day_off: Number(e.target.value)})} className="w-full px-4 py-3 bg-white border border-gray-100 rounded-xl outline-none">
+                                                    <option value={0}>Domingo</option>
+                                                    <option value={1}>Segunda-feira</option>
+                                                    <option value={2}>Terça-feira</option>
+                                                    <option value={3}>Quarta-feira</option>
+                                                    <option value={4}>Quinta-feira</option>
+                                                    <option value={5}>Sexta-feira</option>
+                                                    <option value={6}>Sábado</option>
+                                                </select>
+                                            </div>
+                                            <div className="flex items-center gap-3 pt-4 md:pt-6">
+                                                <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                                    <input type="checkbox" id="toggle-saturday" checked={formData.half_saturday} onChange={e => setFormData({...formData, half_saturday: e.target.checked})} className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-gray-200 appearance-none cursor-pointer transition-all checked:right-0 checked:border-farm-500 checked:bg-farm-500" />
+                                                    <label htmlFor="toggle-saturday" className="toggle-label block overflow-hidden h-5 rounded-full bg-gray-200 cursor-pointer"></label>
+                                                </div>
+                                                <label htmlFor="toggle-saturday" className="text-xs font-bold text-gray-600 cursor-pointer">Meio período aos sábados (4h)</label>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="space-y-1 col-span-2">
                                         <label className="text-[9px] font-bold text-gray-500 uppercase">ID Facial (ControlID)</label>
                                         <input value={formData.controlid_id} onChange={e => setFormData({...formData, controlid_id: e.target.value})} className="w-full px-3 py-2 rounded-lg border" />
                                     </div>
                                 </div>
-                                <button type="submit" className="w-full bg-gray-900 text-white font-bold py-4 rounded-xl shadow-lg">Finalizar Cadastro</button>
+                                <button type="submit" className="w-full bg-gray-900 text-white font-bold py-4 rounded-xl shadow-lg">{editingId ? 'Atualizar Cadastro' : 'Finalizar Cadastro'}</button>
                             </form>
                         </div>
                     )}
@@ -505,32 +707,62 @@ export const EmployeesPage: React.FC = () => {
                             <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b">
                                 <tr>
                                     <th className="px-8 py-6">Funcionário</th>
+                                    <th className="px-8 py-6">Área</th>
                                     <th className="px-8 py-6">Admissão</th>
                                     <th className="px-8 py-6">Jornada</th>
-                                    <th className="px-8 py-6">Férias</th>
+                                    {teamFilter !== 'diaristas' && <th className="px-8 py-6">Férias</th>}
                                     <th className="px-8 py-6 text-right">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {employees.map(emp => (
+                                {employees.filter(e => (teamFilter === 'diaristas' ? e.journey_type === 'diarista' : e.journey_type !== 'diarista')).map(emp => (
                                     <tr key={emp.id} className="hover:bg-gray-50/50 transition-colors">
                                         <td className="px-8 py-6">
                                             <p className="font-bold text-gray-900">{emp.full_name}</p>
                                             <p className="text-[10px] text-gray-400 uppercase">{emp.position}</p>
                                         </td>
+                                        <td className="px-8 py-6 text-sm text-gray-600 font-bold">{emp.area || '-'}</td>
                                         <td className="px-8 py-6 text-sm text-gray-600">{formatDate(emp.admission_date)}</td>
-                                        <td className="px-8 py-6 text-xs font-bold">{emp.work_start} - {emp.work_end}</td>
-                                        <td className="px-8 py-6">
-                                            {getVacationStatus(emp) === 'vencendo' ? (
-                                                <span className="flex items-center gap-1.5 text-orange-600 font-bold text-[10px] uppercase">
-                                                    <IconAlertTriangle className="w-4 h-4" /> Vencendo em breve
-                                                </span>
+                                        <td className="px-8 py-6 text-xs font-bold">
+                                            {emp.journey_type === 'horista' ? (
+                                                <>
+                                                    <span className="text-purple-600 bg-purple-50 px-2 py-1 rounded-md mb-1 inline-block">HORISTA</span>
+                                                    <div className="text-[9px] text-gray-400">Meta: {emp.daily_min_hours}h/dia (Seg-Sáb)</div>
+                                                </>
+                                            ) : emp.journey_type === 'diarista' ? (
+                                                <>
+                                                    <span className="text-green-600 bg-green-50 px-2 py-1 rounded-md mb-1 inline-block">DIARISTA</span>
+                                                    <div className="text-[9px] text-gray-400">R$ {Number(emp.daily_rate).toFixed(2).replace('.', ',')} / dia</div>
+                                                </>
                                             ) : (
-                                                <span className="text-green-600 font-bold text-[10px] uppercase">OK</span>
+                                                <>
+                                                    {emp.work_start || '--:--'} - {emp.work_end || '--:--'}
+                                                    {emp.break_start && emp.break_end ? (
+                                                        <div className="text-[9px] text-gray-400 mt-0.5">Almoço: {emp.break_start} - {emp.break_end}</div>
+                                                    ) : (
+                                                        <div className="text-[9px] text-amber-500 mt-0.5 font-bold">Sem Almoço</div>
+                                                    )}
+                                                </>
                                             )}
                                         </td>
-                                        <td className="px-8 py-6 text-right">
-                                            <button onClick={() => {/* Delete logic */}} className="p-2 text-gray-300 hover:text-red-500"><IconTrash className="w-5 h-5" /></button>
+                                        {teamFilter !== 'diaristas' && (
+                                            <td className="px-8 py-6">
+                                                {getVacationStatus(emp) === 'vencendo' ? (
+                                                    <span className="flex items-center gap-1.5 text-orange-600 font-bold text-[10px] uppercase">
+                                                        <IconAlertTriangle className="w-4 h-4" /> Vencendo em breve
+                                                    </span>
+                                                ) : getVacationStatus(emp) === 'vencida' ? (
+                                                    <span className="flex items-center gap-1.5 text-red-600 font-bold text-[10px] uppercase">
+                                                        <IconAlertTriangle className="w-4 h-4" /> Vencida
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-green-600 font-bold text-[10px] uppercase">OK</span>
+                                                )}
+                                            </td>
+                                        )}
+                                        <td className="px-8 py-6 text-right flex justify-end gap-2 items-center">
+                                            <button onClick={() => handleEditEmployee(emp)} className="p-2 text-gray-300 hover:text-farm-600" title="Editar"><IconEdit className="w-5 h-5" /></button>
+                                            <button onClick={() => handleDeleteEmployee(emp.id)} className="p-2 text-gray-300 hover:text-red-500" title="Excluir"><IconTrash className="w-5 h-5" /></button>
                                         </td>
                                     </tr>
                                 ))}
@@ -554,7 +786,7 @@ export const EmployeesPage: React.FC = () => {
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Funcionário</label>
                                     <select required value={vacationFormData.employee_id} onChange={e => setVacationFormData({...vacationFormData, employee_id: e.target.value})} className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none font-medium">
                                         <option value="">Selecionar...</option>
-                                        {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
+                                        {employees.filter(e => e.journey_type !== 'diarista').map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
                                     </select>
                                 </div>
                                 <div className="space-y-1">
@@ -586,7 +818,7 @@ export const EmployeesPage: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="divide-y divide-gray-50">
-                                    {employees.map(emp => {
+                                    {employees.filter(e => e.journey_type !== 'diarista').map(emp => {
                                         const empVacations = vacations.filter(v => v.employee_id === emp.id);
                                         return (
                                             <div key={emp.id} className="grid grid-cols-[200px_1fr] py-4 items-center">
@@ -631,7 +863,7 @@ export const EmployeesPage: React.FC = () => {
                                 <IconAlertTriangle className="w-5 h-5 text-orange-500" /> Próximos Vencimentos
                             </h4>
                             <div className="space-y-3">
-                                {employees.filter(e => getVacationStatus(e) === 'vencendo').map(e => (
+                                {employees.filter(e => e.journey_type !== 'diarista' && getVacationStatus(e) === 'vencendo').map(e => (
                                     <div key={e.id} className="flex justify-between items-center p-3 bg-orange-50 rounded-xl border border-orange-100">
                                         <div>
                                             <p className="font-bold text-gray-800 text-sm">{e.full_name}</p>
@@ -645,7 +877,7 @@ export const EmployeesPage: React.FC = () => {
                                         </button>
                                     </div>
                                 ))}
-                                {employees.filter(e => getVacationStatus(e) === 'vencendo').length === 0 && (
+                                {employees.filter(e => e.journey_type !== 'diarista' && getVacationStatus(e) === 'vencendo').length === 0 && (
                                     <p className="text-gray-400 text-sm italic text-center py-4">Nenhum vencimento crítico identificado.</p>
                                 )}
                             </div>
@@ -706,13 +938,13 @@ export const EmployeesPage: React.FC = () => {
                                 <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b">
                                     <tr>
                                         <th className="px-8 py-6">Funcionário</th>
-                                        <th className="px-8 py-6 text-center">Horas Esperadas</th>
+                                        <th className="px-8 py-6 text-center">Jornada Mês</th>
                                         <th className="px-8 py-6 text-center">Horas Trabalhadas</th>
                                         <th className="px-8 py-6 text-right">Saldo do Mês</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
-                                    {employees.map(emp => {
+                                    {employees.filter(e => e.journey_type !== 'diarista').map(emp => {
                                         const { totalBalance, totalWorked, totalExpected } = getMonthlyBalance(emp);
                                         return (
                                             <tr key={emp.id} 
@@ -739,6 +971,53 @@ export const EmployeesPage: React.FC = () => {
                                     })}
                                 </tbody>
                             </table>
+
+                            {/* Tabela de Diaristas no Banco de Horas */}
+                            {employees.filter(e => e.journey_type === 'diarista').length > 0 && (
+                                <div className="mt-8 border-t border-gray-100 pt-8">
+                                    <h4 className="font-bold text-gray-800 mb-4 px-8 flex items-center gap-2">
+                                        <IconBriefcase className="w-5 h-5 text-green-600" /> Resumo de Diaristas
+                                    </h4>
+                                    <table className="w-full text-left">
+                                        <thead className="bg-green-50 text-[10px] font-black text-green-600 uppercase tracking-[0.2em] border-b border-green-100">
+                                            <tr>
+                                                <th className="px-8 py-6">Diarista</th>
+                                                <th className="px-8 py-6 text-center">Diárias Feitas</th>
+                                                <th className="px-8 py-6 text-center">Horas Trabalhadas</th>
+                                                <th className="px-8 py-6 text-right">Valor Estimado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {employees.filter(e => e.journey_type === 'diarista').map(emp => {
+                                                const { totalWorked, totalDaysWorked } = getMonthlyBalance(emp);
+                                                const payment = totalDaysWorked * (emp.daily_rate || 0);
+                                                return (
+                                                    <tr key={emp.id} 
+                                                        onClick={() => setSelectedEmployeeForBanco(emp.id)}
+                                                        className="hover:bg-green-50/30 transition-colors cursor-pointer group"
+                                                    >
+                                                        <td className="px-8 py-6">
+                                                            <p className="font-bold text-gray-900 group-hover:text-green-600 transition-colors">{emp.full_name}</p>
+                                                            <p className="text-[10px] text-gray-400 uppercase">{emp.position}</p>
+                                                        </td>
+                                                        <td className="px-8 py-6 text-center">
+                                                            <span className="font-black text-gray-700">{totalDaysWorked} dias</span>
+                                                        </td>
+                                                        <td className="px-8 py-6 text-center">
+                                                            <span className="font-bold text-gray-500">{totalWorked.toFixed(1)}h</span>
+                                                        </td>
+                                                        <td className="px-8 py-6 text-right">
+                                                            <span className="font-black text-green-600 bg-green-50 px-3 py-1.5 rounded-xl border border-green-100">
+                                                                R$ {payment.toFixed(2).replace('.', ',')}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 animate-scale-in">
@@ -887,7 +1166,7 @@ export const EmployeesPage: React.FC = () => {
                                 <div className="h-12 w-px bg-gray-200 hidden md:block"></div>
                                 <div className="text-center md:text-right">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Funcionários Ativos</p>
-                                    <p className="text-2xl font-black text-gray-900">{employees.filter(e => e.active).length} colaboradores</p>
+                                    <p className="text-2xl font-black text-gray-900">{employees.filter(e => e.active && e.journey_type !== 'diarista').length} colaboradores</p>
                                 </div>
                             </div>
 
@@ -999,7 +1278,7 @@ export const EmployeesPage: React.FC = () => {
                                 <div className="h-12 w-px bg-amber-200 hidden md:block"></div>
                                 <div className="text-center md:text-right">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Participantes Selecionados</p>
-                                    <p className="text-2xl font-black text-gray-900">{employees.filter(e => e.active && e.participates_product_rateio).length} colaboradores</p>
+                                    <p className="text-2xl font-black text-gray-900">{employees.filter(e => e.active && e.journey_type !== 'diarista' && e.participates_product_rateio).length} colaboradores</p>
                                 </div>
                             </div>
 
@@ -1048,7 +1327,7 @@ export const EmployeesPage: React.FC = () => {
                                 <IconUser className="w-5 h-5 text-farm-600" /> Ativar Participantes
                             </h4>
                             <div className="space-y-3">
-                                {employees.map(emp => (
+                                {employees.filter(e => e.journey_type !== 'diarista').map(emp => (
                                     <div key={emp.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
                                         <div className="overflow-hidden">
                                             <p className="font-bold text-gray-800 text-sm truncate">{emp.full_name}</p>

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import Papa from 'papaparse';
 import { IconLoader, IconCheck, IconPlus, IconFileText, IconTrash, IconUser, IconRefresh } from '../components/Icons';
 import { BankReconciliation } from '../components/BankReconciliation';
+import { ReconciliationSessions } from '../components/ReconciliationSessions';
 
 // Pencil/Edit icon inline since it may not be in Icons.tsx
 const IconEdit = ({ className }: { className?: string }) => (
@@ -192,7 +193,8 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [isOcrProcessing, setIsOcrProcessing] = useState(false);
-    const [showReconciliation, setShowReconciliation] = useState(false);
+    const [reconciliationView, setReconciliationView] = useState<'none' | 'sessions' | 'active'>('none');
+    const [activeReconciliationId, setActiveReconciliationId] = useState<number | null>(null);
 
     // Contact Management
     const [showContactManager, setShowContactManager] = useState(false);
@@ -231,6 +233,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         tipo: 'all' as 'all' | 'entrada' | 'saida'
     });
     const [searchTerm, setSearchTerm] = useState('');
+    const [flowSearchTerm, setFlowSearchTerm] = useState('');
 
     const defaultFormData = {
         tipo: 'saida' as 'entrada' | 'saida',
@@ -415,7 +418,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             setEntries(data || []);
 
             const totals = (data || []).reduce((acc, curr) => {
-                if (curr.status === 'pendente') return acc;
+                if (curr.status === 'cancelado') return acc; // Ignora apenas cancelados
                 const d = new Date(curr.data_pagamento + 'T12:00:00');
                 if (d.getMonth() + 1 !== m) return acc;
                 if (curr.tipo === 'entrada') acc.totalEntradas += Number(curr.valor);
@@ -663,28 +666,19 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                         }
                     }
 
-                    const finalPayloads = payloads.map(payload => {
+                    const finalPayloads = payloads.filter(payload => {
                         const existing = existingMap[payload.external_id];
-                        if (existing) {
-                            return {
-                                ...payload,
-                                id: existing.id, // Associa o ID do banco para atualizar via upsert
-                                status: existing.status === 'aprovado' ? 'aprovado' : payload.status,
-                                data_aprovacao: existing.status === 'aprovado' ? existing.data_aprovacao : payload.data_aprovacao,
-                                // Preserva a categoria se já tiver sido alterada de 'Geral' pelo usuário no sistema
-                                categoria: (existing.categoria && existing.categoria !== 'Geral') ? existing.categoria : payload.categoria
-                            };
-                        }
-                        return payload;
+                        // Se já existe, pula (não importa, mantém os dados atuais do sistema)
+                        return !existing;
                     });
 
-                    // Gravar os dados em lotes via upsert
+                    // Gravar os dados em lotes via insert (apenas os novos)
                     let successCount = 0;
                     for (let i = 0; i < finalPayloads.length; i += 50) {
                         const chunk = finalPayloads.slice(i, i + 50);
                         const { error } = await supabase
                             .from('fluxo_caixa')
-                            .upsert(chunk, { onConflict: 'external_id' });
+                            .insert(chunk);
                         
                         if (error) {
                             alert('Erro ao importar parte dos dados: ' + error.message);
@@ -1070,7 +1064,14 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         const d = new Date(e.data_pagamento + 'T12:00:00');
         const matchMonth = d.getMonth() + 1 === viewFilters.month;
         const matchTipo = viewFilters.tipo === 'all' || e.tipo === viewFilters.tipo;
-        return matchMonth && matchTipo;
+        const matchSearch = !flowSearchTerm || 
+            e.descricao.toLowerCase().includes(flowSearchTerm.toLowerCase()) || 
+            e.categoria.toLowerCase().includes(flowSearchTerm.toLowerCase()) ||
+            (e.conta_origem || '').toLowerCase().includes(flowSearchTerm.toLowerCase()) ||
+            (e.valor.toString().includes(flowSearchTerm)) ||
+            (e.tags || '').toLowerCase().includes(flowSearchTerm.toLowerCase());
+            
+        return matchMonth && matchTipo && matchSearch;
     });
 
     return (
@@ -1086,7 +1087,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                             {isImportingCsv ? <IconLoader className="w-5 h-5 animate-spin" /> : <IconFileText className="w-5 h-5" />} {isImportingCsv ? 'Importando...' : 'Importar CSV'}
                         </button>
                         <input type="file" id="csvFileInput" accept=".csv" className="hidden" onChange={handleCsvImport} disabled={isImportingCsv} />
-                        <button onClick={() => setShowReconciliation(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-farm-700 border-2 border-farm-100 font-bold px-6 py-3 rounded-xl hover:bg-farm-50 transition-colors">
+                        <button onClick={() => setReconciliationView('sessions')} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-farm-700 border-2 border-farm-100 font-bold px-6 py-3 rounded-xl hover:bg-farm-50 transition-colors">
                             <IconRefresh className="w-5 h-5" /> Conciliar Extrato
                         </button>
                         <button onClick={handleToggleForm} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-farm-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-farm-700 transition-colors shadow-lg shadow-farm-200">
@@ -1342,15 +1343,16 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                     {!loading && (
                         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
                             <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50/50 no-print">
-                                <div className="flex items-center gap-4">
-                                    <span className="text-sm font-bold text-gray-500 uppercase tracking-widest hidden lg:inline">Período:</span>
-                                    <select 
-                                        value={viewFilters.month} 
-                                        onChange={e => setViewFilters({...viewFilters, month: parseInt(e.target.value)})}
-                                        className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-farm-200"
-                                    >
-                                        {Array.from({length: 12}).map((_, i) => (
-                                            <option key={i+1} value={i+1}>{new Date(2000, i, 1).toLocaleDateString('pt-BR', {month: 'long'}).toUpperCase()}</option>
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-bold text-gray-500 uppercase tracking-widest hidden lg:inline">Período:</span>
+                                        <select 
+                                            value={viewFilters.month} 
+                                            onChange={e => setViewFilters({...viewFilters, month: parseInt(e.target.value)})}
+                                            className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-farm-200"
+                                        >
+                                            {Array.from({length: 12}).map((_, i) => (
+                                                <option key={i+1} value={i+1}>{new Date(2000, i, 1).toLocaleDateString('pt-BR', {month: 'long'}).toUpperCase()}</option>
                                         ))}
                                     </select>
                                     <select 
@@ -1370,8 +1372,16 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                         <option value="saida">DESPESAS (SAÍDAS)</option>
                                     </select>
                                 </div>
-                                <div className="flex gap-2 w-full md:w-auto">
-                                    {canApprove && selectedIds.length > 0 && (
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar lançamentos..." 
+                                    value={flowSearchTerm}
+                                    onChange={e => setFlowSearchTerm(e.target.value)}
+                                    className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-farm-200 w-48 shadow-sm"
+                                />
+                                {canApprove && selectedIds.length > 0 && (
                                         <div className="flex gap-2 animate-fade-in bg-amber-50 p-1 rounded-xl border border-amber-100">
                                             <button 
                                                 onClick={handleBulkApprove}
@@ -1944,12 +1954,26 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                 </div>
             )}
 
-            {showReconciliation && (
-                <div className="fixed inset-0 z-[100] overflow-y-auto no-print">
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => setShowReconciliation(false)}></div>
-                    <div className="flex min-h-full items-center justify-center p-4 sm:p-6 lg:p-8">
-                        <div className="w-full max-w-5xl relative z-10 transform transition-all">
-                            <BankReconciliation onReconciled={fetchCashFlow} onClose={() => setShowReconciliation(false)} />
+            {reconciliationView === 'sessions' && (
+                <ReconciliationSessions 
+                    onClose={() => setReconciliationView('none')} 
+                    onSelectSession={(id) => {
+                        setActiveReconciliationId(id);
+                        setReconciliationView('active');
+                    }} 
+                />
+            )}
+            
+            {reconciliationView === 'active' && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => setReconciliationView('sessions')}></div>
+                    <div className="relative z-10 w-full max-w-7xl h-full flex items-center justify-center pointer-events-none">
+                        <div className="pointer-events-auto w-full flex justify-center">
+                            <BankReconciliation 
+                                sessionId={activeReconciliationId}
+                                onReconciled={fetchCashFlow} 
+                                onClose={() => setReconciliationView('sessions')} 
+                            />
                         </div>
                     </div>
                 </div>
