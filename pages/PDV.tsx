@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from '../lib/supabase';
 import { IconCamera, IconLoader, IconCheck, IconShoppingCart, IconUser, IconZap } from '../components/Icons';
+import { BiometricSimulator } from '../components/BiometricSimulator';
 
 interface Stay {
     id: number;
@@ -47,6 +48,8 @@ export const PDVPage: React.FC = () => {
     const [basket, setBasket] = useState<{product: Product, quantity: number}[]>([]);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<'Dinheiro' | 'Pix' | 'Cartão' | 'Transferência'>('Dinheiro');
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [showBiometricSimulator, setShowBiometricSimulator] = useState(false);
 
     // Manual Search State
     const [searchQuery, setSearchQuery] = useState('');
@@ -75,6 +78,14 @@ export const PDVPage: React.FC = () => {
 
     useEffect(() => {
         const fetchInitialData = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+                if (profile?.role === 'admin' || profile?.role === 'site_admin') {
+                    setIsAdmin(true);
+                }
+            }
+
             const { data } = await supabase.from('pontos_venda').select('id, nome').eq('ativo', true).order('nome');
             setAvailablePoints(data || []);
         };
@@ -525,6 +536,16 @@ export const PDVPage: React.FC = () => {
                         >
                             🏠 {operatingPoint} (Trocar)
                         </button>
+                        
+                        {isAdmin && (
+                            <button
+                                onClick={() => setShowBiometricSimulator(true)}
+                                className="mt-2 ml-2 inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-bold hover:bg-blue-200 transition-colors"
+                            >
+                                🤖 Simulador ControlID
+                            </button>
+                        )}
+                        
                         {isRestaurante && (
                             <div className="flex flex-col items-center">
                                 <div className="bg-farm-900 text-white px-6 py-2 rounded-2xl font-black text-xl shadow-lg uppercase tracking-tighter border-2 border-farm-500">
@@ -559,6 +580,15 @@ export const PDVPage: React.FC = () => {
                             </button>
                         ))}
                     </div>
+                    {isAdmin && (
+                        <button
+                            onClick={() => setShowBiometricSimulator(true)}
+                            className="mt-8 bg-blue-50 text-blue-600 px-6 py-3 rounded-xl font-bold hover:bg-blue-100 transition-colors flex items-center gap-2 border border-blue-200 shadow-sm"
+                        >
+                            <IconCamera className="w-5 h-5" />
+                            Abrir Simulador Biométrico (Dev)
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -1038,6 +1068,10 @@ export const PDVPage: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showBiometricSimulator && (
+                <BiometricSimulator onClose={() => setShowBiometricSimulator(false)} />
             )}
         </div>
     );

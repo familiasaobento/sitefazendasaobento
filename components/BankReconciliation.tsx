@@ -613,7 +613,29 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ sessionI
   const handleCreateEntry = async (tx: BankTransaction) => {
     setLoading(true);
     try {
-      const finalCategory = matchCategory(null, tx.description, tx.type, categoriesList);
+      // Motor de Aprendizado: Busca no histórico lançamentos similares para adivinhar a categoria
+      const searchWords = tx.description.split(' ').filter(w => w.length > 3).slice(0, 3).join(' ');
+      let finalCategory = '';
+
+      if (searchWords.length > 3) {
+          const { data: historyData } = await supabase
+              .from('fluxo_caixa')
+              .select('categoria')
+              .eq('tipo', tx.type)
+              .textSearch('descricao', searchWords.split(' ').join(' | ')) // Busca textual pelas palavras principais
+              .not('categoria', 'is', null)
+              .order('data_pagamento', { ascending: false })
+              .limit(1);
+
+          if (historyData && historyData.length > 0) {
+              finalCategory = historyData[0].categoria;
+          }
+      }
+
+      // Fallback para as regras fixas se o aprendizado não trouxer nada
+      if (!finalCategory) {
+          finalCategory = matchCategory(null, tx.description, tx.type, categoriesList);
+      }
 
       const { data, error } = await supabase
         .from('fluxo_caixa')
@@ -1123,7 +1145,7 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ sessionI
                                 </td>
                                 <td className="p-3 font-mono text-[10px] text-gray-400">{tx.date}</td>
                                 <td className="p-3">
-                                   <div className="font-bold text-gray-700 max-w-[200px] truncate" title={tx.description}>{tx.description}</div>
+                                   <div className="font-bold text-gray-700 max-w-[400px] whitespace-normal text-xs" title={tx.description}>{tx.description}</div>
                                 </td>
                                 <td className={`p-3 text-right font-black ${tx.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
                                   {tx.type === 'entrada' ? '+' : '-'} {tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -1258,6 +1280,30 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ sessionI
                                   const absValue = Math.abs(Number(sys.valor));
                                   const isMatch = (sys.tipo === 'entrada' && Math.abs(selectedSumEntrada - absValue) < 0.01) || 
                                                   (sys.tipo === 'saida' && Math.abs(selectedSumSaida - absValue) < 0.01);
+                                  
+                                  // Motor de Aprendizado: Fuzzy Match Visual para divergência de valores
+                                  let isFuzzyMatch = false;
+                                  if (!isMatch && selectedTxs.length === 1 && sys.tipo === selectedTxs[0].type) {
+                                      const sysDate = new Date(sys.data_pagamento);
+                                      const txDate = new Date(parseDate(selectedTxs[0].date));
+                                      const diffDays = Math.abs((txDate.getTime() - sysDate.getTime()) / (1000 * 3600 * 24));
+                                      
+                                      if (diffDays <= 15) {
+                                          const normSys = sys.descricao.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                          const normTx = selectedTxs[0].description.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                          
+                                          if (normSys.length > 5 && (normSys.includes(normTx) || normTx.includes(normSys))) {
+                                              isFuzzyMatch = true;
+                                          } else {
+                                              const sysWords = sys.descricao.toLowerCase().split(' ').filter(w => w.length > 3);
+                                              const txWords = selectedTxs[0].description.toLowerCase().split(' ').filter(w => w.length > 3);
+                                              const overlap = sysWords.filter(w => txWords.includes(w)).length;
+                                              if (overlap >= 2 || (sysWords.length > 0 && overlap === sysWords.length)) {
+                                                  isFuzzyMatch = true;
+                                              }
+                                          }
+                                      }
+                                  }
 
                                   return (
                                       <div 
@@ -1269,7 +1315,9 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ sessionI
                                                   ? 'border-farm-600 bg-farm-50/50 shadow-sm' 
                                                   : isMatch 
                                                       ? 'border-green-400 bg-green-50 shadow-md' 
-                                                      : 'border-gray-100 bg-white hover:bg-gray-50'
+                                                      : isFuzzyMatch
+                                                          ? 'border-yellow-400 bg-yellow-50 shadow-sm ring-1 ring-yellow-400/50'
+                                                          : 'border-gray-100 bg-white hover:bg-gray-50'
                                           }`}
                                       >
                                           <div className="flex justify-between items-start mb-2">
@@ -1288,6 +1336,11 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ sessionI
                                           </div>
                                           <div className="text-sm font-bold text-gray-700 mb-1 line-clamp-2">{sys.descricao}</div>
                                           
+                                          {isFuzzyMatch && !isMatch && !selectedSysIds.has(sys.id) && (
+                                              <div className="mt-2 text-[10px] text-yellow-700 font-bold bg-yellow-100 px-2 py-1 rounded-md flex items-center gap-1 w-max">
+                                                  ⭐ Possível correspondência (Valores divergem)
+                                              </div>
+                                          )}
                                           <div className="flex justify-between items-center mt-2">
                                               <span className="px-2 py-0.5 bg-gray-100 rounded-md text-[10px] font-bold text-gray-500">{sys.categoria}</span>
                                               {selectedSysIds.has(sys.id) && !isReadOnly && (
