@@ -848,11 +848,6 @@ export const MembersPage: React.FC = () => {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <p className="font-bold text-gray-900 truncate">{profile.full_name || 'Sem nome'}</p>
-                                            {profile.has_house && profile.house_number && (
-                                                <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded-md font-black border border-blue-200">
-                                                    CASA {profile.house_number}
-                                                </span>
-                                            )}
                                         </div>
                                         <p className="text-xs text-gray-400 font-mono">
                                             {profile.cpf ? (
@@ -873,6 +868,14 @@ export const MembersPage: React.FC = () => {
                                         <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">E-mail</p>
                                         <p className="text-gray-700 truncate" title={profile.email}>{profile.email || '—'}</p>
                                     </div>
+                                    {profile.has_house && profile.house_number && (
+                                        <div className="col-span-2 bg-blue-50/50 p-2 rounded-lg border border-blue-100 flex justify-between items-center text-xs">
+                                            <p className="text-blue-700 uppercase font-bold text-[10px]">Casa (Fazenda)</p>
+                                            <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-black border border-blue-200">
+                                                CASA {profile.house_number}
+                                            </span>
+                                        </div>
+                                    )}
                                     {isAdmin && (
                                         <div className="col-span-2 pt-2 flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
                                             <select
@@ -899,7 +902,7 @@ export const MembersPage: React.FC = () => {
 
                                 {(profile.address || profile.address_street) && (
                                     <div className="bg-gray-50 p-2 rounded-lg">
-                                        <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Endereço</p>
+                                        <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Endereço Residencial</p>
                                         <p className="text-gray-700 text-xs leading-tight">
                                             {profile.address_street 
                                                 ? `${profile.address_street}, ${profile.address_number}${profile.address_complement ? ` - ${profile.address_complement}` : ''}, ${profile.address_neighborhood}, ${profile.address_city}`
@@ -974,11 +977,6 @@ export const MembersPage: React.FC = () => {
                                                                         {expandedProfileId === profile.id ? '▲' : '▼'}
                                                                     </span>
                                                                 </p>
-                                                                {expandedProfileId === profile.id && profile.has_house && profile.house_number && (
-                                                                    <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-black border border-blue-200">
-                                                                        CASA {profile.house_number}
-                                                                    </span>
-                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1043,8 +1041,8 @@ export const MembersPage: React.FC = () => {
                                                     <td colSpan={5} className="px-6 py-4 border-t border-b border-gray-100">
                                                         <div className="ml-12 pl-4 border-l-2 border-blue-200 space-y-5">
                                                             
-                                                            {/* CPF & Endereço Grid */}
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm max-w-4xl">
+                                                            {/* CPF, Casa & Endereço Grid */}
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm max-w-4xl">
                                                                 <div>
                                                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">CPF</p>
                                                                     <p className="text-sm font-medium text-gray-800 font-mono">
@@ -1059,13 +1057,18 @@ export const MembersPage: React.FC = () => {
                                                                     </p>
                                                                 </div>
                                                                 <div>
-                                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Endereço</p>
-                                                                    <p className="text-sm font-medium text-gray-800 leading-tight">
-                                                                        {profile.has_house && profile.house_number && (
-                                                                            <span className="inline-block bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-black border border-blue-200 mr-2">
+                                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Casa (Fazenda)</p>
+                                                                    <p className="text-sm font-medium text-gray-800">
+                                                                        {profile.has_house && profile.house_number ? (
+                                                                            <span className="inline-block bg-blue-100 text-blue-700 text-xs px-2.5 py-0.5 rounded-full font-black border border-blue-200">
                                                                                 CASA {profile.house_number}
                                                                             </span>
-                                                                        )}
+                                                                        ) : '—'}
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Endereço Residencial</p>
+                                                                    <p className="text-sm font-medium text-gray-800 leading-tight">
                                                                         {profile.address_street 
                                                                             ? `${profile.address_street}, ${profile.address_number}${profile.address_complement ? ` - ${profile.address_complement}` : ''}, ${profile.address_neighborhood}, ${profile.address_city}`
                                                                             : profile.address || '—'
