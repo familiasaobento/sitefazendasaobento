@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { IconPrinter, IconCheck, IconLoader, IconFileText, IconPlus, IconTrash, IconZap, IconDownload } from './Icons';
-import { QRCodeCanvas } from 'qrcode.react';
 
 interface VisualizadorProformaProps {
     estadiaId: number;
@@ -366,39 +365,6 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
         }
     };
 
-    const handlePrintWristbands = () => {
-        const activeStays = data.allStays.filter((s:any) => s.status === 'ativa');
-        if (activeStays.length === 0) return alert('Nenhuma pulseira ativa encontrada para este grupo.');
-
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) return alert('Habilite popups para imprimir.');
-
-        // We'll generate a simple HTML for the barcodes
-        let qrItemsHTML = '';
-        activeStays.forEach((s: any) => {
-            qrItemsHTML += `
-                <div style="display:inline-block; border: 1px solid #eee; padding: 20px; text-align: center; margin: 10px; border-radius: 10px; width: 140px;">
-                    <p style="font-size: 10px; font-weight: bold; margin-bottom: 5px;">${s.hospede_nome}</p>
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${s.codigo_pulseira}" width="120" height="120" />
-                    <p style="font-size: 10px; font-family: monospace; margin-top: 5px;">${s.codigo_pulseira}</p>
-                </div>
-            `;
-        });
-
-        printWindow.document.write(`
-            <html>
-                <head><title>Imprimir Pulseiras - ${data.reservation.name || data.profile.full_name}</title></head>
-                <body style="font-family: sans-serif; padding: 20px; text-align: center;">
-                    <h2>Pulseiras Digitais - Fazenda São Bento</h2>
-                    <div style="display: flex; flex-wrap: wrap; justify-content: center;">
-                        ${qrItemsHTML}
-                    </div>
-                    <script>setTimeout(() => { window.print(); window.close(); }, 1500);</script>
-                </body>
-            </html>
-        `);
-        printWindow.document.close();
-    };
 
     const handleGeneratePDF = () => {
         if (!printRef.current) return;
@@ -520,39 +486,6 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
             </div>
 
             <div className="p-8 space-y-8">
-                {/* QR Codes Section for Admin / Desk */}
-                {!isFinalizado && data.estadia.status === 'ativa' && (
-                    <div className="bg-farm-50 p-6 rounded-3xl border border-farm-100 space-y-4 no-print">
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                            <h3 className="font-bold text-farm-900 flex items-center gap-2 italic">
-                                <IconZap className="w-5 h-5 text-farm-600" />
-                                Pulseiras Digitais (Ativas)
-                            </h3>
-                            <button 
-                                onClick={handlePrintWristbands}
-                                className="bg-farm-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-farm-700 transition-all flex items-center gap-2 shadow-sm"
-                            >
-                                <IconPrinter className="w-4 h-4" /> Imprimir QR Codes
-                            </button>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                            {data.allStays.filter((s:any) => s.status === 'ativa').map((s: any) => (
-                                <div key={s.id} className="bg-white p-4 rounded-2xl border border-farm-100 text-center space-y-2 shadow-sm relative group">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate" title={s.hospede_nome}>
-                                        {s.hospede_nome}
-                                    </p>
-                                    <div className="flex justify-center p-2 bg-white border border-gray-50 rounded-xl">
-                                        <QRCodeCanvas value={s.codigo_pulseira} size={80} level="H" includeMargin={false} fgColor="#1d4336" />
-                                    </div>
-                                    <p className="text-[9px] font-mono font-black text-farm-700 tracking-wider">
-                                        {s.codigo_pulseira}
-                                    </p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-b border-gray-100 pb-8">
                     <div>
                         <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Hóspede Responsável</h4>

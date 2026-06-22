@@ -123,7 +123,7 @@ async function sendInviteEmail(supabaseAdmin: any, email: string, full_name: str
                         <h2 style="color: #1b4332; text-align: center;">Bem-vindo à Fazenda São Bento!</h2>
                         <p>Olá <strong>${full_name}</strong>,</p>
                         <p>Você foi cadastrado como <strong>${roleLabel}</strong> no nosso portal da família.</p>
-                        <p>Para começar a utilizar o sistema, cadastrar suas pulseiras digitais e realizar reservas, você precisa definir sua senha de acesso no botão abaixo:</p>
+                        <p>Para começar a utilizar o sistema, realizar seu cadastro facial e fazer reservas, você precisa definir sua senha de acesso no botão abaixo:</p>
                         
                         <div style="text-align: center; margin: 30px 0;">
                             <a href="${inviteLink}" style="background-color: #556C3B; color: white; padding: 15px 25px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">DEFINIR MINHA SENHA</a>

@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { QRCodeCanvas } from 'qrcode.react';
-import html2canvas from 'html2canvas';
 import { VisualizadorProforma } from '../components/VisualizadorProforma';
 import { IconFileText, IconZap, IconUser, IconLoader, IconDownload, IconLock } from '../components/Icons';
 
@@ -38,41 +36,11 @@ export const ProfilePage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [authEmail, setAuthEmail] = useState('');
     const [pastStays, setPastStays] = useState<any[]>([]);
-    const [activeBraceletCodes, setActiveBraceletCodes] = useState<{code: string; name: string}[]>([]);
     const [selectedEstadiaId, setSelectedEstadiaId] = useState<number | null>(null);
-    const [activeTab, setActiveTab] = useState<'id' | 'data' | 'security'>('id');
+    const [activeTab, setActiveTab] = useState<'data' | 'security'>('data');
     const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' });
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
     const [passwordMessage, setPasswordMessage] = useState({ text: '', type: '' });
-
-    const [isDownloading, setIsDownloading] = useState(false);
-
-    const handleDownloadQRCode = async (elementId: string = 'digital-id-card', filename: string = 'Identidade_Digital_Fazenda_Sao_Bento') => {
-        const element = document.getElementById(elementId);
-        if (!element) return;
-
-        try {
-            setIsDownloading(true);
-            const canvas = await html2canvas(element, { 
-                backgroundColor: '#ffffff',
-                scale: 2,
-                useCORS: true,
-                logging: false
-            });
-            const url = canvas.toDataURL("image/png");
-            const link = document.createElement('a');
-            link.download = `${filename}.png`;
-            link.href = url;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } catch (err) {
-            console.error("Erro ao gerar imagem:", err);
-            alert("Não foi possível gerar a imagem no momento.");
-        } finally {
-            setIsDownloading(false);
-        }
-    };
 
     const [formData, setFormData] = useState<ProfileData>({
         full_name: '',
@@ -339,28 +307,7 @@ export const ProfilePage: React.FC = () => {
                 setPastStays(userStays);
             }
 
-            // Fetch Active Stay (codigo pulseira) - Two step process to ensure RLS compliance
-            const { data: userRes } = await supabase
-                .from('reservations')
-                .select('id')
-                .eq('user_id', user.id);
 
-            if (userRes && userRes.length > 0) {
-                const resIds = userRes.map(r => r.id);
-                const { data: activeStayData } = await supabase
-                    .from('estadias')
-                    .select('codigo_pulseira, hospede_nome')
-                    .eq('status', 'ativa')
-                    .in('reserva_id', resIds)
-                    .order('id', { ascending: false });
-
-                if (activeStayData && activeStayData.length > 0) {
-                    setActiveBraceletCodes(activeStayData.map(s => ({ 
-                        code: s.codigo_pulseira, 
-                        name: s.hospede_nome 
-                    })));
-                }
-            }
 
         } catch (err: any) {
             console.error('Erro ao buscar perfil:', err);
@@ -521,13 +468,7 @@ export const ProfilePage: React.FC = () => {
         <div className="max-w-2xl mx-auto space-y-6 pb-20">
             {/* Tab Navigation */}
             <div className="flex bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 mb-8">
-                <button
-                    onClick={() => setActiveTab('id')}
-                    className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${activeTab === 'id' ? 'bg-farm-700 text-white shadow-lg shadow-farm-100' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                    <IconZap className="w-4 h-4" />
-                    Identidade Digital
-                </button>
+
                 <button
                     onClick={() => setActiveTab('data')}
                     className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${activeTab === 'data' ? 'bg-farm-700 text-white shadow-lg shadow-farm-100' : 'text-gray-400 hover:text-gray-600'}`}
@@ -544,76 +485,7 @@ export const ProfilePage: React.FC = () => {
                 </button>
             </div>
 
-            {activeTab === 'id' ? (
-                /* PDV / Digital ID Section */
-                <div id="digital-id-card" className={`bg-white rounded-3xl shadow-sm border p-10 text-center transition-all animate-fade-in ${activeBraceletCodes.length > 0 ? 'border-farm-300 ring-8 ring-farm-50' : 'border-gray-200 opacity-75'}`}>
-                    <div className="mb-6" data-html2canvas-ignore="true">
-                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] ${activeBraceletCodes.length > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                            {activeBraceletCodes.length > 0 ? '● Pulseira(s) Habilitada(s) (Na Fazenda)' : '○ Sem Acessos Ativos no Momento'}
-                        </span>
-                    </div>
-                    
-                    <h2 className="text-3xl font-bold text-farm-900 font-serif mb-3">Suas Pulseiras Digitais</h2>
-                    <p className="text-gray-500 mb-8 text-sm max-w-sm mx-auto leading-relaxed">
-                        {activeBraceletCodes.length > 0 
-                            ? 'Apresente este(s) código(s) nos PDVs para registrar os consumos.' 
-                            : 'Nenhuma pulseira ativa. Os códigos QR serão gerados automaticamente no seu check-in na secretaria da fazenda.'}
-                    </p>
-
-                    {activeBraceletCodes.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center justify-center">
-                            {activeBraceletCodes.map((item, idx) => (
-                                <div key={idx} id={`bracelet-${idx}`} className="space-y-4 p-6 bg-white rounded-3xl border border-gray-100 shadow-sm relative group/item">
-                                    <p className="text-xs font-black uppercase tracking-widest text-farm-700">{item.name}</p>
-                                    <div className="relative inline-block">
-                                        <div className="p-4 bg-white border-2 rounded-[2rem] shadow-xl border-farm-100">
-                                            <QRCodeCanvas
-                                                value={item.code}
-                                                size={180}
-                                                level="H"
-                                                includeMargin={true}
-                                                fgColor="#1b4332"
-                                            />
-                                        </div>
-                                    </div>
-                                    <p className="text-[10px] font-black font-mono tracking-[0.3em] uppercase text-gray-400">{item.code}</p>
-                                    
-                                    <button
-                                        onClick={() => handleDownloadQRCode(`bracelet-${idx}`, `Pulseira_${item.name.replace(/\s+/g, '_')}`)}
-                                        className="mt-4 flex items-center justify-center gap-2 w-full text-[10px] font-bold text-farm-700 bg-farm-50 py-2 rounded-xl border border-farm-100 hover:bg-farm-100 transition-colors"
-                                        title="Baixar apenas este QR Code"
-                                        data-html2canvas-ignore="true"
-                                    >
-                                        <IconDownload className="w-3 h-3" />
-                                        Baixar Individual
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="py-12 flex flex-col items-center justify-center opacity-40">
-                            <div className="bg-gray-100 w-24 h-24 rounded-full flex items-center justify-center mb-4">
-                                <IconZap className="w-10 h-10 text-gray-300" />
-                            </div>
-                            <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Aguardando Check-in</p>
-                        </div>
-                    )}
-
-                    {activeBraceletCodes.length > 0 && (
-                        <div className="mt-12 space-y-4">
-                            <button
-                                onClick={() => handleDownloadQRCode()}
-                                disabled={isDownloading}
-                                data-html2canvas-ignore="true"
-                                className="flex items-center gap-2 mx-auto text-farm-700 font-bold hover:text-farm-800 transition-colors py-2 px-4 rounded-xl hover:bg-farm-50 disabled:opacity-50"
-                            >
-                                {isDownloading ? <IconLoader className="w-5 h-5 animate-spin" /> : <IconDownload className="w-5 h-5" />}
-                                {isDownloading ? 'Gerando Imagens...' : 'Baixar Todas as Pulseiras'}
-                            </button>
-                        </div>
-                    )}
-                </div>
-            ) : activeTab === 'data' ? (
+            {activeTab === 'data' ? (
                 /* Profile Form and History */
                 <div className="animate-fade-in space-y-6">
                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">

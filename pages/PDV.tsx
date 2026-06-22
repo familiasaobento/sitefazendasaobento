@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from '../lib/supabase';
 import { IconCamera, IconLoader, IconCheck, IconShoppingCart, IconUser, IconZap } from '../components/Icons';
 import { BiometricSimulator } from '../components/BiometricSimulator';
@@ -56,9 +55,6 @@ export const PDVPage: React.FC = () => {
     const [activeStaysList, setActiveStaysList] = useState<Stay[]>([]);
     const [showManualSearch, setShowManualSearch] = useState(false);
     const [availablePoints, setAvailablePoints] = useState<OperatingPoint[]>([]);
-
-    const scannerRef = useRef<Html5QrcodeScanner | null>(null);
-    const lastScanRef = useRef<{ code: string, time: number } | null>(null);
 
     const getCurrentMeal = () => {
         const hour = new Date().getHours();
@@ -117,11 +113,6 @@ export const PDVPage: React.FC = () => {
 
         fetchInitialData();
         fetchActiveStays();
-        return () => {
-            if (scannerRef.current) {
-                scannerRef.current.clear();
-            }
-        };
     }, []);
 
     useEffect(() => {
@@ -162,18 +153,6 @@ export const PDVPage: React.FC = () => {
     useEffect(() => {
         if (operatingPoint) {
             fetchPdvProducts();
-            /*
-            if (isRestaurante) {
-                setTimeout(startScanner, 500);
-            }
-            */
-        } else {
-            if (scannerRef.current) {
-                scannerRef.current.clear().then(() => {
-                    scannerRef.current = null;
-                }).catch(e => console.error(e));
-                setScanning(false);
-            }
         }
     }, [operatingPoint]);
 
@@ -246,128 +225,7 @@ export const PDVPage: React.FC = () => {
         }
     };
 
-    const startScanner = async () => {
-        if (scannerRef.current) {
-            try {
-                await scannerRef.current.clear();
-                scannerRef.current = null;
-            } catch (e) {
-                console.error("Error clearing scanner:", e);
-            }
-        }
-
-        setScanning(true);
-        setActiveStay(null);
-
-        // Wait for DOM element to be ready
-        setTimeout(() => {
-            const readerElement = document.getElementById("reader");
-            if (!readerElement) {
-                console.error("Reader element not found");
-                return;
-            }
-
-            const scanner = new Html5QrcodeScanner(
-                "reader",
-                { fps: 10, qrbox: { width: 250, height: 250 } },
-                /* verbose= */ false
-            );
-
-            try {
-                scanner.render(onScanSuccess, onScanFailure);
-                scannerRef.current = scanner;
-            } catch (err) {
-                console.error("Scanner render error:", err);
-            }
-        }, 300);
-    };
-
-    const onScanSuccess = async (decodedText: string) => {
-        // Prevent double scans (vibrate/beep workaround)
-        const now = Date.now();
-        if (lastScanRef.current && lastScanRef.current.code === decodedText && now - lastScanRef.current.time < 30000) {
-            return;
-        }
-        lastScanRef.current = { code: decodedText, time: now };
-
-        if (!isRestaurante && scannerRef.current) {
-            await scannerRef.current.clear();
-            scannerRef.current = null;
-            setScanning(false);
-        }
-        
-        setLoading(true);
-
-        try {
-            const { data, error } = await supabase
-                .from('estadias')
-                .select(`
-                    id,
-                    reserva_id,
-                    codigo_pulseira,
-                    status,
-                    hospede_nome,
-                    hospede_idade,
-                    reservations:reserva_id (
-                        num_guests,
-                        accommodation,
-                        check_in,
-                        name,
-                        profiles:profiles!user_id (full_name, role)
-                    )
-                `)
-                .eq('codigo_pulseira', decodedText)
-                .eq('status', 'ativa')
-                .order('id', { ascending: false })
-                .single();
-
-            if (error || !data) {
-                setFeedback('⚠️ Erro: Pulseira não encontrada ou inativa');
-                setTimeout(() => setFeedback(null), 3000);
-                return;
-            }
-
-            if (isRestaurante) {
-                const mealName = getCurrentMeal();
-                if (!mealName) {
-                    setFeedback('🍽️ Fora do horário de refeições');
-                    setTimeout(() => setFeedback(null), 3000);
-                } else {
-                    // Check if THIS specific person (stay.id) already had this meal today
-                    const today = new Date().toISOString().split('T')[0];
-                    const { count, error: countError } = await supabase
-                        .from('lancamentos_consumo')
-                        .select('*', { count: 'exact', head: true })
-                        .eq('estadia_id', data.id)
-                        .eq('nome_item_snapshot', mealName)
-                        .gte('created_at', today);
-
-                    if (countError) console.error('Error checking repeat meal:', countError);
-                    
-                    const alreadyLaunched = count || 0;
-
-                    if (alreadyLaunched > 0) {
-                        // REPEAT: Launch with price 0
-                        setFeedback(`🔄 Repetição: ${data.hospede_nome || 'Hóspede'}. Registrando sem custo.`);
-                        await handleLaunchConsumption(mealName, 1, 0, data);
-                    } else {
-                        // FIRST TIME: Launch with normal price
-                        await handleLaunchConsumption(mealName, 1, undefined, data);
-                    }
-                }
-            } else {
-                setActiveStay(data);
-            }
-        } catch (err) {
-            console.error('Error finding stay:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const onScanFailure = (error: any) => { };
-
-    const handleLaunchConsumption = async (itemName: string, quantity: number, priceOverride?: number, stayOverride?: any, currentIteration?: number, maxIteration?: number) => {
+    const handleLaunchConsumption = async (itemName: string, quantity: number, priceOverride?: number, stayOverride?: any) => {
         const targetStayForRegular = stayOverride || activeStay;
         if (!targetStayForRegular && !isAvulsa) return;
 
@@ -528,9 +386,7 @@ export const PDVPage: React.FC = () => {
                     <div className="space-y-2">
                         <button
                             onClick={() => {
-                                if (scannerRef.current) scannerRef.current.clear();
                                 setOperatingPoint(null);
-                                setScanning(false);
                             }}
                             className="mt-2 inline-flex items-center gap-2 bg-farm-100 text-farm-700 px-3 py-1 rounded-full text-sm font-bold hover:bg-farm-200 transition-colors"
                         >
@@ -552,13 +408,11 @@ export const PDVPage: React.FC = () => {
                                     Modo Facial ControlID: {getCurrentMeal() || 'Fechado'}
                                 </div>
                                 <p className="text-farm-600 text-sm mt-2 font-bold animate-pulse">Aguardando identificação facial no hardware...</p>
-                                
-                                {/* Botão de fallback para QR Code oculto por padrão */}
                                 <button 
-                                    onClick={startScanner}
-                                    className="mt-4 text-gray-400 text-xs underline hover:text-gray-600"
+                                    onClick={() => setShowBiometricSimulator(true)}
+                                    className="mt-6 text-gray-400 text-xs underline hover:text-gray-600 font-bold"
                                 >
-                                    Usar Pulseira (Fallback QR)
+                                    [Admin] Simular Evento Facial
                                 </button>
                             </div>
                         )}
@@ -585,14 +439,13 @@ export const PDVPage: React.FC = () => {
                             onClick={() => setShowBiometricSimulator(true)}
                             className="mt-8 bg-blue-50 text-blue-600 px-6 py-3 rounded-xl font-bold hover:bg-blue-100 transition-colors flex items-center gap-2 border border-blue-200 shadow-sm"
                         >
-                            <IconCamera className="w-5 h-5" />
                             Abrir Simulador Biométrico (Dev)
                         </button>
                     )}
                 </div>
             )}
 
-            {operatingPoint && !activeStay && !scanning && !showManualSearch && !isRestaurante && !isAvulsa && (
+            {operatingPoint && !activeStay && !showManualSearch && !isRestaurante && !isAvulsa && (
                 <div className="flex-1 flex flex-col items-center justify-center space-y-6">
                     {feedback ? (
                         <div className="flex flex-col items-center justify-center space-y-4 animate-bounce py-12">
@@ -609,13 +462,6 @@ export const PDVPage: React.FC = () => {
                                 <p className="text-blue-600 text-sm">O sistema agora valida o consumo automaticamente via hardware ControlID.</p>
                             </div>
 
-                            <button
-                                onClick={startScanner}
-                                className="w-48 h-12 bg-gray-100 text-gray-400 rounded-2xl shadow-sm flex items-center justify-center gap-2 hover:bg-gray-200 transition-all active:scale-95 group"
-                            >
-                                <IconCamera className="w-5 h-5" />
-                                <span className="text-sm font-bold uppercase">Scanner QR (Fallback)</span>
-                            </button>
                             <p className="text-gray-400 text-center max-w-xs font-medium uppercase tracking-tighter mt-4">— OU —</p>
                             <div className="flex flex-col gap-3 w-64">
                                 <button
@@ -733,7 +579,7 @@ export const PDVPage: React.FC = () => {
                                 <div className="relative">
                                     <input
                                         type="text"
-                                        placeholder="Buscar por nome ou pulseira..."
+                                        placeholder="Buscar por nome ou CPF..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         className="w-full px-5 py-4 pl-12 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-farm-500 focus:ring-4 focus:ring-farm-100 transition-all outline-none text-lg font-medium"
@@ -745,10 +591,8 @@ export const PDVPage: React.FC = () => {
                                     {activeStaysList
                                         .filter(s => {
                                             const name = s.reservations?.name || s.reservations?.profiles?.full_name || '';
-                                            const wristband = s.codigo_pulseira || '';
                                             const cpf = s.reservations?.profiles?.cpf || '';
                                             return name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                                wristband.toLowerCase().includes(searchQuery.toLowerCase()) ||
                                                 cpf.includes(searchQuery);
                                         })
                                         .map(s => (
@@ -764,7 +608,7 @@ export const PDVPage: React.FC = () => {
                                                 <div>
                                                     <p className="font-bold text-gray-800 text-lg">{s.reservations?.name || s.reservations?.profiles?.full_name || 'Usuário Indefinido'}</p>
                                                     <p className="text-sm text-gray-500 font-medium mt-1">
-                                                        {s.reservations?.accommodation} • Code: <span className="text-farm-600 bg-farm-100 px-2 py-0.5 rounded-md text-xs">{s.codigo_pulseira}</span>
+                                                        {s.reservations?.accommodation}
                                                     </p>
                                                 </div>
                                                 <div className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-400 group-hover:text-farm-600 group-hover:border-farm-300 transition-colors shadow-sm">
@@ -773,57 +617,10 @@ export const PDVPage: React.FC = () => {
                                             </button>
                                         ))
                                     }
-                                    {activeStaysList.filter(s =>
-                                        (s.reservations?.name || s.reservations?.profiles?.full_name)?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                        s.codigo_pulseira.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                        (s.reservations?.profiles?.cpf || '').includes(searchQuery)
-                                    ).length === 0 && (
-                                            <div className="text-center py-10">
-                                                <p className="text-gray-500 font-medium text-lg">Nenhum hóspede ativo encontrado.</p>
-                                            </div>
-                                        )}
                                 </div>
                             </>
                         )}
                     </div>
-                </div>
-            )}
-
-            {scanning && !showManualSearch && !activeStay && (
-                <div className="flex-1 bg-white rounded-3xl shadow-xl p-4 overflow-hidden relative border-4 border-farm-200 flex flex-col min-h-[400px]">
-                    <div id="reader" className="w-full flex-1"></div>
-                    
-                    {/* FEEDBACK OVERLAY (Corrects the white screen issue by not unmounting the reader) */}
-                    {feedback && (
-                        <div className="absolute inset-0 bg-white/95 backdrop-blur-md z-50 flex flex-col items-center justify-center space-y-6 animate-fade-in">
-                            <div className={`w-32 h-32 ${feedback.includes('✅') ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} rounded-full flex items-center justify-center shadow-inner animate-bounce`}>
-                                {feedback.includes('✅') ? <IconCheck className="w-16 h-16" /> : <span className="text-6xl">⚠️</span>}
-                            </div>
-                            <h2 className="text-2xl font-bold text-gray-800 text-center px-8">{feedback}</h2>
-                            <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Aguarde... voltando para a câmera</p>
-                        </div>
-                    )}
-
-                    {isRestaurante && (
-                        <button
-                            onClick={() => setShowManualSearch(true)}
-                            className="mt-4 w-full py-4 bg-white text-farm-700 border-2 border-farm-200 rounded-2xl shadow-sm flex items-center justify-center gap-3 hover:bg-farm-50 transition-all font-bold"
-                        >
-                            <IconUser className="w-6 h-6 text-farm-600" />
-                            {isRestaurante ? 'Esqueci o QR Code (Entrar CPF)' : 'Esqueci o QR Code (Buscar Nome)'}
-                        </button>
-                    )}
-                    {!isRestaurante && (
-                        <button
-                            onClick={() => {
-                                if (scannerRef.current) scannerRef.current.clear();
-                                setScanning(false);
-                            }}
-                            className="mt-4 w-full py-4 bg-gray-100 text-gray-600 font-bold rounded-2xl"
-                        >
-                            Cancelar
-                        </button>
-                    )}
                 </div>
             )}
 
@@ -838,7 +635,7 @@ export const PDVPage: React.FC = () => {
                                 {isAvulsa ? 'Venda Avulsa' : (activeStay!.reservations.name || activeStay!.reservations.profiles.full_name)}
                             </p>
                             <p className="text-gray-500 font-medium">
-                                {isAvulsa ? 'Recebimento imediato no Escritório' : `${activeStay!.reservations.accommodation} • Pulseira: ${activeStay!.codigo_pulseira}`}
+                                {isAvulsa ? 'Recebimento imediato no Escritório' : `${activeStay!.reservations.accommodation}`}
                             </p>
                         </div>
                         <button

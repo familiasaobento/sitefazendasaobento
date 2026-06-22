@@ -91,7 +91,6 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const [showProforma, setShowProforma] = useState(false);
   const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [selectedResForCheckin, setSelectedResForCheckin] = useState<any>(null);
-  const [wristbandCodes, setWristbandCodes] = useState<string[]>([]);
   const [faceIds, setFaceIds] = useState<string[]>([]);
   const [isProcessingCheckin, setIsProcessingCheckin] = useState(false);
   const [checkinGuests, setCheckinGuests] = useState<any[]>([]);
@@ -547,7 +546,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
 
   const handleStartCheckin = (res: any) => {
     setSelectedResForCheckin(res);
-    setWristbandCodes(new Array(res.num_guests || 1).fill(''));
+
     
     // Initialize guests details
     const existing = res.guests_details || [];
@@ -598,13 +597,10 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
       });
 
       const stayInserts = guests.map((guest: any, idx: number) => {
-        const manualCode = wristbandCodes[idx];
-        const finalWristband = manualCode || `FB-${selectedResForCheckin.id}-${idx + 1}-${Math.floor(Math.random()*1000)}`;
-        
         return {
           reserva_id: selectedResForCheckin.id,
           status: 'ativa',
-          codigo_pulseira: finalWristband,
+          codigo_pulseira: `FB-${selectedResForCheckin.id}-${idx + 1}-${Math.floor(Math.random()*1000)}`,
           checkin_at: new Date().toISOString(),
           hospede_nome: guest.name || (idx === 0 ? selectedResForCheckin.name : `Hóspede ${idx + 1}`),
           hospede_idade: guest.age ? parseInt(guest.age) : null,
@@ -631,7 +627,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
 
       setShowCheckinModal(false);
       fetchAllReservations();
-      alert(`Check-in de ${stayInserts.length} pulseiras realizado com sucesso!`);
+      alert(`Check-in de ${stayInserts.length} pessoas realizado com sucesso!`);
     } catch (err: any) {
       alert('Erro ao realizar check-in: ' + err.message);
     } finally {
@@ -1369,8 +1365,8 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                             <span className="text-blue-600 font-bold">{formatDate(res.check_out)}</span>
                           </div>
                           <div className="flex justify-between items-center text-sm pt-3 border-t border-gray-200">
-                            <span className="text-gray-400 font-medium font-mono uppercase text-[10px]">Pulseira:</span>
-                            <span className="text-gray-800 font-black font-mono">{res.estadias?.[0]?.codigo_pulseira}</span>
+                            <span className="text-gray-400 font-medium font-mono uppercase text-[10px]">Biometria Facial:</span>
+                            <span className="text-gray-800 font-black font-mono">{res.estadias?.[0]?.controlid_id ? 'Vinculada' : 'Pendente'}</span>
                           </div>
                         </div>
                         <button onClick={() => handleViewProforma(res.estadias[0].id)} className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 shadow-lg shadow-blue-100 flex items-center justify-center gap-2 transition-all">
@@ -1961,7 +1957,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
               <div className="h-2 bg-farm-600 w-full"></div>
               <div className="p-8">
                 <h3 className="text-2xl font-bold text-gray-800 font-serif mb-2">Realizar Check-in</h3>
-                <p className="text-gray-400 text-sm mb-6">Confirme os dados e vincule uma pulseira para iniciar a estadia de <strong>{selectedResForCheckin.name || selectedResForCheckin.profiles?.full_name}</strong>.</p>
+                <p className="text-gray-400 text-sm mb-6">Confirme os dados e vincule a biometria para iniciar a estadia de <strong>{selectedResForCheckin.name || selectedResForCheckin.profiles?.full_name}</strong>.</p>
                 
                 <div className="bg-gray-50 rounded-2xl p-6 mb-8 space-y-4">
                   <div className="flex justify-between text-sm">
@@ -1975,7 +1971,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                 </div>
 
                 <div className="space-y-4">
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest">Códigos das Pulseiras</label>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest">Hóspedes e Biometria</label>
                   <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
                     {Array.from({ length: selectedResForCheckin.num_guests || 1 }).map((_, idx) => {
                       const guest = checkinGuests[idx] || { name: '', age: '' };
@@ -1983,7 +1979,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                         <div key={idx} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-3">
                           <div className="flex justify-between items-center px-1">
                             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Hóspede #{idx+1}</span>
-                            <span className="text-[10px] text-gray-400 font-mono">Pulseira</span>
+                            <span className="text-[10px] text-gray-400 font-mono">Biometria (ID)</span>
                           </div>
                           
                           <div className="grid grid-cols-2 gap-3">
@@ -2015,17 +2011,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                           </div>
 
                           <div className="grid grid-cols-2 gap-2">
-                            <input
-                              type="text"
-                              value={wristbandCodes[idx] || ''}
-                              onChange={(e) => {
-                                const newCodes = [...wristbandCodes];
-                                newCodes[idx] = e.target.value;
-                                setWristbandCodes(newCodes);
-                              }}
-                              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-[10px] font-mono text-center placeholder:font-sans placeholder:text-gray-300"
-                              placeholder="Pulseira (QR)"
-                            />
+
                             <div className="flex gap-1.5 w-full">
                               <input
                                 type="text"
