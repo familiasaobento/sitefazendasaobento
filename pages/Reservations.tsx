@@ -1774,30 +1774,35 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                         <input type="number" min="1" required value={numGuests} onChange={handleNumGuestsChange} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" />
                       </div>
 
-                      {numGuests > 1 && (
-                        <div className="space-y-4 p-5 bg-gray-50 rounded-2xl border border-gray-100 animate-fade-in shadow-inner">
-                          <div className="flex justify-between items-center mb-2 px-1">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Detalhes dos Hóspedes</p>
-                          </div>
-
-                          {isMember && userDependents.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mb-4">
+                      {isMember && userDependents.length > 0 && (
+                        <div className="space-y-2 p-4 bg-amber-50/50 rounded-2xl border border-amber-100 mb-4">
+                            <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-2 flex items-center gap-1">
+                                <IconUser className="w-3 h-3" /> Seus Dependentes
+                            </p>
+                            <div className="flex flex-wrap gap-2">
                                 {userDependents.map((dep, idx) => (
                                     <button
                                         key={idx}
                                         type="button"
                                         onClick={() => handleQuickAddDependent(dep)}
-                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1.5 ${
+                                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 ${
                                             guestsDetails.some(g => g.name === dep.name)
-                                            ? 'bg-farm-600 text-white border-farm-600 shadow-sm shadow-farm-100'
-                                            : 'bg-white text-farm-600 border-farm-100 hover:bg-farm-50'
+                                            ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-200'
+                                            : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-100 shadow-sm'
                                         }`}
                                     >
-                                        <IconUser className="w-3 h-3" /> {dep.name}
+                                        {dep.name} {guestsDetails.some(g => g.name === dep.name) ? '✓' : '+'}
                                     </button>
                                 ))}
                             </div>
-                          )}
+                        </div>
+                      )}
+
+                      {numGuests > 1 && (
+                        <div className="space-y-4 p-5 bg-gray-50 rounded-2xl border border-gray-100 animate-fade-in shadow-inner">
+                          <div className="flex justify-between items-center mb-2 px-1">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Detalhes dos Hóspedes Adicionais</p>
+                          </div>
 
                           {guestsDetails.slice(1).map((_, i) => (
                             <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-3 border-b border-gray-200 last:border-0 last:pb-0">
