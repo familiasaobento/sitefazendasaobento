@@ -730,7 +730,7 @@ export const AdminUsersPage: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    {newUser.role === 'member' && (
+                                    {(newUser.role === 'member' || newUser.role === 'consu') && (
                                         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-blue-50/50 border border-blue-100 rounded-2xl">
                                             <div className="flex items-center">
                                                 <label className="flex items-center gap-3 p-3 bg-white border border-blue-200 rounded-xl w-full cursor-pointer hover:bg-blue-50 transition-all select-none shadow-sm">

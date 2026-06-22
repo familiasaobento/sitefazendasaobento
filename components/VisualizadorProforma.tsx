@@ -83,7 +83,7 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
 
             // 2. Determine Category and Location for Tarifario
             let categoriaHospede = 'visitante';
-            if (['member', 'admin', 'manager', 'staff', 'finance', 'finance_manager', 'site_admin'].includes(profile.role)) {
+            if (['member', 'admin', 'manager', 'staff', 'finance', 'finance_manager', 'site_admin', 'consu'].includes(profile.role)) {
                 categoriaHospede = 'socio_sem_casa';
             }
 
@@ -99,7 +99,7 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
                 .select('*');
 
             let audienceRule: 'Sócio' | 'Visitante' | 'Morador' | 'Todos' = 'Visitante';
-            if (['member', 'admin', 'manager', 'staff', 'finance', 'finance_manager', 'site_admin'].includes(profile.role)) {
+            if (['member', 'admin', 'manager', 'staff', 'finance', 'finance_manager', 'site_admin', 'consu'].includes(profile.role)) {
                 audienceRule = 'Sócio';
             }
 

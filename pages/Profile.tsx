@@ -691,7 +691,7 @@ export const ProfilePage: React.FC = () => {
                                 </div>
                             </div>
 
-                            {formData.role === 'member' && (
+                            {(formData.role === 'member' || formData.role === 'consu') && (
                                 <div className="space-y-4 pt-4 border-t border-gray-100">
                                     <h4 className="text-sm font-bold text-farm-800">Residência na Fazenda</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

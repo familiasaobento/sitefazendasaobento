@@ -303,7 +303,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
       
       const userRole = (profile as any)?.role || (isVisitorProp ? 'visitor' : 'member');
       const isUserVisitor = userRole === 'visitor';
-      const isUserMember = userRole === 'member';
+      const isUserMember = userRole === 'member' || userRole === 'consu';
       
       setIsVisitor(isUserVisitor);
       setIsMember(isUserMember);
