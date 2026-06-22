@@ -486,9 +486,9 @@ serve(async (req) => {
 
         // 3. Busca o preço atual do produto
         const { data: produtos } = await supabaseClient
-          .from('produtos')
-          .select('id, nome, preco')
-          .ilike('nome', `%${productNameToSearch}%`)
+          .from('products')
+          .select('id, name, price')
+          .ilike('name', `%${productNameToSearch}%`)
           .limit(1);
 
         if (!produtos || produtos.length === 0) {
@@ -503,12 +503,13 @@ serve(async (req) => {
           .from('lancamentos_consumo')
           .insert({
             estadia_id: estadia.id,
-            item_tipo: 'produto',
             item_id: produto.id,
-            descricao: `Buffet de ${productNameToSearch} (Reconhecimento Facial)`,
+            nome_item_snapshot: produto.name,
             quantidade: 1,
-            valor_unitario: produto.preco,
-            data_hora: new Date().toISOString()
+            valor_unitario_aplicado: produto.price,
+            aprovado_admin: true,
+            pago: false,
+            observacoes: `Buffet de ${productNameToSearch} (Reconhecimento Facial)`
           });
 
         if (insertConsumoError) {
