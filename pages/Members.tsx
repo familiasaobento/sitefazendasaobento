@@ -950,51 +950,38 @@ export const MembersPage: React.FC = () => {
                                 <table className="w-full text-left min-w-[1200px] divide-y divide-gray-100">
                                     <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
                                         <tr>
-                                            <th className="px-6 py-5 font-black">Usuário</th>
-                                            <th className="px-6 py-5 font-black">CPF</th>
-                                            <th className="px-6 py-5 font-black">Contato</th>
+                                            <th className="px-6 py-5 font-black">Sócio</th>
+                                            <th className="px-6 py-5 font-black">Telefone</th>
                                             <th className="px-6 py-5 font-black">E-mail</th>
-                                            <th className="px-6 py-5 font-black text-right">Ações</th>
+                                            <th className="px-6 py-5 font-black">Ações</th>
+                                            <th className="px-6 py-5 font-black text-right">Apagar</th>
                                         </tr>
                                     </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {filteredProfiles.map((profile) => (
                                         <React.Fragment key={profile.id}>
                                             <tr className="hover:bg-gray-50 transition-colors">
-                                                <td className="px-6 py-4">
+                                                <td className="px-6 py-4 cursor-pointer select-none group" onClick={() => toggleExpanded(profile.id)}>
                                                     <div className="flex items-center gap-3">
-                                                        <div className="bg-farm-50 w-10 h-10 rounded-full flex items-center justify-center text-farm-700 font-bold shrink-0">
+                                                        <div className="bg-farm-50 w-10 h-10 rounded-full flex items-center justify-center text-farm-700 font-bold shrink-0 group-hover:bg-farm-100 transition-colors">
                                                             {profile.full_name?.charAt(0) || '?'}
                                                         </div>
                                                         <div>
                                                             <div className="flex items-center gap-2">
-                                                                <p className="font-bold text-gray-800">{profile.full_name || 'Sem nome'}</p>
+                                                                <p className="font-bold text-gray-800 group-hover:text-farm-700 transition-colors flex items-center gap-1.5">
+                                                                    {profile.full_name || 'Sem nome'}
+                                                                    <span className="text-[9px] text-gray-400">
+                                                                        {expandedProfileId === profile.id ? '▲' : '▼'}
+                                                                    </span>
+                                                                </p>
                                                                 {profile.has_house && profile.house_number && (
                                                                     <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-black border border-blue-200">
                                                                         CASA {profile.house_number}
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            {(profile.address || profile.address_street) && (
-                                                                <p className="text-xs text-gray-400 mt-0.5 leading-tight" title={profile.address_street ? `${profile.address_street}, ${profile.address_number}, ${profile.address_city}` : profile.address}>
-                                                                    {profile.address_street 
-                                                                        ? `${profile.address_street}, ${profile.address_number}${profile.address_complement ? ` - ${profile.address_complement}` : ''}, ${profile.address_neighborhood}, ${profile.address_city}`
-                                                                        : profile.address
-                                                                    }
-                                                                </p>
-                                                            )}
                                                         </div>
                                                     </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-gray-600 font-mono whitespace-nowrap w-40 min-w-[140px]" title={profile.cpf}>
-                                                    {(() => {
-                                                        if (!profile.cpf) return '—';
-                                                        const digits = profile.cpf.replace(/\D/g, '');
-                                                        if (digits.length === 11) {
-                                                            return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-                                                        }
-                                                        return profile.cpf;
-                                                    })()}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="text-sm text-gray-600 flex items-center gap-2">
@@ -1014,49 +1001,76 @@ export const MembersPage: React.FC = () => {
                                                 </td>
 
                                                 <td className="px-6 py-4">
-                                                    <div className="flex items-center justify-end gap-3">
-                                                        <button
-                                                            onClick={() => toggleExpanded(profile.id)}
-                                                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all ${expandedProfileId === profile.id
-                                                                ? 'bg-blue-200 text-blue-900 ring-2 ring-blue-500 ring-offset-1'
-                                                                : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-                                                                }`}
+                                                    {isAdmin ? (
+                                                        <select
+                                                            value={profile.member_status || 'Ativo'}
+                                                            onChange={(e) => handleUpdateStatus(profile.id, e.target.value)}
+                                                            className={`text-xs font-bold uppercase rounded-full px-3 py-1 outline-none border border-transparent hover:border-gray-200 ${
+                                                                profile.member_status === 'Ativo' ? 'bg-green-100 text-green-700' :
+                                                                profile.member_status === 'Inativo' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                                                            }`}
                                                         >
-                                                            {profile.dependents && profile.dependents.length > 0 ? `${profile.dependents.length} dep.` : 'Biometria'}
-                                                        </button>
+                                                            <option value="Ativo">Ativo</option>
+                                                            <option value="Inativo">Inativo</option>
+                                                            <option value="Licença">Licença</option>
+                                                        </select>
+                                                    ) : (
+                                                        <span className={`text-[10px] font-bold uppercase rounded-full px-2.5 py-1 ${
+                                                            profile.member_status === 'Ativo' ? 'bg-green-100 text-green-700' :
+                                                            profile.member_status === 'Inativo' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                                                        }`}>
+                                                            {profile.member_status || 'Ativo'}
+                                                        </span>
+                                                    )}
+                                                </td>
 
-                                                        {isAdmin && (
-                                                            <>
-                                                                <select
-                                                                    value={profile.member_status || 'Ativo'}
-                                                                    onChange={(e) => handleUpdateStatus(profile.id, e.target.value)}
-                                                                    className={`text-xs font-bold uppercase rounded-full px-3 py-1 outline-none border border-transparent hover:border-gray-200 ${
-                                                                        profile.member_status === 'Ativo' ? 'bg-green-100 text-green-700' :
-                                                                        profile.member_status === 'Inativo' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
-                                                                    }`}
-                                                                >
-                                                                    <option value="Ativo">Ativo</option>
-                                                                    <option value="Inativo">Inativo</option>
-                                                                    <option value="Licença">Licença</option>
-                                                                </select>
-                                                                <button
-                                                                    onClick={() => handleDeleteUser(profile.id, profile.full_name)}
-                                                                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                                    title="Excluir Sócio"
-                                                                >
-                                                                    <IconTrash className="w-5 h-5" />
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
+                                                <td className="px-6 py-4 text-right">
+                                                    {isAdmin ? (
+                                                        <button
+                                                            onClick={() => handleDeleteUser(profile.id, profile.full_name)}
+                                                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                            title="Excluir Sócio"
+                                                        >
+                                                            <IconTrash className="w-5 h-5" />
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-gray-300">—</span>
+                                                    )}
                                                 </td>
                                             </tr>
                                             {expandedProfileId === profile.id && (
-                                                <tr className="bg-blue-50/50">
+                                                <tr className="bg-blue-50/20">
                                                     <td colSpan={5} className="px-6 py-4 border-t border-b border-gray-100">
-                                                        <div className="ml-12 pl-4 border-l-2 border-blue-200 space-y-4">
+                                                        <div className="ml-12 pl-4 border-l-2 border-blue-200 space-y-5">
                                                             
-                                                            <div>
+                                                            {/* CPF & Endereço Grid */}
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm max-w-4xl">
+                                                                <div>
+                                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">CPF</p>
+                                                                    <p className="text-sm font-medium text-gray-800 font-mono">
+                                                                        {(() => {
+                                                                            if (!profile.cpf) return '—';
+                                                                            const digits = profile.cpf.replace(/\D/g, '');
+                                                                            if (digits.length === 11) {
+                                                                                return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                                                                            }
+                                                                            return profile.cpf;
+                                                                        })()}
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Endereço</p>
+                                                                    <p className="text-sm font-medium text-gray-800 leading-tight">
+                                                                        {profile.address_street 
+                                                                            ? `${profile.address_street}, ${profile.address_number}${profile.address_complement ? ` - ${profile.address_complement}` : ''}, ${profile.address_neighborhood}, ${profile.address_city}`
+                                                                            : profile.address || '—'
+                                                                        }
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Biometria do Titular */}
+                                                            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm max-w-4xl">
                                                                 <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
                                                                     <IconUser className="w-4 h-4 text-blue-600" />
                                                                     Biometria do Titular
@@ -1076,28 +1090,29 @@ export const MembersPage: React.FC = () => {
                                                                         type="button"
                                                                         onClick={() => startEnroll('member', profile.id)}
                                                                         className="bg-blue-50 text-blue-600 px-3 py-2 rounded-lg border border-blue-200 hover:bg-blue-100 transition-all font-bold text-xs flex items-center gap-1.5 shrink-0"
-                                                                        title="Capturar biometria usando o leitor do escritório"
+                                                                        title="Capturar biometria"
                                                                     >
                                                                         <IconZap className="w-3.5 h-3.5 text-blue-500 animate-pulse" /> Capturar
                                                                     </button>
                                                                 </div>
                                                             </div>
 
+                                                            {/* Dependentes Vinculados */}
                                                             {profile.dependents && profile.dependents.length > 0 && (
-                                                                <div>
-                                                                    <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                                                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm max-w-4xl">
+                                                                    <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
                                                                         <span className="bg-blue-100 text-blue-700 w-5 h-5 rounded-full flex items-center justify-center text-xs">i</span>
                                                                         Dependentes Vinculados:
                                                                     </h4>
                                                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                                                         {profile.dependents.map((dep, idx) => (
-                                                                            <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm text-sm">
+                                                                            <div key={idx} className="bg-gray-50/50 p-3 rounded-xl border border-gray-200 text-sm">
                                                                                 <div className="font-semibold text-gray-800">{dep.name}</div>
                                                                                 <div className="text-gray-500 text-xs mt-1 flex justify-between">
                                                                                     <span>{dep.relationship}</span>
                                                                                     <span>{formatDate(dep.birthDate)}</span>
                                                                                 </div>
-                                                                                <div className="mt-2 pt-2 border-t border-gray-50">
+                                                                                <div className="mt-2 pt-2 border-t border-gray-200">
                                                                                     <div className="flex gap-1.5">
                                                                                         <input
                                                                                             type="text"
@@ -1113,13 +1128,13 @@ export const MembersPage: React.FC = () => {
                                                                                                 newDeps[idx] = { ...newDeps[idx], controlid_id: e.target.value };
                                                                                                 await supabase.from('profiles').update({ dependents: newDeps }).eq('id', profile.id);
                                                                                             }}
-                                                                                            className="flex-1 min-w-0 px-2 py-1 text-xs bg-gray-50 border border-gray-200 rounded outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                                                                                            className="flex-1 min-w-0 px-2 py-1 text-xs bg-white border border-gray-200 rounded outline-none focus:ring-1 focus:ring-blue-500 font-mono"
                                                                                         />
                                                                                         <button
                                                                                             type="button"
                                                                                             onClick={() => startEnroll('dependent', profile.id, dep.name)}
                                                                                             className="bg-blue-50 text-blue-600 px-1.5 py-1 rounded border border-blue-200 hover:bg-blue-100 transition-all font-bold text-[10px] flex items-center gap-0.5 shrink-0"
-                                                                                            title="Capturar biometria usando o leitor do escritório"
+                                                                                            title="Capturar biometria"
                                                                                         >
                                                                                             <IconZap className="w-3 h-3 text-blue-500 animate-pulse" /> Capturar
                                                                                         </button>
@@ -1631,7 +1646,7 @@ export const MembersPage: React.FC = () => {
                                     <div>
                                         <p className="text-farm-600 text-[10px] font-bold uppercase tracking-wider">Total em Aberto</p>
                                         <p className="text-2xl font-black text-gray-800">
-                                            R$ {Object.values(debts).reduce((a, b) => a + Number(b), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            R$ {(Object.values(debts) as number[]).reduce((a, b) => a + b, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </p>
                                     </div>
                                 </div>
@@ -1661,7 +1676,7 @@ export const MembersPage: React.FC = () => {
                                     <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Clique para ver títulos individuais</div>
                                 </div>
                                 <div className="divide-y divide-gray-100 max-h-[1000px] overflow-y-auto custom-scrollbar">
-                                    {Object.entries(debts)
+                                    {(Object.entries(debts) as [string, number][])
                                         .sort(([, a], [, b]) => b - a)
                                         .map(([memberId, total]) => {
                                             const profile = profiles.find(p => p.id === memberId);

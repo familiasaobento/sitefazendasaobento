@@ -282,7 +282,11 @@ serve(async (req) => {
       if (isSuccess) {
         await supabaseClient
           .from('controlid_commands')
-          .update({ status: 'success', updated_at: new Date().toISOString() })
+          .update({ 
+            status: 'success', 
+            metadata: { ...metadata, response_payload: payload },
+            updated_at: new Date().toISOString() 
+          })
           .eq('id', command.id);
 
         const targetType = metadata.target_type;
