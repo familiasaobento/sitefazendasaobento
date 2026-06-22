@@ -974,7 +974,7 @@ export const MembersPage: React.FC = () => {
                                                                         {expandedProfileId === profile.id ? '▲' : '▼'}
                                                                     </span>
                                                                 </p>
-                                                                {profile.has_house && profile.house_number && (
+                                                                {expandedProfileId === profile.id && profile.has_house && profile.house_number && (
                                                                     <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-black border border-blue-200">
                                                                         CASA {profile.house_number}
                                                                     </span>
@@ -1061,6 +1061,11 @@ export const MembersPage: React.FC = () => {
                                                                 <div>
                                                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Endereço</p>
                                                                     <p className="text-sm font-medium text-gray-800 leading-tight">
+                                                                        {profile.has_house && profile.house_number && (
+                                                                            <span className="inline-block bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-black border border-blue-200 mr-2">
+                                                                                CASA {profile.house_number}
+                                                                            </span>
+                                                                        )}
                                                                         {profile.address_street 
                                                                             ? `${profile.address_street}, ${profile.address_number}${profile.address_complement ? ` - ${profile.address_complement}` : ''}, ${profile.address_neighborhood}, ${profile.address_city}`
                                                                             : profile.address || '—'
