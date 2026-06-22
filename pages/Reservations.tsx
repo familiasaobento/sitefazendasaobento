@@ -96,6 +96,172 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const [isProcessingCheckin, setIsProcessingCheckin] = useState(false);
   const [checkinGuests, setCheckinGuests] = useState<any[]>([]);
 
+  const [enrollState, setEnrollState] = useState<{
+    enrolling: boolean;
+    commandId?: string;
+    status?: string;
+    error?: string;
+    targetName?: string;
+    guestIndex?: number;
+  }>({ enrolling: false });
+
+  const cancelEnroll = async () => {
+    if (!enrollState.commandId) return;
+    try {
+      await supabase
+        .from('controlid_commands')
+        .update({ 
+          status: 'failed', 
+          error: 'Operação cancelada pela recepção no Check-in.',
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', enrollState.commandId);
+    } catch (err) {
+      console.error('Error cancelling enrollment:', err);
+    }
+    setEnrollState({ enrolling: false });
+  };
+
+  const startEnroll = async (guestIdx: number, guestName: string) => {
+    try {
+      const { data: devices, error: devError } = await supabase
+        .from('idface_dispositivos')
+        .select('serial_number')
+        .eq('pdv_id', 3) // PDV Escritório
+        .eq('ativo', true)
+        .limit(1);
+
+      if (devError || !devices || devices.length === 0) {
+        alert('Nenhum aparelho do Escritório (PDV Escritório) está cadastrado ou ativo no sistema. Cadastre o leitor na tela de Configuração de Hardware primeiro!');
+        return;
+      }
+
+      const device = devices[0];
+
+      let generatedId = '';
+      let attempts = 0;
+      const existingIds = new Set<string>();
+
+      const { data: allProfiles } = await supabase
+        .from('profiles')
+        .select('controlid_id, dependents');
+      
+      const { data: allEmployees } = await supabase
+        .from('employees')
+        .select('controlid_id');
+
+      if (allProfiles) {
+        allProfiles.forEach((p: any) => {
+          if (p.controlid_id) existingIds.add(String(p.controlid_id));
+          if (Array.isArray(p.dependents)) {
+            p.dependents.forEach((d: any) => {
+              if (d.controlid_id) existingIds.add(String(d.controlid_id));
+            });
+          }
+        });
+      }
+      if (allEmployees) {
+        allEmployees.forEach((e: any) => {
+          if (e.controlid_id) existingIds.add(String(e.controlid_id));
+        });
+      }
+
+      do {
+        generatedId = String(Math.floor(100000 + Math.random() * 900000));
+        attempts++;
+      } while (existingIds.has(generatedId) && attempts < 100);
+
+      const { data: command, error: cmdError } = await supabase
+        .from('controlid_commands')
+        .insert({
+          device_id: device.serial_number,
+          command: 'remote_enroll.fcgi',
+          params: {
+            type: 'face',
+            user_id: parseInt(generatedId),
+            save: true
+          },
+          metadata: {
+            target_type: 'visitor_checkin',
+            guest_name: guestName
+          },
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (cmdError || !command) throw cmdError || new Error('Falha ao criar comando de cadastro.');
+
+      setEnrollState({
+        enrolling: true,
+        commandId: command.id,
+        status: 'pending',
+        targetName: guestName || `Convidado ${guestIdx + 1}`,
+        guestIndex: guestIdx
+      });
+
+      const subscription = supabase
+        .channel(`controlid-enroll-${command.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'controlid_commands',
+            filter: `id=eq.${command.id}`
+          },
+          (payload) => {
+            const updatedCmd = payload.new;
+            setEnrollState(prev => ({
+              ...prev,
+              status: updatedCmd.status,
+              error: updatedCmd.error || undefined
+            }));
+
+            if (updatedCmd.status === 'success') {
+              setFaceIds(prev => {
+                const newFaceIds = [...prev];
+                newFaceIds[guestIdx] = generatedId;
+                return newFaceIds;
+              });
+              subscription.unsubscribe();
+              setEnrollState({ enrolling: false });
+            } else if (updatedCmd.status === 'failed') {
+              alert(`Falha ao cadastrar no leitor: ${updatedCmd.error || 'Erro desconhecido.'}`);
+              subscription.unsubscribe();
+              setEnrollState({ enrolling: false });
+            }
+          }
+        )
+        .subscribe();
+
+      setTimeout(async () => {
+        const { data: latestCmd } = await supabase
+          .from('controlid_commands')
+          .select('status')
+          .eq('id', command.id)
+          .single();
+
+        if (latestCmd && (latestCmd.status === 'pending' || latestCmd.status === 'sent')) {
+          await supabase
+            .from('controlid_commands')
+            .update({ 
+              status: 'failed', 
+              error: 'Tempo esgotado (60s) aguardando o leitor.',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', command.id);
+          alert('Tempo esgotado (60 segundos). A captura de rosto expirou.');
+          subscription.unsubscribe();
+          setEnrollState({ enrolling: false });
+        }
+      }, 60000);
+
+    } catch (err: any) {
+      alert('Erro ao iniciar cadastro facial: ' + err.message);
+    }
+  };
+
   // Form States
   const [name, setName] = useState('');
   const [checkIn, setCheckIn] = useState('');
@@ -174,6 +340,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
         .from('reservations')
         .select(`
           *,
+          profiles:profiles!user_id(full_name, cpf, controlid_id, dependents),
           estadias:estadias!reserva_id(*)
         `)
         .eq('user_id', user.id)
@@ -190,7 +357,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
         .from('reservations')
         .select(`
           *,
-          profiles:profiles!user_id(full_name, cpf),
+          profiles:profiles!user_id(full_name, cpf, controlid_id, dependents),
           estadias:estadias!reserva_id(*)
         `)
         .order('check_in', { ascending: true });
@@ -381,7 +548,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const handleStartCheckin = (res: any) => {
     setSelectedResForCheckin(res);
     setWristbandCodes(new Array(res.num_guests || 1).fill(''));
-    setFaceIds(new Array(res.num_guests || 1).fill(''));
+    
     // Initialize guests details
     const existing = res.guests_details || [];
     const initialGuests = Array.from({ length: res.num_guests || 1 }).map((_, i) => {
@@ -393,6 +560,30 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
         return { name: '', age: '' };
     });
     setCheckinGuests(initialGuests);
+
+    // Auto-fill Face IDs based on Master Profile
+    const initialFaceIds = new Array(res.num_guests || 1).fill('');
+    const profile = res.profiles && !Array.isArray(res.profiles) ? res.profiles : (res.profiles?.[0] || null);
+
+    if (profile) {
+        initialFaceIds[0] = profile.controlid_id || '';
+        
+        if (profile.dependents && Array.isArray(profile.dependents)) {
+            for (let i = 1; i < initialGuests.length; i++) {
+                const guestName = initialGuests[i].name;
+                if (guestName) {
+                    const matchedDep = profile.dependents.find((d: any) => 
+                        d.name.toLowerCase().trim() === guestName.toLowerCase().trim()
+                    );
+                    if (matchedDep && matchedDep.controlid_id) {
+                        initialFaceIds[i] = matchedDep.controlid_id;
+                    }
+                }
+            }
+        }
+    }
+    setFaceIds(initialFaceIds);
+
     setShowCheckinModal(true);
   };
 
@@ -1830,17 +2021,27 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                               className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-[10px] font-mono text-center placeholder:font-sans placeholder:text-gray-300"
                               placeholder="Pulseira (QR)"
                             />
-                            <input
-                              type="text"
-                              value={faceIds[idx] || ''}
-                              onChange={(e) => {
-                                const newFaceIds = [...faceIds];
-                                newFaceIds[idx] = e.target.value;
-                                setFaceIds(newFaceIds);
-                              }}
-                              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-[10px] font-mono text-center placeholder:font-sans placeholder:text-gray-300"
-                              placeholder="Face ID (ControlID)"
-                            />
+                            <div className="flex gap-1.5 w-full">
+                              <input
+                                type="text"
+                                value={faceIds[idx] || ''}
+                                onChange={(e) => {
+                                  const newFaceIds = [...faceIds];
+                                  newFaceIds[idx] = e.target.value;
+                                  setFaceIds(newFaceIds);
+                                }}
+                                className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-[10px] font-mono text-center placeholder:font-sans placeholder:text-gray-300 min-w-0"
+                                placeholder="Face ID (ControlID)"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => startEnroll(idx, guest.name || (idx === 0 ? selectedResForCheckin.name : `Hóspede ${idx + 1}`))}
+                                className="bg-farm-50 text-farm-600 px-2 py-2 rounded-xl border border-farm-200 hover:bg-farm-100 transition-all font-bold text-[9px] flex items-center gap-0.5 shrink-0"
+                                title="Capturar biometria usando o leitor do escritório"
+                              >
+                                <IconZap className="w-3 h-3 text-farm-500 animate-pulse" /> Capturar
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1976,6 +2177,46 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                     </footer>
                 </div>
             </div>
+        </div>
+      )}
+
+      {enrollState.enrolling && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] p-8 max-w-md w-full border border-gray-100 shadow-2xl space-y-6 text-center animate-scale-in">
+            <div className="w-16 h-16 bg-farm-50 text-farm-600 rounded-full flex items-center justify-center mx-auto animate-pulse">
+              <IconZap className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 font-serif">Cadastrando Rosto</h3>
+              <p className="text-sm text-gray-500 mt-2">
+                Capturando a biometria de <span className="font-bold text-farm-600">{enrollState.targetName}</span> no aparelho do Escritório.
+              </p>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-2xl space-y-2">
+              <p className="text-xs text-gray-400 font-black uppercase tracking-wider">Status do Leitor</p>
+              {enrollState.status === 'pending' && (
+                <p className="text-sm text-amber-600 font-bold flex items-center justify-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                  Aguardando leitor receber comando...
+                </p>
+              )}
+              {enrollState.status === 'sent' && (
+                <p className="text-sm text-blue-600 font-bold flex items-center justify-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping"></span>
+                  Olhe para a câmera do iDFace agora!
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={cancelEnroll}
+              className="w-full bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all"
+            >
+              Cancelar Operação
+            </button>
+          </div>
         </div>
       )}
     </div>

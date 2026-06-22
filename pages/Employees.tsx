@@ -237,6 +237,11 @@ export const EmployeesPage: React.FC = () => {
     };
 
     const getExpectedHours = (emp: Employee, dateStr?: string) => {
+        if (dateStr) {
+            const isVacation = vacations.some(v => v.employee_id === emp.id && v.start_date <= dateStr && v.end_date >= dateStr);
+            if (isVacation) return 0;
+        }
+
         if (emp.journey_type === 'horista' || emp.journey_type === 'diarista') {
             if (dateStr) {
                 const dayOfWeek = new Date(dateStr + 'T12:00:00Z').getUTCDay();
@@ -260,7 +265,8 @@ export const EmployeesPage: React.FC = () => {
         const isDayOff = daysOff.some(d => d.employee_id === emp.id && d.date === dateStr);
         const expected = isDayOff ? 0 : getExpectedHours(emp, dateStr);
 
-        const dayEntries = timeEntries.filter(e => {
+        const allDayPunches = timeEntries.filter(e => {
+            if (e.employee_id !== emp.id) return false;
             const localDate = new Date(e.timestamp).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }); // 'DD/MM/YYYY'
             const parts = localDate.split('/');
             if (parts.length === 3) {
@@ -271,20 +277,40 @@ export const EmployeesPage: React.FC = () => {
         });
 
         let workedHours = 0;
-        let lastEntryTime: number | null = null;
 
-        dayEntries.forEach(entry => {
-            const time = new Date(entry.timestamp).getTime();
-            if (entry.entry_type === 'entry') {
-                lastEntryTime = time;
-            } else if (entry.entry_type === 'exit' && lastEntryTime) {
-                workedHours += (time - lastEntryTime) / (1000 * 60 * 60);
-                lastEntryTime = null;
+        allDayPunches.filter(e => e.entry_type === 'entry').forEach(entry => {
+            // Encontra a próxima saída deste funcionário cronologicamente
+            const exit = timeEntries.find(e => e.employee_id === emp.id && e.entry_type === 'exit' && new Date(e.timestamp) > new Date(entry.timestamp));
+            
+            if (exit) {
+                const start = new Date(entry.timestamp).getTime();
+                const end = new Date(exit.timestamp).getTime();
+                let durationH = (end - start) / (1000 * 60 * 60);
+
+                // Limite de segurança de 24h para batidas esquecidas
+                if (durationH > 24) durationH = 24;
+
+                // Adicional Noturno: Se a jornada cruza madrugada (22h - 05h)
+                if (new Date(exit.timestamp).getDate() !== new Date(entry.timestamp).getDate() || new Date(entry.timestamp).getHours() >= 22 || new Date(exit.timestamp).getHours() <= 5) {
+                    let nightHours = 0;
+                    for (let t = start; t < end; t += 60000) {
+                        const h = new Date(t).getHours();
+                        if (h >= 22 || h < 5) nightHours += 1/60;
+                    }
+                    durationH += (nightHours * 0.2); // +20% sobre as horas noturnas
+                }
+                workedHours += durationH;
             }
         });
 
-        const balance = workedHours - expected;
-        return { expected, workedHours, balance, isDayOff, punches: dayEntries.length };
+        let balance = workedHours - expected;
+        // Tolerância CLT (10 minutos / dia)
+        if (Math.abs(balance) <= (10 / 60)) {
+            workedHours = expected;
+            balance = 0;
+        }
+
+        return { expected, workedHours, balance, isDayOff, punches: allDayPunches.length };
     };
 
     const getMonthlyBalance = (emp: Employee) => {

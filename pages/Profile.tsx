@@ -9,6 +9,7 @@ interface Dependent {
     name: string;
     birthDate: string;
     relationship: string;
+    controlid_id?: string;
 }
 
 interface ProfileData {
@@ -27,6 +28,7 @@ interface ProfileData {
     dependents: Dependent[];
     host_name: string;
     role: string;
+    controlid_id: string;
 }
 
 export const ProfilePage: React.FC = () => {
@@ -87,12 +89,191 @@ export const ProfilePage: React.FC = () => {
         email: '',
         dependents: [],
         host_name: '',
-        role: ''
+        role: '',
+        controlid_id: ''
     });
 
     const [legacyAddress, setLegacyAddress] = useState<string>('');
 
     const [hasDependents, setHasDependents] = useState<string>('Não');
+
+    const [enrollState, setEnrollState] = useState<{
+        enrolling: boolean;
+        commandId?: string;
+        status?: string;
+        error?: string;
+        targetName?: string;
+    }>({ enrolling: false });
+
+    const cancelEnroll = async () => {
+        if (!enrollState.commandId) return;
+        try {
+            await supabase
+                .from('controlid_commands')
+                .update({ 
+                    status: 'failed', 
+                    error: 'Operação cancelada pelo usuário no Portal.',
+                    updated_at: new Date().toISOString() 
+                })
+                .eq('id', enrollState.commandId);
+        } catch (err) {
+            console.error('Error cancelling enrollment:', err);
+        }
+        setEnrollState({ enrolling: false });
+    };
+
+    const startEnroll = async (targetType: 'member' | 'dependent', dependentName?: string) => {
+        try {
+            const { data: devices, error: devError } = await supabase
+                .from('idface_dispositivos')
+                .select('serial_number')
+                .eq('pdv_id', 3) // PDV Escritório
+                .eq('ativo', true)
+                .limit(1);
+
+            if (devError || !devices || devices.length === 0) {
+                alert('Nenhum aparelho do Escritório (PDV Escritório) está cadastrado ou ativo no sistema. Cadastre o leitor na tela de Configuração de Hardware primeiro!');
+                return;
+            }
+
+            const device = devices[0];
+
+            let generatedId = '';
+            let attempts = 0;
+            const existingIds = new Set<string>();
+
+            const { data: allProfiles } = await supabase
+                .from('profiles')
+                .select('controlid_id, dependents');
+            
+            const { data: allEmployees } = await supabase
+                .from('employees')
+                .select('controlid_id');
+
+            if (allProfiles) {
+                allProfiles.forEach((p: any) => {
+                    if (p.controlid_id) existingIds.add(String(p.controlid_id));
+                    if (Array.isArray(p.dependents)) {
+                        p.dependents.forEach((d: any) => {
+                            if (d.controlid_id) existingIds.add(String(d.controlid_id));
+                        });
+                    }
+                });
+            }
+            if (allEmployees) {
+                allEmployees.forEach((e: any) => {
+                    if (e.controlid_id) existingIds.add(String(e.controlid_id));
+                });
+            }
+
+            do {
+                generatedId = String(Math.floor(100000 + Math.random() * 900000));
+                attempts++;
+            } while (existingIds.has(generatedId) && attempts < 100);
+
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            const { data: command, error: cmdError } = await supabase
+                .from('controlid_commands')
+                .insert({
+                    device_id: device.serial_number,
+                    command: 'remote_enroll.fcgi',
+                    params: {
+                        type: 'face',
+                        user_id: parseInt(generatedId),
+                        save: true
+                    },
+                    metadata: {
+                        target_type: targetType,
+                        target_id: user.id,
+                        parent_id: targetType === 'dependent' ? user.id : undefined,
+                        dependent_name: targetType === 'dependent' ? dependentName : undefined
+                    },
+                    status: 'pending'
+                })
+                .select()
+                .single();
+
+            if (cmdError || !command) throw cmdError || new Error('Falha ao criar comando de cadastro.');
+
+            setEnrollState({
+                enrolling: true,
+                commandId: command.id,
+                status: 'pending',
+                targetName: dependentName || 'Titular'
+            });
+
+            const subscription = supabase
+                .channel(`controlid-enroll-${command.id}`)
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'UPDATE',
+                        schema: 'public',
+                        table: 'controlid_commands',
+                        filter: `id=eq.${command.id}`
+                    },
+                    (payload) => {
+                        const updatedCmd = payload.new;
+                        setEnrollState(prev => ({
+                            ...prev,
+                            status: updatedCmd.status,
+                            error: updatedCmd.error || undefined
+                        }));
+
+                        if (updatedCmd.status === 'success') {
+                            if (targetType === 'member') {
+                                setFormData(f => ({ ...f, controlid_id: generatedId }));
+                            } else if (targetType === 'dependent') {
+                                setFormData(f => {
+                                    const updatedDeps = f.dependents.map(d => {
+                                        if (d.name === dependentName) {
+                                            return { ...d, controlid_id: generatedId };
+                                        }
+                                        return d;
+                                    });
+                                    return { ...f, dependents: updatedDeps };
+                                });
+                            }
+                            subscription.unsubscribe();
+                            setEnrollState({ enrolling: false });
+                        } else if (updatedCmd.status === 'failed') {
+                            alert(`Falha ao cadastrar no leitor: ${updatedCmd.error || 'Erro desconhecido.'}`);
+                            subscription.unsubscribe();
+                            setEnrollState({ enrolling: false });
+                        }
+                    }
+                )
+                .subscribe();
+
+            // Timeout de 60 segundos
+            setTimeout(async () => {
+                const { data: latestCmd } = await supabase
+                    .from('controlid_commands')
+                    .select('status')
+                    .eq('id', command.id)
+                    .single();
+
+                if (latestCmd && (latestCmd.status === 'pending' || latestCmd.status === 'sent')) {
+                    await supabase
+                        .from('controlid_commands')
+                        .update({ 
+                            status: 'failed', 
+                            error: 'Tempo esgotado (60s) aguardando o leitor.',
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', command.id);
+                    alert('Tempo esgotado (60 segundos). A captura de rosto expirou.');
+                    subscription.unsubscribe();
+                    setEnrollState({ enrolling: false });
+                }
+            }, 60000);
+
+        } catch (err: any) {
+            alert('Erro ao iniciar cadastro facial: ' + err.message);
+        }
+    };
 
     useEffect(() => {
         fetchProfile();
@@ -132,7 +313,8 @@ export const ProfilePage: React.FC = () => {
                     email: profile.email || user.email || '',
                     dependents: profile.dependents || [],
                     host_name: profile.host_name || '',
-                    role: profile.role || ''
+                    role: profile.role || '',
+                    controlid_id: profile.controlid_id || ''
                 });
                 setHasDependents(profile.dependents && profile.dependents.length > 0 ? 'Sim' : 'Não');
             } else {
@@ -264,6 +446,7 @@ export const ProfilePage: React.FC = () => {
                     has_house: formData.has_house,
                     house_number: formData.house_number,
                     dependents: formData.dependents,
+                    controlid_id: formData.controlid_id || null,
                     email: formData.email 
                 })
                 .eq('id', user.id);
@@ -527,6 +710,29 @@ export const ProfilePage: React.FC = () => {
                                 />
                             </div>
 
+                            <div className="space-y-1">
+                                <label htmlFor="controlid_id" className="block text-sm font-bold text-gray-700 mb-1.5">ID Facial (Biometria)</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        id="controlid_id"
+                                        type="text"
+                                        value={formData.controlid_id}
+                                        onChange={handleInputChange}
+                                        placeholder="Ex: 123"
+                                        className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all font-mono"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => startEnroll('member')}
+                                        className="bg-farm-50 text-farm-600 px-4 py-3 rounded-xl border border-farm-200 hover:bg-farm-100 transition-all font-bold text-xs flex items-center gap-1.5"
+                                        title="Capturar biometria usando o leitor do escritório"
+                                    >
+                                        <IconZap className="w-4 h-4 text-farm-500 animate-pulse" /> Capturar Rosto
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-gray-400">Número gerado ao cadastrar seu rosto no aparelho do escritório.</p>
+                            </div>
+
                             {formData.host_name && (
                                 <div className="space-y-1">
                                     <label className="block text-sm font-medium text-gray-700">Sócio Responsável (Anfitrião)</label>
@@ -711,6 +917,26 @@ export const ProfilePage: React.FC = () => {
                                                             <option value="Outros">Outros</option>
                                                         </select>
                                                     </div>
+                                                    <div className="space-y-1 md:col-span-2">
+                                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">ID Facial (Opcional)</label>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Ex: 124"
+                                                                value={dep.controlid_id || ''}
+                                                                onChange={(e) => handleDependentChange(idx, 'controlid_id', e.target.value)}
+                                                                className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm transition-all bg-white font-mono"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => startEnroll('dependent', dep.name)}
+                                                                className="bg-farm-50 text-farm-600 px-3 py-3 rounded-xl border border-farm-200 hover:bg-farm-100 transition-all font-bold text-[10px] flex items-center gap-1"
+                                                                title="Capturar biometria usando o leitor do escritório"
+                                                            >
+                                                                <IconZap className="w-3.5 h-3.5 text-farm-500 animate-pulse" /> Capturar
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                     <button
                                                         type="button"
                                                         onClick={() => removeDependent(idx)}
@@ -835,6 +1061,46 @@ export const ProfilePage: React.FC = () => {
                                 onClose={() => setSelectedEstadiaId(null)}
                             />
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {enrollState.enrolling && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2rem] p-8 max-w-md w-full border border-gray-100 shadow-2xl space-y-6 text-center animate-scale-in">
+                        <div className="w-16 h-16 bg-farm-50 text-farm-600 rounded-full flex items-center justify-center mx-auto animate-pulse">
+                            <IconZap className="w-8 h-8" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-gray-900 font-serif">Cadastrando Rosto</h3>
+                            <p className="text-sm text-gray-500 mt-2">
+                                Capturando a biometria de <span className="font-bold text-farm-600">{enrollState.targetName}</span> no aparelho do Escritório.
+                            </p>
+                        </div>
+                        
+                        <div className="bg-gray-50 p-4 rounded-2xl space-y-2">
+                            <p className="text-xs text-gray-400 font-black uppercase tracking-wider">Status do Leitor</p>
+                            {enrollState.status === 'pending' && (
+                                <p className="text-sm text-amber-600 font-bold flex items-center justify-center gap-2">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                                    Aguardando leitor receber comando...
+                                </p>
+                            )}
+                            {enrollState.status === 'sent' && (
+                                <p className="text-sm text-blue-600 font-bold flex items-center justify-center gap-2">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping"></span>
+                                    Olhe para a câmera do iDFace agora!
+                                </p>
+                            )}
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={cancelEnroll}
+                            className="w-full bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all"
+                        >
+                            Cancelar Operação
+                        </button>
                     </div>
                 </div>
             )}

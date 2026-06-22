@@ -112,6 +112,20 @@ export const HardwarePage: React.FC = () => {
         }
     };
 
+    const handleChangePdv = async (id: number, newPdvId: number) => {
+        try {
+            const { error } = await supabase
+                .from('idface_dispositivos')
+                .update({ pdv_id: newPdvId })
+                .eq('id', id);
+
+            if (error) throw error;
+            fetchData();
+        } catch (err) {
+            console.error('Error updating device pdv:', err);
+        }
+    };
+
     return (
         <div className="space-y-8 animate-fade-in">
             <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
@@ -222,7 +236,16 @@ export const HardwarePage: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className="px-8 py-6">
-                                    <span className="text-sm font-bold text-gray-700">{disp.pontos_venda?.nome || 'Não vinculado'}</span>
+                                    <select 
+                                        value={disp.pdv_id}
+                                        onChange={(e) => handleChangePdv(disp.id, parseInt(e.target.value))}
+                                        className="text-sm font-bold text-gray-700 bg-transparent border-none focus:ring-0 cursor-pointer hover:bg-gray-100 rounded px-2 py-1 outline-none"
+                                    >
+                                        <option value={0}>Não vinculado</option>
+                                        {pdvs.map(p => (
+                                            <option key={p.id} value={p.id}>{p.nome}</option>
+                                        ))}
+                                    </select>
                                 </td>
                                 <td className="px-8 py-6">
                                     <button 

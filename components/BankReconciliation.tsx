@@ -3,6 +3,7 @@ import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { matchCategory } from '../pages/CashFlow';
+import { predictTransactionData } from '../lib/categorization';
 import { IconLoader, IconCheck, IconPlus, IconFileText, IconRefresh } from './Icons';
 
 interface BankTransaction {
@@ -15,6 +16,10 @@ interface BankTransaction {
   status: 'matched' | 'unmatched' | 'ignored';
   matchedSystemId?: number;
   selected?: boolean;
+  predictedCategory?: string | null;
+  predictedSupplier?: string | null;
+  predictedProject?: string | null;
+  predictedTags?: string | null;
 }
 
 interface SystemEntry {
@@ -406,6 +411,19 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ sessionI
         }
       }
 
+      // 3.5 Predict missing data for unmatched items
+      await Promise.all(processed.map(async (tx) => {
+        if (tx.status !== 'ignored') {
+            const pred = await predictTransactionData(tx.description, tx.type);
+            if (pred) {
+                tx.predictedCategory = pred.categoria;
+                tx.predictedSupplier = pred.cnpj_fornecedor;
+                tx.predictedProject = pred.projeto;
+                tx.predictedTags = pred.tags;
+            }
+        }
+      }));
+
       // 4. Load System Cash Flow for comparison based on statement's month range
       const validTxs = processed.filter(tx => tx.status !== 'ignored');
       const dates = validTxs.map(tx => tx.date);
@@ -613,24 +631,7 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ sessionI
   const handleCreateEntry = async (tx: BankTransaction) => {
     setLoading(true);
     try {
-      // Motor de Aprendizado: Busca no histórico lançamentos similares para adivinhar a categoria
-      const searchWords = tx.description.split(' ').filter(w => w.length > 3).slice(0, 3).join(' ');
-      let finalCategory = '';
-
-      if (searchWords.length > 3) {
-          const { data: historyData } = await supabase
-              .from('fluxo_caixa')
-              .select('categoria')
-              .eq('tipo', tx.type)
-              .textSearch('descricao', searchWords.split(' ').join(' | ')) // Busca textual pelas palavras principais
-              .not('categoria', 'is', null)
-              .order('data_pagamento', { ascending: false })
-              .limit(1);
-
-          if (historyData && historyData.length > 0) {
-              finalCategory = historyData[0].categoria;
-          }
-      }
+      let finalCategory = tx.predictedCategory || '';
 
       // Fallback para as regras fixas se o aprendizado não trouxer nada
       if (!finalCategory) {
@@ -645,6 +646,9 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ sessionI
           tipo: tx.type,
           data_pagamento: tx.date,
           categoria: finalCategory,
+          cnpj_fornecedor: tx.predictedSupplier || null,
+          projeto: tx.predictedProject || null,
+          tags: tx.predictedTags || null,
           meio_pagamento: 'Banco',
           status: 'pago',
           conciliado: true
@@ -1146,6 +1150,11 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ sessionI
                                 <td className="p-3 font-mono text-[10px] text-gray-400">{tx.date}</td>
                                 <td className="p-3">
                                    <div className="font-bold text-gray-700 max-w-[400px] whitespace-normal text-xs" title={tx.description}>{tx.description}</div>
+                                   {tx.predictedCategory && tx.status === 'unmatched' && (
+                                       <div className="text-[9px] text-farm-500 font-bold mt-1 bg-farm-50 w-fit px-1.5 py-0.5 rounded border border-farm-100 shadow-sm flex items-center gap-1">
+                                          <IconCheck className="w-3 h-3" /> Sugestão: {tx.predictedCategory}
+                                       </div>
+                                   )}
                                 </td>
                                 <td className={`p-3 text-right font-black ${tx.type === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
                                   {tx.type === 'entrada' ? '+' : '-'} {tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -1382,7 +1391,7 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ sessionI
       </div>
 
       {showAudit && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
               <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAudit(false)}></div>
               <div className="bg-gray-100 rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] relative z-10">
                   <header className="p-6 border-b flex flex-col gap-4 bg-farm-900 text-white">
@@ -1472,7 +1481,7 @@ export const BankReconciliation: React.FC<BankReconciliationProps> = ({ sessionI
       )}
 
       {editingSysEntry && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
               <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEditingSysEntry(null)}></div>
               <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden relative z-10">
                   <header className="p-6 border-b bg-gray-50 flex justify-between items-center">

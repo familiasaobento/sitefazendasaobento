@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
-import { IconUser, IconPrinter, IconTrash, IconPhone, IconMail, IconCalendar, IconPlus, IconLoader, IconChart, IconUpload, IconEdit, IconX, IconCheck } from '../components/Icons';
+import { IconUser, IconPrinter, IconTrash, IconPhone, IconMail, IconCalendar, IconPlus, IconLoader, IconChart, IconUpload, IconEdit, IconX, IconCheck, IconZap } from '../components/Icons';
 
 interface Dependent {
     name: string;
@@ -76,6 +76,189 @@ export const MembersPage: React.FC = () => {
     const [pendingUpdates, setPendingUpdates] = useState<MemberTitle[] | null>(null);
     const [expandedDebtId, setExpandedDebtId] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [enrollState, setEnrollState] = useState<{
+        enrolling: boolean;
+        commandId?: string;
+        status?: string;
+        error?: string;
+        targetName?: string;
+        profileId?: string;
+        dependentName?: string;
+    }>({ enrolling: false });
+
+    const cancelEnroll = async () => {
+        if (!enrollState.commandId) return;
+        try {
+            await supabase
+                .from('controlid_commands')
+                .update({ 
+                    status: 'failed', 
+                    error: 'Operação cancelada pela recepção no Portal.',
+                    updated_at: new Date().toISOString() 
+                })
+                .eq('id', enrollState.commandId);
+        } catch (err) {
+            console.error('Error cancelling enrollment:', err);
+        }
+        setEnrollState({ enrolling: false });
+    };
+
+    const startEnroll = async (targetType: 'member' | 'dependent', targetProfileId: string, dependentName?: string) => {
+        try {
+            const { data: devices, error: devError } = await supabase
+                .from('idface_dispositivos')
+                .select('serial_number')
+                .eq('pdv_id', 3) // PDV Escritório
+                .eq('ativo', true)
+                .limit(1);
+
+            if (devError || !devices || devices.length === 0) {
+                alert('Nenhum aparelho do Escritório (PDV Escritório) está cadastrado ou ativo no sistema. Cadastre o leitor na tela de Configuração de Hardware primeiro!');
+                return;
+            }
+
+            const device = devices[0];
+
+            let generatedId = '';
+            let attempts = 0;
+            const existingIds = new Set<string>();
+
+            const { data: allProfiles } = await supabase
+                .from('profiles')
+                .select('controlid_id, dependents');
+            
+            const { data: allEmployees } = await supabase
+                .from('employees')
+                .select('controlid_id');
+
+            if (allProfiles) {
+                allProfiles.forEach((p: any) => {
+                    if (p.controlid_id) existingIds.add(String(p.controlid_id));
+                    if (Array.isArray(p.dependents)) {
+                        p.dependents.forEach((d: any) => {
+                            if (d.controlid_id) existingIds.add(String(d.controlid_id));
+                        });
+                    }
+                });
+            }
+            if (allEmployees) {
+                allEmployees.forEach((e: any) => {
+                    if (e.controlid_id) existingIds.add(String(e.controlid_id));
+                });
+            }
+
+            do {
+                generatedId = String(Math.floor(100000 + Math.random() * 900000));
+                attempts++;
+            } while (existingIds.has(generatedId) && attempts < 100);
+
+            const { data: command, error: cmdError } = await supabase
+                .from('controlid_commands')
+                .insert({
+                    device_id: device.serial_number,
+                    command: 'remote_enroll.fcgi',
+                    params: {
+                        type: 'face',
+                        user_id: parseInt(generatedId),
+                        save: true
+                    },
+                    metadata: {
+                        target_type: targetType,
+                        target_id: targetProfileId,
+                        parent_id: targetType === 'dependent' ? targetProfileId : undefined,
+                        dependent_name: targetType === 'dependent' ? dependentName : undefined
+                    },
+                    status: 'pending'
+                })
+                .select()
+                .single();
+
+            if (cmdError || !command) throw cmdError || new Error('Falha ao criar comando de cadastro.');
+
+            setEnrollState({
+                enrolling: true,
+                commandId: command.id,
+                status: 'pending',
+                targetName: dependentName || 'Titular',
+                profileId: targetProfileId,
+                dependentName
+            });
+
+            const subscription = supabase
+                .channel(`controlid-enroll-${command.id}`)
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'UPDATE',
+                        schema: 'public',
+                        table: 'controlid_commands',
+                        filter: `id=eq.${command.id}`
+                    },
+                    (payload) => {
+                        const updatedCmd = payload.new;
+                        setEnrollState(prev => ({
+                            ...prev,
+                            status: updatedCmd.status,
+                            error: updatedCmd.error || undefined
+                        }));
+
+                        if (updatedCmd.status === 'success') {
+                            if (targetType === 'member') {
+                                setProfiles(prev => prev.map(p => 
+                                    p.id === targetProfileId ? { ...p, controlid_id: generatedId } : p
+                                ));
+                            } else if (targetType === 'dependent') {
+                                setProfiles(prev => prev.map(p => {
+                                    if (p.id === targetProfileId && p.dependents) {
+                                        const updatedDeps = p.dependents.map(d => {
+                                            if (d.name === dependentName) {
+                                                return { ...d, controlid_id: generatedId };
+                                            }
+                                            return d;
+                                        });
+                                        return { ...p, dependents: updatedDeps };
+                                    }
+                                    return p;
+                                }));
+                            }
+                            subscription.unsubscribe();
+                            setEnrollState({ enrolling: false });
+                        } else if (updatedCmd.status === 'failed') {
+                            alert(`Falha ao cadastrar no leitor: ${updatedCmd.error || 'Erro desconhecido.'}`);
+                            subscription.unsubscribe();
+                            setEnrollState({ enrolling: false });
+                        }
+                    }
+                )
+                .subscribe();
+
+            setTimeout(async () => {
+                const { data: latestCmd } = await supabase
+                    .from('controlid_commands')
+                    .select('status')
+                    .eq('id', command.id)
+                    .single();
+
+                if (latestCmd && (latestCmd.status === 'pending' || latestCmd.status === 'sent')) {
+                    await supabase
+                        .from('controlid_commands')
+                        .update({ 
+                            status: 'failed', 
+                            error: 'Tempo esgotado (60s) aguardando o leitor.',
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', command.id);
+                    alert('Tempo esgotado (60 segundos). A captura de rosto expirou.');
+                    subscription.unsubscribe();
+                    setEnrollState({ enrolling: false });
+                }
+            }, 60000);
+
+        } catch (err: any) {
+            alert('Erro ao iniciar cadastro facial: ' + err.message);
+        }
+    };
 
     const fetchProfiles = async () => {
         setLoading(true);
@@ -832,19 +1015,15 @@ export const MembersPage: React.FC = () => {
 
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center justify-end gap-3">
-                                                        {profile.dependents && profile.dependents.length > 0 ? (
-                                                            <button
-                                                                onClick={() => toggleExpanded(profile.id)}
-                                                                className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all ${expandedProfileId === profile.id
-                                                                    ? 'bg-blue-200 text-blue-900 ring-2 ring-blue-500 ring-offset-1'
-                                                                    : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-                                                                    }`}
-                                                            >
-                                                                {profile.dependents.length} dependentes
-                                                            </button>
-                                                        ) : (
-                                                            <span className="text-gray-400 text-sm italic">S/ dep.</span>
-                                                        )}
+                                                        <button
+                                                            onClick={() => toggleExpanded(profile.id)}
+                                                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all ${expandedProfileId === profile.id
+                                                                ? 'bg-blue-200 text-blue-900 ring-2 ring-blue-500 ring-offset-1'
+                                                                : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                                                }`}
+                                                        >
+                                                            {profile.dependents && profile.dependents.length > 0 ? `${profile.dependents.length} dep.` : 'Biometria'}
+                                                        </button>
 
                                                         {isAdmin && (
                                                             <>
@@ -872,25 +1051,85 @@ export const MembersPage: React.FC = () => {
                                                     </div>
                                                 </td>
                                             </tr>
-                                            {expandedProfileId === profile.id && profile.dependents && (
+                                            {expandedProfileId === profile.id && (
                                                 <tr className="bg-blue-50/50">
                                                     <td colSpan={5} className="px-6 py-4 border-t border-b border-gray-100">
-                                                        <div className="ml-12 pl-4 border-l-2 border-blue-200">
-                                                            <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                                                                <span className="bg-blue-100 text-blue-700 w-5 h-5 rounded-full flex items-center justify-center text-xs">i</span>
-                                                                Dependentes Vinculados:
-                                                            </h4>
-                                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                                {profile.dependents.map((dep, idx) => (
-                                                                    <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm text-sm">
-                                                                        <div className="font-semibold text-gray-800">{dep.name}</div>
-                                                                        <div className="text-gray-500 text-xs mt-1 flex justify-between">
-                                                                            <span>{dep.relationship}</span>
-                                                                            <span>{formatDate(dep.birthDate)}</span>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
+                                                        <div className="ml-12 pl-4 border-l-2 border-blue-200 space-y-4">
+                                                            
+                                                            <div>
+                                                                <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                                                    <IconUser className="w-4 h-4 text-blue-600" />
+                                                                    Biometria do Titular
+                                                                </h4>
+                                                                <div className="flex items-center gap-2 max-w-md">
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="ID Facial..."
+                                                                        value={profile.controlid_id || ''}
+                                                                        onChange={(e) => {
+                                                                            setProfiles(profiles.map(p => p.id === profile.id ? { ...p, controlid_id: e.target.value } : p));
+                                                                        }}
+                                                                        onBlur={(e) => handleUpdateControlId(profile.id, e.target.value)}
+                                                                        className="flex-1 px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => startEnroll('member', profile.id)}
+                                                                        className="bg-blue-50 text-blue-600 px-3 py-2 rounded-lg border border-blue-200 hover:bg-blue-100 transition-all font-bold text-xs flex items-center gap-1.5 shrink-0"
+                                                                        title="Capturar biometria usando o leitor do escritório"
+                                                                    >
+                                                                        <IconZap className="w-3.5 h-3.5 text-blue-500 animate-pulse" /> Capturar
+                                                                    </button>
+                                                                </div>
                                                             </div>
+
+                                                            {profile.dependents && profile.dependents.length > 0 && (
+                                                                <div>
+                                                                    <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                                                        <span className="bg-blue-100 text-blue-700 w-5 h-5 rounded-full flex items-center justify-center text-xs">i</span>
+                                                                        Dependentes Vinculados:
+                                                                    </h4>
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                                        {profile.dependents.map((dep, idx) => (
+                                                                            <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm text-sm">
+                                                                                <div className="font-semibold text-gray-800">{dep.name}</div>
+                                                                                <div className="text-gray-500 text-xs mt-1 flex justify-between">
+                                                                                    <span>{dep.relationship}</span>
+                                                                                    <span>{formatDate(dep.birthDate)}</span>
+                                                                                </div>
+                                                                                <div className="mt-2 pt-2 border-t border-gray-50">
+                                                                                    <div className="flex gap-1.5">
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            placeholder="ID Facial..."
+                                                                                            value={dep.controlid_id || ''}
+                                                                                            onChange={async (e) => {
+                                                                                                const newDeps = [...(profile.dependents || [])];
+                                                                                                newDeps[idx] = { ...newDeps[idx], controlid_id: e.target.value };
+                                                                                                setProfiles(profiles.map(p => p.id === profile.id ? { ...p, dependents: newDeps } : p));
+                                                                                            }}
+                                                                                            onBlur={async (e) => {
+                                                                                                const newDeps = [...(profile.dependents || [])];
+                                                                                                newDeps[idx] = { ...newDeps[idx], controlid_id: e.target.value };
+                                                                                                await supabase.from('profiles').update({ dependents: newDeps }).eq('id', profile.id);
+                                                                                            }}
+                                                                                            className="flex-1 min-w-0 px-2 py-1 text-xs bg-gray-50 border border-gray-200 rounded outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                                                                                        />
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => startEnroll('dependent', profile.id, dep.name)}
+                                                                                            className="bg-blue-50 text-blue-600 px-1.5 py-1 rounded border border-blue-200 hover:bg-blue-100 transition-all font-bold text-[10px] flex items-center gap-0.5 shrink-0"
+                                                                                            title="Capturar biometria usando o leitor do escritório"
+                                                                                        >
+                                                                                            <IconZap className="w-3 h-3 text-blue-500 animate-pulse" /> Capturar
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1544,6 +1783,45 @@ export const MembersPage: React.FC = () => {
                 </div>
             )}
                 </>
+            )}
+            {enrollState.enrolling && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2rem] p-8 max-w-md w-full border border-gray-100 shadow-2xl space-y-6 text-center animate-scale-in">
+                        <div className="w-16 h-16 bg-farm-50 text-farm-600 rounded-full flex items-center justify-center mx-auto animate-pulse">
+                            <IconZap className="w-8 h-8" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-gray-900 font-serif">Cadastrando Rosto</h3>
+                            <p className="text-sm text-gray-500 mt-2">
+                                Capturando a biometria de <span className="font-bold text-farm-600">{enrollState.targetName}</span> no aparelho do Escritório.
+                            </p>
+                        </div>
+                        
+                        <div className="bg-gray-50 p-4 rounded-2xl space-y-2">
+                            <p className="text-xs text-gray-400 font-black uppercase tracking-wider">Status do Leitor</p>
+                            {enrollState.status === 'pending' && (
+                                <p className="text-sm text-amber-600 font-bold flex items-center justify-center gap-2">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                                    Aguardando leitor receber comando...
+                                </p>
+                            )}
+                            {enrollState.status === 'sent' && (
+                                <p className="text-sm text-blue-600 font-bold flex items-center justify-center gap-2">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping"></span>
+                                    Olhe para a câmera do iDFace agora!
+                                </p>
+                            )}
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={cancelEnroll}
+                            className="w-full bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all"
+                        >
+                            Cancelar Operação
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     );

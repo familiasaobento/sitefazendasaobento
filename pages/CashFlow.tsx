@@ -4,6 +4,7 @@ import Papa from 'papaparse';
 import { IconLoader, IconCheck, IconPlus, IconFileText, IconTrash, IconUser, IconRefresh } from '../components/Icons';
 import { BankReconciliation } from '../components/BankReconciliation';
 import { ReconciliationSessions } from '../components/ReconciliationSessions';
+import { predictTransactionData } from '../lib/categorization';
 
 // Pencil/Edit icon inline since it may not be in Icons.tsx
 const IconEdit = ({ className }: { className?: string }) => (
@@ -216,7 +217,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
     // Multi-select
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-    const [activeTab, setActiveTab] = useState<'flow' | 'contacts' | 'accounts' | 'reports' | 'tags'>(isViewOnly ? 'reports' : 'flow');
+    const [activeTab, setActiveTab] = useState<'flow' | 'contacts' | 'accounts' | 'reports' | 'tags' | 'audit'>(isViewOnly ? 'reports' : 'flow');
     const [reportFilters, setReportFilters] = useState({
         origem: 'all',
         month: new Date().getMonth() + 1,
@@ -265,6 +266,30 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
 
     const [registeredTags, setRegisteredTags] = useState<FinanceTag[]>([]);
     const [newTag, setNewTag] = useState('');
+
+    const [isPredicting, setIsPredicting] = useState(false);
+
+    // Motor de Aprendizado para o formulário manual
+    useEffect(() => {
+        if (!formData.descricao || formData.descricao.length < 4 || editingEntry) return;
+
+        const timer = setTimeout(async () => {
+            setIsPredicting(true);
+            const pred = await predictTransactionData(formData.descricao, formData.tipo);
+            if (pred) {
+                setFormData(prev => ({
+                    ...prev,
+                    categoria: prev.categoria === 'Geral' || !prev.categoria ? (pred.categoria || prev.categoria) : prev.categoria,
+                    cnpj_fornecedor: !prev.cnpj_fornecedor ? (pred.cnpj_fornecedor || prev.cnpj_fornecedor) : prev.cnpj_fornecedor,
+                    projeto: !prev.projeto ? (pred.projeto || prev.projeto) : prev.projeto,
+                    tags: !prev.tags ? (pred.tags || prev.tags) : prev.tags
+                }));
+            }
+            setIsPredicting(false);
+        }, 800);
+
+        return () => clearTimeout(timer);
+    }, [formData.descricao, formData.tipo, editingEntry]);
 
     const [registeredProjects, setRegisteredProjects] = useState<FinanceProject[]>([]);
     const [newProject, setNewProject] = useState({ nome: '', descricao: '' });
@@ -1118,6 +1143,15 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                     Projetos / Tags
                     {activeTab === 'tags' && <div className="absolute bottom-0 left-0 w-full h-1 bg-farm-600 rounded-t-full"></div>}
                 </button>
+                {canApprove && (
+                    <button onClick={() => setActiveTab('audit')} className={`px-8 py-4 font-bold text-sm transition-all relative ${activeTab === 'audit' ? 'text-farm-800' : 'text-gray-400 hover:text-gray-600'}`}>
+                        Auditoria (Aprovações)
+                        {activeTab === 'audit' && <div className="absolute bottom-0 left-0 w-full h-1 bg-farm-600 rounded-t-full"></div>}
+                        {entries.filter(e => e.status === 'pendente').length > 0 && (
+                            <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">{entries.filter(e => e.status === 'pendente').length}</span>
+                        )}
+                    </button>
+                )}
             </div>
 
             {activeTab === 'flow' ? (
@@ -1791,6 +1825,71 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                         </table>
                     </div>
                 </div>
+            ) : activeTab === 'audit' && canApprove ? (
+                <div className="bg-white rounded-3xl shadow-sm border border-gray-200 p-8 animate-fade-in">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-black text-farm-900">Painel de Auditoria e Aprovação</h2>
+                        {selectedIds.length > 0 && (
+                            <button onClick={handleBulkApprove} className="bg-green-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-green-700 transition-colors shadow-lg shadow-green-200 flex items-center gap-2">
+                                <IconCheck className="w-5 h-5" /> Aprovar Selecionados ({selectedIds.length})
+                            </button>
+                        )}
+                    </div>
+                    
+                    <div className="overflow-x-auto rounded-xl border border-gray-100">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-gray-50 text-gray-500 text-[10px] uppercase tracking-widest border-b border-gray-100">
+                                    <th className="p-4 w-10 text-center"><input type="checkbox" onChange={(e) => {
+                                        if (e.target.checked) {
+                                            setSelectedIds(entries.filter(tx => tx.status === 'pendente').map(tx => tx.id));
+                                        } else {
+                                            setSelectedIds([]);
+                                        }
+                                    }} checked={entries.filter(tx => tx.status === 'pendente').length > 0 && selectedIds.length === entries.filter(tx => tx.status === 'pendente').length} className="w-4 h-4 rounded text-farm-600 focus:ring-farm-500 border-gray-300" /></th>
+                                    <th className="p-4">Data</th>
+                                    <th className="p-4">Descrição</th>
+                                    <th className="p-4">Categoria</th>
+                                    <th className="p-4">Status / Alertas</th>
+                                    <th className="p-4 text-right">Valor</th>
+                                    <th className="p-4 text-center">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {entries.filter(e => e.status === 'pendente').map((entry) => (
+                                    <tr key={entry.id} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${selectedIds.includes(entry.id) ? 'bg-farm-50/30' : ''}`}>
+                                        <td className="p-4 text-center"><input type="checkbox" checked={selectedIds.includes(entry.id)} onChange={(e) => {
+                                            if (e.target.checked) setSelectedIds([...selectedIds, entry.id]);
+                                            else setSelectedIds(selectedIds.filter(id => id !== entry.id));
+                                        }} className="w-4 h-4 rounded text-farm-600 focus:ring-farm-500 border-gray-300" /></td>
+                                        <td className="p-4 font-mono text-[11px] text-gray-400">{new Date(entry.data_pagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                                        <td className="p-4">
+                                            <div className="font-bold text-gray-700 text-sm">{entry.descricao}</div>
+                                            {entry.projeto && <div className="text-[10px] text-gray-400 mt-0.5">Projeto: {entry.projeto}</div>}
+                                        </td>
+                                        <td className="p-4">
+                                            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-bold">{entry.categoria}</span>
+                                        </td>
+                                        <td className="p-4">
+                                            <span className="px-2 py-1 bg-amber-100 text-amber-800 text-[10px] font-bold rounded inline-block mb-1">PENDENTE APROVAÇÃO</span>
+                                            {entry.valor > 5000 && <span className="ml-2 px-2 py-1 bg-red-100 text-red-800 text-[10px] font-bold rounded inline-block">ALTO VALOR</span>}
+                                            {entry.categoria === 'Geral' && <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-800 text-[10px] font-bold rounded inline-block">GENÉRICO</span>}
+                                        </td>
+                                        <td className={`p-4 text-right font-black ${entry.tipo === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
+                                            {entry.tipo === 'entrada' ? '+' : '-'} {entry.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                        </td>
+                                        <td className="p-4 text-center">
+                                            <button onClick={() => handleApprove(entry)} className="px-4 py-2 bg-green-100 text-green-700 hover:bg-green-200 font-bold text-xs rounded-xl transition-colors shadow-sm flex items-center justify-center gap-1 mx-auto"><IconCheck className="w-4 h-4"/> Aprovar</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {entries.filter(e => e.status === 'pendente').length === 0 && (
+                                    <tr><td colSpan={7} className="p-12 text-center text-gray-400 font-bold">Nenhum lançamento pendente de aprovação. 🎉</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             ) : activeTab === 'tags' ? (
                 <div className="space-y-8 animate-fade-in">
                     {/* Seção de Projetos */}
@@ -1965,7 +2064,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             )}
             
             {reconciliationView === 'active' && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => setReconciliationView('sessions')}></div>
                     <div className="relative z-10 w-full max-w-7xl h-full flex items-center justify-center pointer-events-none">
                         <div className="pointer-events-auto w-full flex justify-center">

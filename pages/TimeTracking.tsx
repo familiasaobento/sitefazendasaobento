@@ -32,12 +32,14 @@ export const TimeTrackingPage: React.FC = () => {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [showManualEntry, setShowManualEntry] = useState(false);
+    const [showAbonoForm, setShowAbonoForm] = useState(false);
     const [feedback, setFeedback] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
 
     // Form state
     const [selectedEmployee, setSelectedEmployee] = useState('');
     const [entryType, setEntryType] = useState<'entry' | 'exit'>('entry');
     const [entryTime, setEntryTime] = useState(new Date().toISOString().slice(0, 16));
+    const [abonoDate, setAbonoDate] = useState(new Date().toISOString().split('T')[0]);
 
     useEffect(() => {
         fetchData();
@@ -110,6 +112,29 @@ export const TimeTrackingPage: React.FC = () => {
         setTimeout(() => setFeedback(null), 3000);
     };
 
+    const handleAbonoSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedEmployee) return;
+
+        setLoading(true);
+        const { error } = await supabase
+            .from('employee_days_off')
+            .insert({
+                employee_id: selectedEmployee,
+                date: abonoDate
+            });
+
+        if (error) {
+            setFeedback({ type: 'error', msg: 'Erro ao registrar abono: ' + error.message });
+        } else {
+            setFeedback({ type: 'success', msg: 'Abono/Atestado registrado com sucesso!' });
+            setShowAbonoForm(false);
+            setSelectedEmployee('');
+        }
+        setLoading(false);
+        setTimeout(() => setFeedback(null), 3000);
+    };
+
     const handleDelete = async (id: string) => {
         if (!confirm('Excluir este registro de ponto?')) return;
         const { error } = await supabase.from('time_entries').delete().eq('id', id);
@@ -135,7 +160,13 @@ export const TimeTrackingPage: React.FC = () => {
                 </div>
                 <div className="flex gap-3">
                     <button 
-                        onClick={() => setShowManualEntry(true)}
+                        onClick={() => { setShowAbonoForm(true); setShowManualEntry(false); }}
+                        className="bg-white text-farm-900 px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-farm-50 transition-all shadow-lg border-2 border-farm-100"
+                    >
+                        Abonar Falta
+                    </button>
+                    <button 
+                        onClick={() => { setShowManualEntry(true); setShowAbonoForm(false); }}
                         className="bg-gray-900 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-gray-800 transition-all shadow-lg"
                     >
                         <IconPlus className="w-5 h-5" /> Registro Manual
@@ -209,6 +240,38 @@ export const TimeTrackingPage: React.FC = () => {
                         </div>
                         <div className="flex items-end">
                             <button type="submit" className="w-full bg-farm-600 text-white font-bold py-3.5 rounded-xl hover:bg-farm-700 shadow-lg transition-all">Salvar</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {showAbonoForm && (
+                <div className="bg-white p-8 rounded-3xl border-2 border-blue-100 shadow-xl animate-scale-in">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-bold text-gray-800">Registrar Abono / Atestado Médico</h3>
+                        <button onClick={() => setShowAbonoForm(false)} className="text-gray-400 hover:text-red-500 transition-colors">
+                            <IconX className="w-6 h-6" />
+                        </button>
+                    </div>
+                    <form onSubmit={handleAbonoSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Funcionário</label>
+                            <select 
+                                required
+                                value={selectedEmployee}
+                                onChange={e => setSelectedEmployee(e.target.value)}
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                            >
+                                <option value="">Selecionar...</option>
+                                {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
+                            </select>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Data da Falta Abonada</label>
+                            <input type="date" required value={abonoDate} onChange={e => setAbonoDate(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-medium" />
+                        </div>
+                        <div className="flex items-end">
+                            <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 shadow-lg transition-all">Registrar Abono</button>
                         </div>
                     </form>
                 </div>
