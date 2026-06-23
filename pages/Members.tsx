@@ -841,21 +841,17 @@ export const MembersPage: React.FC = () => {
                     <div className="grid grid-cols-1 gap-4 md:hidden print:hidden">
                         {filteredProfiles.map((profile) => (
                             <div key={profile.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-4">
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3 cursor-pointer" onClick={() => toggleExpanded(profile.id)}>
                                     <div className="bg-farm-50 w-12 h-12 rounded-full flex items-center justify-center text-farm-700 font-bold shrink-0 text-xl">
                                         {profile.full_name?.charAt(0) || '?'}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center justify-between">
                                             <p className="font-bold text-gray-900 truncate">{profile.full_name || 'Sem nome'}</p>
+                                            <span className="text-gray-400 text-xs ml-2">
+                                                {expandedProfileId === profile.id ? '▲' : '▼'}
+                                            </span>
                                         </div>
-                                        <p className="text-xs text-gray-400 font-mono">
-                                            {profile.cpf ? (
-                                                profile.cpf.replace(/\D/g, '').length === 11 
-                                                    ? profile.cpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
-                                                    : profile.cpf
-                                            ) : 'CPF não informado'}
-                                        </p>
                                     </div>
                                 </div>
 
@@ -868,14 +864,6 @@ export const MembersPage: React.FC = () => {
                                         <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">E-mail</p>
                                         <p className="text-gray-700 truncate" title={profile.email}>{profile.email || '—'}</p>
                                     </div>
-                                    {profile.has_house && profile.house_number && (
-                                        <div className="col-span-2 bg-blue-50/50 p-2 rounded-lg border border-blue-100 flex justify-between items-center text-xs">
-                                            <p className="text-blue-700 uppercase font-bold text-[10px]">Casa (Fazenda)</p>
-                                            <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-black border border-blue-200">
-                                                CASA {profile.house_number}
-                                            </span>
-                                        </div>
-                                    )}
                                     {isAdmin && (
                                         <div className="col-span-2 pt-2 flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
                                             <select
@@ -900,42 +888,114 @@ export const MembersPage: React.FC = () => {
                                     )}
                                 </div>
 
-                                {(profile.address || profile.address_street) && (
-                                    <div className="bg-gray-50 p-2 rounded-lg">
-                                        <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Endereço Residencial</p>
-                                        <p className="text-gray-700 text-xs leading-tight">
-                                            {profile.address_street 
-                                                ? `${profile.address_street}, ${profile.address_number}${profile.address_complement ? ` - ${profile.address_complement}` : ''}, ${profile.address_neighborhood}, ${profile.address_city}`
-                                                : profile.address
-                                            }
-                                        </p>
-                                    </div>
-                                )}
+                                {expandedProfileId === profile.id && (
+                                    <div className="pt-4 border-t border-gray-100 space-y-4 animate-in slide-in-from-top-2">
+                                        <div className="bg-gray-50 p-2 rounded-lg text-xs">
+                                            <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">CPF</p>
+                                            <p className="text-gray-700 font-mono">
+                                                {profile.cpf ? (
+                                                    profile.cpf.replace(/\D/g, '').length === 11 
+                                                        ? profile.cpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
+                                                        : profile.cpf
+                                                ) : 'CPF não informado'}
+                                            </p>
+                                        </div>
 
-                                {profile.dependents && profile.dependents.length > 0 && (
-                                    <div className="pt-2 border-t border-gray-100">
-                                        <button
-                                            onClick={() => toggleExpanded(profile.id)}
-                                            className="w-full flex items-center justify-between text-blue-600 font-bold text-xs"
-                                        >
-                                            <span>{profile.dependents.length} dependentes</span>
-                                            <svg
-                                                className={`w-4 h-4 transition-transform ${expandedProfileId === profile.id ? 'rotate-180' : ''}`}
-                                                fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                            >
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                        </button>
+                                        {profile.has_house && profile.house_number && (
+                                            <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100 flex justify-between items-center text-xs">
+                                                <p className="text-blue-700 uppercase font-bold text-[10px]">Casa (Fazenda)</p>
+                                                <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-black border border-blue-200">
+                                                    Nº {profile.house_number}
+                                                </span>
+                                            </div>
+                                        )}
 
-                                        {expandedProfileId === profile.id && (
-                                            <div className="mt-3 space-y-2 animate-in slide-in-from-top-2">
+                                        {(profile.address || profile.address_street) && (
+                                            <div className="bg-gray-50 p-2 rounded-lg">
+                                                <p className="text-gray-400 uppercase font-bold text-[10px] mb-1">Endereço Residencial</p>
+                                                <p className="text-gray-700 text-xs leading-tight">
+                                                    {profile.address_street 
+                                                        ? `${profile.address_street}, ${profile.address_number}${profile.address_complement ? ` - ${profile.address_complement}` : ''}, ${profile.address_neighborhood}, ${profile.address_city}`
+                                                        : profile.address
+                                                    }
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                                            <h4 className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                                <IconUser className="w-3 h-3 text-blue-600" />
+                                                Face ID Titular
+                                            </h4>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="ID Facial..."
+                                                    value={profile.controlid_id || ''}
+                                                    onChange={(e) => {
+                                                        setProfiles(profiles.map(p => p.id === profile.id ? { ...p, controlid_id: e.target.value } : p));
+                                                    }}
+                                                    onBlur={(e) => handleUpdateControlId(profile.id, e.target.value)}
+                                                    className="flex-1 px-2 py-1.5 text-xs bg-white border border-gray-200 rounded-lg outline-none font-mono"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => startEnroll('member', profile.id)}
+                                                    className="bg-blue-50 text-blue-600 px-2 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-all font-bold text-[10px] uppercase shrink-0"
+                                                >
+                                                    Capturar
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {profile.dependents && profile.dependents.length > 0 && (
+                                            <div className="space-y-2">
+                                                <h4 className="text-xs font-bold text-gray-700 flex items-center gap-2">
+                                                    Dependentes ({profile.dependents.length})
+                                                </h4>
                                                 {profile.dependents.map((dep, idx) => (
-                                                    <div key={idx} className="bg-blue-50/50 p-2 rounded-lg border border-blue-100">
-                                                        <p className="font-bold text-gray-800 text-xs">{dep.name}</p>
-                                                        <p className="text-[10px] text-gray-500 flex justify-between">
-                                                            <span>{dep.relationship}</span>
-                                                            <span>{formatDate(dep.birthDate)}</span>
-                                                        </p>
+                                                    <div key={idx} className="bg-blue-50/30 p-3 rounded-xl border border-blue-100 space-y-2">
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <p className="font-bold text-gray-800 text-xs">{dep.name}</p>
+                                                                <p className="text-[10px] text-gray-500 mt-0.5">
+                                                                    {dep.relationship} • Nasc: {formatDate(dep.birthDate)}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-blue-100/50">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="ID Facial..."
+                                                                value={(dep as any).controlid_id || ''}
+                                                                onChange={(e) => {
+                                                                    const newVal = e.target.value;
+                                                                    setProfiles(profiles.map(p => {
+                                                                        if (p.id === profile.id && p.dependents) {
+                                                                            const updated = p.dependents.map((d: any) => 
+                                                                                d.name === dep.name ? { ...d, controlid_id: newVal } : d
+                                                                            );
+                                                                            return { ...p, dependents: updated };
+                                                                        }
+                                                                        return p;
+                                                                    }));
+                                                                }}
+                                                                onBlur={async (e) => {
+                                                                    const updatedDeps = profile.dependents!.map((d: any) => 
+                                                                        d.name === dep.name ? { ...d, controlid_id: e.target.value } : d
+                                                                    );
+                                                                    await supabase.from('profiles').update({ dependents: updatedDeps }).eq('id', profile.id);
+                                                                }}
+                                                                className="flex-1 px-2 py-1.5 text-xs bg-white border border-gray-200 rounded-lg outline-none font-mono"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => startEnroll('dependent', profile.id, dep.name)}
+                                                                className="bg-blue-50 text-blue-600 px-2 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-all font-bold text-[10px] uppercase shrink-0"
+                                                            >
+                                                                Capturar
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>

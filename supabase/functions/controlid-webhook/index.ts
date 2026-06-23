@@ -17,6 +17,13 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // Log every request
+    await supabaseClient.from('webhook_logs').insert({ log: `[START] Webhook acionado: ${req.method} url: ${req.url}` });
+
+    if (req.method === 'OPTIONS') {
+      return new Response('ok', { headers: corsHeaders })
+    }
+
     const url = new URL(req.url);
     const path = url.pathname;
     const isPush = path.endsWith('/push');
@@ -359,19 +366,27 @@ serve(async (req) => {
     const payload = await req.json();
     console.log("Logs de acesso recebidos do Control iD:", JSON.stringify(payload));
 
-    const logs = payload.access_logs || [];
-    if (logs.length === 0) {
-      return new Response(JSON.stringify({ status: "success", message: "No access logs to process" }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      });
-    }
-
     const deviceId = payload.device_id;
     if (!deviceId) {
       return new Response(JSON.stringify({ error: "Missing device_id in event payload" }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
+      });
+    }
+
+    let logs = [];
+    if (payload.access_logs) {
+      logs = payload.access_logs;
+    } else if (payload.object_changes) {
+      logs = payload.object_changes
+        .filter((change: any) => change.object === "access_logs")
+        .map((change: any) => change.values);
+    }
+
+    if (logs.length === 0) {
+      return new Response(JSON.stringify({ status: "success", message: "No access logs to process" }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
       });
     }
 
@@ -451,18 +466,82 @@ serve(async (req) => {
       // ==========================================
       if (pdvId === 2) {
         // 1. Busca Estadia Ativa vinculada a esse Face ID
-        const { data: estadias, error: estadiaError } = await supabaseClient
+        let { data: estadias, error: estadiaError } = await supabaseClient
           .from('estadias')
           .select('id, hospede_nome, reserva_id')
           .eq('status', 'ativa')
           .eq('controlid_id', String(userId));
 
-        if (estadiaError || !estadias || estadias.length === 0) {
-          console.log(`FaceID ${userId} ignorado no restaurante: nenhuma estadia ativa encontrada.`);
-          continue;
+        let estadia = estadias && estadias.length > 0 ? estadias[0] : null;
+
+        // Se não encontrar diretamente na estadia, tenta resolver pelo profile (Sócio Titular ou Dependente)
+        if (!estadia) {
+          let titularId = null;
+          let personName = null;
+
+          // Busca como titular
+          const { data: titularProfile } = await supabaseClient
+            .from('profiles')
+            .select('id, full_name')
+            .eq('controlid_id', String(userId));
+
+          if (titularProfile && titularProfile.length > 0) {
+            titularId = titularProfile[0].id;
+            personName = titularProfile[0].full_name;
+          } else {
+            // Busca como dependente
+            const { data: depProfile } = await supabaseClient
+              .from('profiles')
+              .select('id, dependents')
+              .contains('dependents', `[{"controlid_id": "${String(userId)}"}]`);
+
+            if (depProfile && depProfile.length > 0) {
+              titularId = depProfile[0].id;
+              const deps = depProfile[0].dependents || [];
+              const matchedDep = deps.find((d: any) => String(d.controlid_id) === String(userId));
+              if (matchedDep) personName = matchedDep.name;
+            }
+          }
+
+          if (titularId) {
+            // Encontra a reserva ativa do titular
+            const { data: reservas } = await supabaseClient
+              .from('reservations')
+              .select('id')
+              .eq('user_id', titularId)
+              .in('status', ['confirmed', 'em_curso'])
+              .order('created_at', { ascending: false })
+              .limit(1);
+
+            if (reservas && reservas.length > 0) {
+              const reservaId = reservas[0].id;
+              const { data: titularEstadias } = await supabaseClient
+                .from('estadias')
+                .select('id, hospede_nome, reserva_id')
+                .eq('reserva_id', reservaId)
+                .eq('status', 'ativa');
+
+              if (titularEstadias && titularEstadias.length > 0) {
+                const estadiaMatch = titularEstadias.find((e: any) => 
+                  e.hospede_nome && personName && e.hospede_nome.toLowerCase().includes(personName.toLowerCase())
+                );
+                estadia = estadiaMatch || titularEstadias[0];
+                console.log(`[Restaurante] FaceID resolvido via Profile. Usuário: ${personName} -> Estadia ${estadia.id} (${estadia.hospede_nome})`);
+                await supabaseClient.from('webhook_logs').insert({ log: `Resolvido via Profile: ${personName} -> Estadia ${estadia.id}` });
+              }
+            } else {
+              await supabaseClient.from('webhook_logs').insert({ log: `Titular ${titularId} encontrado, mas nenhuma reserva ativa.` });
+            }
+          } else {
+            await supabaseClient.from('webhook_logs').insert({ log: `FaceID ${userId} não encontrado em profiles nem dependents.` });
+          }
         }
 
-        const estadia = estadias[0];
+        if (!estadia) {
+          console.log(`FaceID ${userId} ignorado no restaurante: nenhuma estadia ativa ou reserva encontrada.`);
+          await supabaseClient.from('webhook_logs').insert({ log: `FaceID ${userId} ignorado no restaurante: nenhuma estadia ativa.` });
+          continue;
+        }
 
         // 2. Lógica de Horário para Restaurante (Fuso Horário BRT UTC-3)
         const now = new Date();
@@ -481,6 +560,7 @@ serve(async (req) => {
 
         if (!productNameToSearch) {
           console.log(`FaceID ${userId} reconhecido no restaurante, mas fora do horário de refeições (${hour}:${minutes}).`);
+          await supabaseClient.from('webhook_logs').insert({ log: `FaceID ${userId} fora do horário (${hour}:${minutes}).` });
           continue;
         }
 
@@ -493,12 +573,15 @@ serve(async (req) => {
 
         if (!produtos || produtos.length === 0) {
           console.log(`Produto ${productNameToSearch} não encontrado no banco de dados.`);
+          await supabaseClient.from('webhook_logs').insert({ log: `Produto ${productNameToSearch} não encontrado.` });
           continue;
         }
 
         const produto = produtos[0];
 
         // 4. Grava o consumo
+        const nomeParaAnotar = estadia.hospede_nome || 'Desconhecido';
+        
         const { error: insertConsumoError } = await supabaseClient
           .from('lancamentos_consumo')
           .insert({
@@ -509,13 +592,15 @@ serve(async (req) => {
             valor_unitario_aplicado: produto.price,
             aprovado_admin: true,
             pago: false,
-            observacoes: `Buffet de ${productNameToSearch} (Reconhecimento Facial)`
+            observacoes: `Buffet de ${productNameToSearch} (Face ID: ${nomeParaAnotar})`
           });
 
         if (insertConsumoError) {
           console.error("Erro ao inserir consumo:", insertConsumoError);
+          await supabaseClient.from('webhook_logs').insert({ log: `Erro ao inserir consumo: ${insertConsumoError.message}` });
         } else {
           console.log(`Sucesso: ${productNameToSearch} cobrado na conta de ${estadia.hospede_nome} (Estadia ${estadia.id})`);
+          await supabaseClient.from('webhook_logs').insert({ log: `Sucesso: Consumo registrado para ${nomeParaAnotar} na estadia ${estadia.id}` });
         }
       }
     }
