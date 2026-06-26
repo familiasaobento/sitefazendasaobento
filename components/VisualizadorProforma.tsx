@@ -180,12 +180,14 @@ export const VisualizadorProforma: React.FC<VisualizadorProformaProps> = ({ esta
                 nights: nights
             };
 
-            const { data: consumo, error: consumoError } = await supabase
+            const { data: rawConsumo, error: consumoError } = await supabase
                 .from('lancamentos_consumo')
                 .select('*, item:item_id(name)')
                 .in('estadia_id', stayIds);
 
             if (consumoError) throw consumoError;
+
+            const consumo = rawConsumo?.filter(item => Number(item.valor_unitario_aplicado) > 0) || [];
 
             const d_in = new Date(reservation.check_in + 'T12:00:00');
             const d_out = new Date(reservation.check_out + 'T12:00:00');

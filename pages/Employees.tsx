@@ -5,6 +5,7 @@ import {
     IconLoader, IconClock, IconZap, IconCalendar, IconAlertTriangle,
     IconChart, IconBriefcase, IconEdit
 } from '../components/Icons';
+import * as XLSX from 'xlsx';
 
 interface Employee {
     id: string;
@@ -39,7 +40,7 @@ interface Vacation {
     };
 }
 
-export const EmployeesPage: React.FC = () => {
+export const EmployeesPage: React.FC<{ userRole?: string }> = ({ userRole = 'member' }) => {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [vacations, setVacations] = useState<Vacation[]>([]);
     const [categories, setCategories] = useState<{id: number, nome: string}[]>([]);
@@ -225,7 +226,13 @@ export const EmployeesPage: React.FC = () => {
         if (existing) {
             await supabase.from('employee_days_off').delete().eq('id', existing.id);
         } else {
-            await supabase.from('employee_days_off').insert({ employee_id: employeeId, date: dateStr });
+            const isManagerOrAdmin = userRole === 'admin' || userRole === 'site_admin' || userRole === 'finance_manager';
+            const initialStatus = isManagerOrAdmin ? 'approved' : 'pending';
+            await supabase.from('employee_days_off').insert({ 
+                employee_id: employeeId, 
+                date: dateStr,
+                status: initialStatus
+            });
         }
         fetchBancoData();
     };
@@ -262,7 +269,7 @@ export const EmployeesPage: React.FC = () => {
     };
 
     const calculateDailyBalance = (emp: Employee, dateStr: string) => {
-        const isDayOff = daysOff.some(d => d.employee_id === emp.id && d.date === dateStr);
+        const isDayOff = daysOff.some(d => d.employee_id === emp.id && d.date === dateStr && d.status !== 'pending');
         const expected = isDayOff ? 0 : getExpectedHours(emp, dateStr);
 
         const allDayPunches = timeEntries.filter(e => {
@@ -276,11 +283,15 @@ export const EmployeesPage: React.FC = () => {
             return false;
         });
 
+        // Filter out pending punches for calculations
+        const approvedDayPunches = allDayPunches.filter(e => e.status !== 'pending');
+        const approvedTimeEntries = timeEntries.filter(e => e.status !== 'pending');
+
         let workedHours = 0;
 
-        allDayPunches.filter(e => e.entry_type === 'entry').forEach(entry => {
+        approvedDayPunches.filter(e => e.entry_type === 'entry').forEach(entry => {
             // Encontra a próxima saída deste funcionário cronologicamente
-            const exit = timeEntries.find(e => e.employee_id === emp.id && e.entry_type === 'exit' && new Date(e.timestamp) > new Date(entry.timestamp));
+            const exit = approvedTimeEntries.find(e => e.employee_id === emp.id && e.entry_type === 'exit' && new Date(e.timestamp) > new Date(entry.timestamp));
             
             if (exit) {
                 const start = new Date(entry.timestamp).getTime();
@@ -310,7 +321,7 @@ export const EmployeesPage: React.FC = () => {
             balance = 0;
         }
 
-        return { expected, workedHours, balance, isDayOff, punches: allDayPunches.length };
+        return { expected, workedHours, balance, isDayOff, punches: approvedDayPunches.length, allPunches: allDayPunches };
     };
 
     const getMonthlyBalance = (emp: Employee) => {
@@ -343,6 +354,97 @@ export const EmployeesPage: React.FC = () => {
         const h = Math.floor(absH);
         const m = Math.floor((absH - h) * 60);
         return `${sign}${h}h${String(m).padStart(2, '0')}m`;
+    };
+
+    const exportSummaryToExcel = () => {
+        const regularEmployees = employees.filter(e => e.journey_type !== 'diarista');
+        
+        const dataToExport = regularEmployees.map(emp => {
+            const balanceData = getMonthlyBalance(emp);
+            return {
+                'Colaborador': emp.full_name,
+                'Cargo': emp.position || '-',
+                'Área/Setor': emp.area || '-',
+                'Jornada Prevista': `${(balanceData.totalExpected).toFixed(1)}h`,
+                'Horas Trabalhadas': `${(balanceData.totalWorked).toFixed(1)}h`,
+                'Saldo do Mês': formatHours(balanceData.totalBalance)
+            };
+        });
+
+        const diaristas = employees.filter(e => e.journey_type === 'diarista');
+        const diaristasToExport = diaristas.map(emp => {
+            const balanceData = getMonthlyBalance(emp);
+            const payment = balanceData.totalDaysWorked * (emp.daily_rate || 0);
+            return {
+                'Colaborador': emp.full_name,
+                'Cargo': emp.position || '-',
+                'Área/Setor': emp.area || '-',
+                'Diárias Realizadas': `${balanceData.totalDaysWorked} dias`,
+                'Horas Trabalhadas': `${balanceData.totalWorked.toFixed(1)}h`,
+                'Valor Estimado (R$)': payment.toFixed(2).replace('.', ',')
+            };
+        });
+
+        const workbook = XLSX.utils.book_new();
+        
+        if (dataToExport.length > 0) {
+            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Funcionários Fixos");
+        }
+        
+        if (diaristasToExport.length > 0) {
+            const worksheetDiaristas = XLSX.utils.json_to_sheet(diaristasToExport);
+            XLSX.utils.book_append_sheet(workbook, worksheetDiaristas, "Diaristas");
+        }
+
+        XLSX.writeFile(workbook, `resumo-banco-horas-${selectedMonth}.xlsx`);
+    };
+
+    const exportEmployeeDetailToExcel = (emp: Employee) => {
+        const year = parseInt(selectedMonth.split('-')[0]);
+        const month = parseInt(selectedMonth.split('-')[1]) - 1;
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        const dataToExport = Array.from({ length: daysInMonth }).map((_, i) => {
+            const dStr = `${selectedMonth}-${String(i + 1).padStart(2, '0')}`;
+            const { expected, workedHours, balance, isDayOff, punches, allPunches } = calculateDailyBalance(emp, dStr);
+            const dateObj = new Date(dStr + 'T12:00:00Z');
+            
+            const punchTimesStr = (allPunches || []).map(p => {
+                const time = new Date(p.timestamp).toLocaleTimeString('pt-BR', { 
+                    hour: '2-digit', 
+                    minute: '2-digit', 
+                    timeZone: 'America/Sao_Paulo' 
+                });
+                return `${time} (${p.entry_type === 'entry' ? 'Ent' : 'Saí'})`;
+            }).join(' | ');
+
+            return {
+                'Dia': String(i + 1).padStart(2, '0'),
+                'Dia da Semana': dateObj.toLocaleDateString('pt-BR', { weekday: 'long' }),
+                'Escala': isDayOff ? 'Folga' : 'Dia de Trabalho',
+                'Batidas de Ponto': punchTimesStr || '-',
+                'Quantidade Batidas': punches,
+                'Horas Previstas': `${expected.toFixed(1)}h`,
+                'Horas Trabalhadas': workedHours > 0 ? `${Math.floor(workedHours)}h${String(Math.round((workedHours % 1) * 60)).padStart(2, '0')}m` : '-',
+                'Saldo Diário': formatHours(balance)
+            };
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Espelho de Ponto");
+
+        const maxLen = dataToExport.reduce((acc, row) => {
+            Object.keys(row).forEach((key, i) => {
+                const val = String(row[key as keyof typeof row] || '');
+                acc[i] = Math.max(acc[i] || 0, val.length, key.length);
+            });
+            return acc;
+        }, [] as number[]);
+        worksheet['!cols'] = maxLen.map(len => ({ wch: len + 3 }));
+
+        XLSX.writeFile(workbook, `espelho-ponto-${emp.full_name.trim().replace(/\s+/g, '-')}-${selectedMonth}.xlsx`);
     };
 
     // Calculation for Rateio (Generic function for both tips and production)
@@ -486,12 +588,17 @@ export const EmployeesPage: React.FC = () => {
         if (!error) fetchVacations();
     };
 
-    const getVacationStatus = (emp: Employee) => {
+    const getVacationStatus = (emp: Employee): 'ok' | 'vencendo' | 'vencida' => {
         const admission = new Date(emp.admission_date);
         const today = new Date();
         const diffYears = today.getFullYear() - admission.getFullYear();
         const diffMonths = (today.getMonth() + diffYears * 12) - admission.getMonth();
         
+        if (diffMonths >= 23) {
+            const yearStart = new Date(today.getFullYear() - 1, 0, 1).toISOString();
+            const hasRecentVacation = vacations.some(v => v.employee_id === emp.id && v.start_date >= yearStart);
+            if (!hasRecentVacation) return 'vencida';
+        }
         if (diffMonths >= 11) {
             const yearStart = new Date(today.getFullYear(), 0, 1).toISOString();
             const hasRecentVacation = vacations.some(v => v.employee_id === emp.id && v.start_date >= yearStart);
@@ -948,7 +1055,13 @@ export const EmployeesPage: React.FC = () => {
                                 <p className="text-xs text-gray-500">Gerencie as folgas e veja o saldo de horas no mês.</p>
                             </div>
                         </div>
-                        <div>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={exportSummaryToExcel}
+                                className="bg-farm-600 hover:bg-farm-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center gap-1.5"
+                            >
+                                Exportar Resumo
+                            </button>
                             <input 
                                 type="month" 
                                 value={selectedMonth}
@@ -1049,12 +1162,20 @@ export const EmployeesPage: React.FC = () => {
                         <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 animate-scale-in">
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 pb-6 border-b border-gray-100 gap-4">
                                 <div>
-                                    <button 
-                                        onClick={() => setSelectedEmployeeForBanco(null)}
-                                        className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-farm-600 mb-2 flex items-center gap-1 transition-colors"
-                                    >
-                                        ← Voltar para lista
-                                    </button>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <button 
+                                            onClick={() => setSelectedEmployeeForBanco(null)}
+                                            className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-farm-600 flex items-center gap-1 transition-colors"
+                                        >
+                                            ← Voltar para lista
+                                        </button>
+                                        <button
+                                            onClick={() => exportEmployeeDetailToExcel(employees.find(e => e.id === selectedEmployeeForBanco)!)}
+                                            className="bg-farm-600 hover:bg-farm-700 text-white font-bold text-[10px] uppercase tracking-wider px-3.5 py-1.5 rounded-xl shadow-sm transition-all"
+                                        >
+                                            Exportar Espelho
+                                        </button>
+                                    </div>
                                     <h3 className="text-2xl font-bold text-gray-900">
                                         {employees.find(e => e.id === selectedEmployeeForBanco)?.full_name}
                                     </h3>
@@ -1088,11 +1209,12 @@ export const EmployeesPage: React.FC = () => {
                                             const dStr = `${selectedMonth}-${String(i + 1).padStart(2, '0')}`;
                                             const isFuture = new Date(dStr + 'T00:00:00') > new Date();
                                             const emp = employees.find(e => e.id === selectedEmployeeForBanco)!;
-                                            const { expected, workedHours, balance, isDayOff, punches } = calculateDailyBalance(emp, dStr);
+                                            const { expected, workedHours, balance, isDayOff, punches, allPunches } = calculateDailyBalance(emp, dStr);
                                             const dateObj = new Date(dStr + 'T12:00:00Z');
+                                            const hasPendingDayOff = daysOff.some(d => d.employee_id === emp.id && d.date === dStr && d.status === 'pending');
                                             
                                             return (
-                                                <tr key={dStr} className={`hover:bg-gray-50/80 transition-colors ${isDayOff ? 'bg-orange-50/30' : ''}`}>
+                                                <tr key={dStr} className={`hover:bg-gray-50/80 transition-colors ${isDayOff ? 'bg-orange-50/30' : hasPendingDayOff ? 'bg-yellow-50/20' : ''}`}>
                                                     <td className="px-6 py-4">
                                                         <span className="font-bold text-gray-700">{String(i + 1).padStart(2, '0')}</span>
                                                         <span className="text-xs text-gray-400 ml-2 uppercase font-medium">
@@ -1100,23 +1222,63 @@ export const EmployeesPage: React.FC = () => {
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-4">
-                                                        <button 
-                                                            onClick={() => toggleDayOff(emp.id, dStr)}
-                                                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${
-                                                                isDayOff 
-                                                                ? 'bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200' 
-                                                                : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800'
-                                                            }`}
-                                                        >
-                                                            {isDayOff ? 'Folga Marcada' : 'Dia de Trabalho'}
-                                                        </button>
+                                                        <div className="flex flex-col gap-1">
+                                                            <div>
+                                                                <button 
+                                                                    onClick={() => toggleDayOff(emp.id, dStr)}
+                                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${
+                                                                        isDayOff 
+                                                                        ? 'bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200' 
+                                                                        : hasPendingDayOff
+                                                                            ? 'bg-yellow-100 text-yellow-700 border-yellow-200 hover:bg-yellow-200'
+                                                                            : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                                                                    }`}
+                                                                >
+                                                                    {isDayOff ? 'Folga Marcada' : hasPendingDayOff ? 'Folga Pendente' : 'Dia de Trabalho'}
+                                                                </button>
+                                                            </div>
+                                                            {!isDayOff && emp.work_start && emp.work_end && (
+                                                                <div className="text-[10px] text-gray-400 font-medium whitespace-nowrap">
+                                                                    Jornada: <span className="font-bold text-gray-600">{emp.work_start} - {emp.work_end}</span>
+                                                                    {emp.break_start && emp.break_end && (
+                                                                        <> (Almoço: <span className="font-bold text-gray-600">{emp.break_start} - {emp.break_end}</span>)</>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </td>
-                                                    <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">
-                                                        {punches > 0 ? (
-                                                            <span className="bg-gray-100 px-3 py-1 rounded-full text-xs text-gray-600 border border-gray-200">{punches} batidas</span>
-                                                        ) : (
-                                                            <span className="text-gray-300">-</span>
-                                                        )}
+                                                    <td className="px-6 py-4 text-center">
+                                                        <div className="flex flex-col items-center gap-1.5">
+                                                            {punches > 0 ? (
+                                                                <>
+                                                                    <span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-black text-gray-600 border border-gray-200">
+                                                                        {punches} {punches === 1 ? 'batida' : 'batidas'}
+                                                                    </span>
+                                                                    <div className="flex flex-wrap justify-center gap-1 text-[10px]">
+                                                                        {(allPunches || []).map((p: any, idx: number) => {
+                                                                            const time = new Date(p.timestamp).toLocaleTimeString('pt-BR', { 
+                                                                                hour: '2-digit', 
+                                                                                minute: '2-digit', 
+                                                                                timeZone: 'America/Sao_Paulo' 
+                                                                            });
+                                                                            return (
+                                                                                <span key={p.id || idx} className={`px-1.5 py-0.5 rounded font-bold border ${
+                                                                                    p.status === 'pending'
+                                                                                        ? 'bg-yellow-50 text-yellow-700 border-yellow-200 line-through opacity-70'
+                                                                                        : p.entry_type === 'entry' 
+                                                                                            ? 'bg-green-50 text-green-700 border-green-100' 
+                                                                                            : 'bg-orange-50 text-orange-700 border-orange-100'
+                                                                                }`} title={p.status === 'pending' ? 'Ajuste Pendente de Aprovação' : p.entry_type === 'entry' ? 'Entrada' : 'Saída'}>
+                                                                                    {time} ({p.entry_type === 'entry' ? 'Ent' : 'Sai'}){p.status === 'pending' && ' (Pend)'}
+                                                                                </span>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-gray-300">-</span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-6 py-4 text-center text-sm font-medium text-gray-700">
                                                         {workedHours > 0 ? (

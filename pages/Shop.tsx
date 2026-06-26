@@ -12,6 +12,7 @@ interface Product {
     is_active: boolean;
     sell_by_weight: boolean;
     unit_type: string;
+    by_order: boolean;
 }
 
 interface CartItem {
@@ -52,7 +53,9 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
     const [rejectionId, setRejectionId] = useState<number | null>(null);
     const [rejectionReason, setRejectionReason] = useState('');
 
-    const categories = ['Todos', 'Refeições', 'Doces', 'Laticínios', 'Padaria', 'Hortifruti'];
+    const [categories, setCategories] = useState<string[]>(['Todos', 'Refeições', 'Doces', 'Laticínios', 'Padaria', 'Hortifruti']);
+    const [isNewCategory, setIsNewCategory] = useState(false);
+    const [newCategoryText, setNewCategoryText] = useState('');
 
     useEffect(() => {
         fetchProducts();
@@ -61,6 +64,22 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
             fetchReservations();
         }
     }, [isAdmin]);
+
+    useEffect(() => {
+        if (!showAdminModal) {
+            setIsNewCategory(false);
+            setNewCategoryText('');
+        }
+    }, [showAdminModal]);
+
+    useEffect(() => {
+        if (products.length > 0) {
+            const dbCategories = Array.from(new Set(products.map(p => p.category))).filter(Boolean);
+            const defaultCats = ['Todos', 'Refeições', 'Doces', 'Laticínios', 'Padaria', 'Hortifruti'];
+            const merged = Array.from(new Set([...defaultCats, ...dbCategories]));
+            setCategories(merged);
+        }
+    }, [products]);
 
     const fetchProducts = async () => {
         try {
@@ -331,7 +350,8 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                 is_active: editingProduct.is_active,
                 image_url: editingProduct.image_url,
                 sell_by_weight: editingProduct.sell_by_weight || false,
-                unit_type: editingProduct.unit_type || 'unit'
+                unit_type: editingProduct.unit_type || 'unit',
+                by_order: editingProduct.by_order || false
             };
 
             if (editingProduct.id) {
@@ -399,7 +419,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                 </div>
                 {isAdmin && (
                     <button
-                        onClick={() => { setEditingProduct({ name: '', price: 0, category: 'Doces', sell_by_weight: false, unit_type: 'unit', is_active: true }); setShowAdminModal(true); }}
+                        onClick={() => { setEditingProduct({ name: '', price: 0, category: 'Doces', sell_by_weight: false, unit_type: 'unit', is_active: true, by_order: false }); setShowAdminModal(true); }}
                         className="bg-farm-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-farm-700 transition-colors shadow-sm"
                     >
                         + Gerenciar Produtos
@@ -446,6 +466,11 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                                         <span className="bg-white/90 backdrop-blur-sm text-farm-600 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider shadow-sm border border-farm-100">
                                             {product.category}
                                         </span>
+                                        {product.by_order && (
+                                            <span className="bg-amber-500/90 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider shadow-sm font-sans">
+                                                Sob Encomenda
+                                            </span>
+                                        )}
                                         {!product.is_active && (
                                             <span className="bg-red-500/90 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider shadow-sm">
                                                 Inativo
@@ -568,12 +593,35 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                                     <div>
                                         <label className="block text-sm font-bold text-gray-700 mb-1.5">Categoria</label>
                                         <select
-                                            value={editingProduct.category}
-                                            onChange={e => setEditingProduct({ ...editingProduct, category: e.target.value })}
-                                            className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none bg-white"
+                                            value={isNewCategory ? 'new' : editingProduct.category}
+                                            onChange={e => {
+                                                if (e.target.value === 'new') {
+                                                    setIsNewCategory(true);
+                                                    setNewCategoryText('');
+                                                    setEditingProduct({ ...editingProduct, category: '' });
+                                                } else {
+                                                    setIsNewCategory(false);
+                                                    setEditingProduct({ ...editingProduct, category: e.target.value });
+                                                }
+                                            }}
+                                            className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none bg-white mb-2"
                                         >
                                             {categories.filter(c => c !== 'Todos').map(c => <option key={c} value={c}>{c}</option>)}
+                                            <option value="new">+ Nova Categoria...</option>
                                         </select>
+                                        {isNewCategory && (
+                                            <input
+                                                type="text"
+                                                required
+                                                placeholder="Nome da Categoria"
+                                                value={newCategoryText}
+                                                onChange={e => {
+                                                    setNewCategoryText(e.target.value);
+                                                    setEditingProduct({ ...editingProduct, category: e.target.value });
+                                                }}
+                                                className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none animate-fade-in text-sm font-medium"
+                                            />
+                                        )}
                                     </div>
                                 </div>
                                 <div>
@@ -585,7 +633,7 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                                         placeholder="Ex: Doce de leite caseiro feito no fogão a lenha..."
                                     />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-xl">
                                     <label className="flex items-center gap-2 cursor-pointer group">
                                         <input
                                             type="checkbox"
@@ -603,6 +651,15 @@ export const ShopPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean }> = ({
                                             className="w-5 h-5 rounded border-gray-300 text-farm-600 focus:ring-farm-500"
                                         />
                                         <span className="text-sm font-bold text-gray-700">Venda por Peso (Kg)</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                        <input
+                                            type="checkbox"
+                                            checked={editingProduct.by_order}
+                                            onChange={e => setEditingProduct({ ...editingProduct, by_order: e.target.checked })}
+                                            className="w-5 h-5 rounded border-gray-300 text-farm-600 focus:ring-farm-500"
+                                        />
+                                        <span className="text-sm font-bold text-gray-700">Sob Encomenda</span>
                                     </label>
                                 </div>
                                 <div>

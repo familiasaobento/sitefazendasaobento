@@ -73,6 +73,8 @@ export const ProfilePage: React.FC = () => {
         targetName?: string;
     }>({ enrolling: false });
 
+    const canSeeFaceId = ['admin', 'site_admin', 'finance_manager', 'finance'].includes(formData.role) || authEmail === 'admin@familiasaobento.com';
+
     const cancelEnroll = async () => {
         if (!enrollState.commandId) return;
         try {
@@ -582,28 +584,30 @@ export const ProfilePage: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="space-y-1">
-                                <label htmlFor="controlid_id" className="block text-sm font-bold text-gray-700 mb-1.5">ID Facial (Biometria)</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        id="controlid_id"
-                                        type="text"
-                                        value={formData.controlid_id}
-                                        onChange={handleInputChange}
-                                        placeholder="Ex: 123"
-                                        className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all font-mono"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => startEnroll('member')}
-                                        className="bg-farm-50 text-farm-600 px-4 py-3 rounded-xl border border-farm-200 hover:bg-farm-100 transition-all font-bold text-xs flex items-center gap-1.5"
-                                        title="Capturar biometria usando o leitor do escritório"
-                                    >
-                                        <IconZap className="w-4 h-4 text-farm-500 animate-pulse" /> Capturar Rosto
-                                    </button>
+                            {canSeeFaceId && (
+                                <div className="space-y-1">
+                                    <label htmlFor="controlid_id" className="block text-sm font-bold text-gray-700 mb-1.5">ID Facial (Biometria)</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            id="controlid_id"
+                                            type="text"
+                                            value={formData.controlid_id}
+                                            onChange={handleInputChange}
+                                            placeholder="Ex: 123"
+                                            className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all font-mono"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => startEnroll('member')}
+                                            className="bg-farm-50 text-farm-600 px-4 py-3 rounded-xl border border-farm-200 hover:bg-farm-100 transition-all font-bold text-xs flex items-center gap-1.5"
+                                            title="Capturar biometria usando o leitor do escritório"
+                                        >
+                                            <IconZap className="w-4 h-4 text-farm-500 animate-pulse" /> Capturar Rosto
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-gray-400">Número gerado ao cadastrar seu rosto no aparelho do escritório.</p>
                                 </div>
-                                <p className="text-[10px] text-gray-400">Número gerado ao cadastrar seu rosto no aparelho do escritório.</p>
-                            </div>
+                            )}
 
                             {formData.host_name && (
                                 <div className="space-y-1">
@@ -789,26 +793,28 @@ export const ProfilePage: React.FC = () => {
                                                             <option value="Outros">Outros</option>
                                                         </select>
                                                     </div>
-                                                    <div className="space-y-1 md:col-span-2">
-                                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">ID Facial (Opcional)</label>
-                                                        <div className="flex gap-2">
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Ex: 124"
-                                                                value={dep.controlid_id || ''}
-                                                                onChange={(e) => handleDependentChange(idx, 'controlid_id', e.target.value)}
-                                                                className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm transition-all bg-white font-mono"
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => startEnroll('dependent', dep.name)}
-                                                                className="bg-farm-50 text-farm-600 px-3 py-3 rounded-xl border border-farm-200 hover:bg-farm-100 transition-all font-bold text-[10px] flex items-center gap-1"
-                                                                title="Capturar biometria usando o leitor do escritório"
-                                                            >
-                                                                <IconZap className="w-3.5 h-3.5 text-farm-500 animate-pulse" /> Capturar
-                                                            </button>
+                                                    {canSeeFaceId && (
+                                                        <div className="space-y-1 md:col-span-2">
+                                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">ID Facial (Opcional)</label>
+                                                            <div className="flex gap-2">
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Ex: 124"
+                                                                    value={dep.controlid_id || ''}
+                                                                    onChange={(e) => handleDependentChange(idx, 'controlid_id', e.target.value)}
+                                                                    className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm transition-all bg-white font-mono"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => startEnroll('dependent', dep.name)}
+                                                                    className="bg-farm-50 text-farm-600 px-3 py-3 rounded-xl border border-farm-200 hover:bg-farm-100 transition-all font-bold text-[10px] flex items-center gap-1"
+                                                                    title="Capturar biometria usando o leitor do escritório"
+                                                                >
+                                                                    <IconZap className="w-3.5 h-3.5 text-farm-500 animate-pulse" /> Capturar
+                                                                </button>
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                    )}
                                                     <button
                                                         type="button"
                                                         onClick={() => removeDependent(idx)}

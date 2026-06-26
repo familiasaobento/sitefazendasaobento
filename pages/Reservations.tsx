@@ -48,6 +48,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const [isAutoApproved, setIsAutoApproved] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
   const [adminTab, setAdminTab] = useState<'list' | 'map' | 'form' | 'in_house' | 'history' | 'planning' | 'guest_requests'>('map');
+  const [userTab, setUserTab] = useState<'form' | 'list'>('form');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [historyStays, setHistoryStays] = useState<any[]>([]);
@@ -626,7 +627,11 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
       if (resError) throw resError;
 
       setShowCheckinModal(false);
-      fetchAllReservations();
+      if (isAdmin) {
+        fetchAllReservations();
+      } else {
+        fetchReservations();
+      }
       alert(`Check-in de ${stayInserts.length} pessoas realizado com sucesso!`);
     } catch (err: any) {
       alert('Erro ao realizar check-in: ' + err.message);
@@ -790,12 +795,12 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
             <div>
               <h2 className="text-xl md:text-4xl font-bold text-gray-900 font-serif flex items-center gap-2 italic">
                 <IconCalendar className="w-6 h-6 md:w-10 md:h-10 text-farm-800" />
-                {isAdmin ? 'Gestão de Reservas' : 'Minhas Reservas'}
+                {isAdmin ? 'Gestão de Reservas' : (userTab === 'form' ? (isVisitor ? 'Solicitar Reserva' : 'Informar Reserva') : 'Minhas Reservas')}
               </h2>
               <p className="text-sm md:text-lg text-gray-500 mt-1 ml-1 leading-tight">
                 {isAdmin 
                   ? 'Controle de hóspedes, ocupação e financeiro.' 
-                  : 'Acompanhe suas reservas na Fazenda.'}
+                  : (userTab === 'form' ? (isVisitor ? 'Solicite uma nova hospedagem na Fazenda.' : 'Informe uma nova hospedagem na Fazenda.') : 'Acompanhe suas reservas feitas e ativas.')}
               </p>
             </div>
 
@@ -805,7 +810,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                   <IconMap className="w-4 h-4" /> Mapa
                 </button>
                 <button onClick={() => setAdminTab('list')} className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 text-xs flex-shrink-0 ${adminTab === 'list' ? 'bg-farm-600 text-white shadow-lg shadow-farm-200' : 'text-gray-500 hover:bg-gray-50'}`}>
-                  <IconList className="w-4 h-4" /> Pedidos {guestRequests.filter(r => r.status === 'pending').length > 0 && <span className="ml-1 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ring-2 ring-white">{guestRequests.filter(r => r.status === 'pending').length}</span>}
+                  <IconList className="w-4 h-4" /> Pedidos {(allReservations.filter(r => r.status === 'pending').length + guestRequests.filter(r => r.status === 'pending').length) > 0 && <span className="ml-1 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ring-2 ring-white">{allReservations.filter(r => r.status === 'pending').length + guestRequests.filter(r => r.status === 'pending').length}</span>}
                 </button>
                 <button onClick={() => setAdminTab('in_house')} className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 text-xs flex-shrink-0 ${adminTab === 'in_house' ? 'bg-farm-600 text-white shadow-lg shadow-farm-200' : 'text-gray-500 hover:bg-gray-50'}`}>
                   <IconZap className="w-4 h-4" /> Na Casa
@@ -818,6 +823,17 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                 </button>
                 <button onClick={() => setAdminTab('form')} className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 text-xs flex-shrink-0 ${adminTab === 'form' ? 'bg-farm-600 text-white shadow-lg shadow-farm-200' : 'text-gray-500 hover:bg-gray-50'}`}>
                   <IconHome className="w-4 h-4" /> Novo
+                </button>
+              </div>
+            )}
+
+            {!isAdmin && ((profileComplete && isVisitor) || !isVisitor) && (
+              <div className="bg-gray-100/50 p-1 rounded-2xl flex shadow-inner border border-gray-100 overflow-x-auto whitespace-nowrap max-w-full custom-scrollbar scrollbar-hide">
+                <button onClick={() => setUserTab('form')} className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 text-xs flex-shrink-0 ${userTab === 'form' ? 'bg-farm-600 text-white shadow-lg shadow-farm-200' : 'text-gray-500 hover:bg-gray-50'}`}>
+                  <IconCalendar className="w-4 h-4" /> {isVisitor ? 'Solicitar Reserva' : 'Informar Reserva'}
+                </button>
+                <button onClick={() => setUserTab('list')} className={`px-4 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 text-xs flex-shrink-0 ${userTab === 'list' ? 'bg-farm-600 text-white shadow-lg shadow-farm-200' : 'text-gray-500 hover:bg-gray-50'}`}>
+                  <IconList className="w-4 h-4" /> Minhas Reservas {reservations.length > 0 && <span className="ml-1 bg-farm-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ring-2 ring-white">{reservations.length}</span>}
                 </button>
               </div>
             )}
@@ -1100,7 +1116,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                             </div>
                           </td>
                           <td className="px-6 py-6">
-                            <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter border-2 ${
+                            <span className={`inline-block whitespace-nowrap px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter border-2 ${
                               res.estadias?.[0]?.status === 'ativa' ? 'bg-blue-50 text-blue-700 border-blue-200 ring-2 ring-blue-50' :
                               res.estadias?.[0]?.status === 'finalizada' ? 'bg-gray-100 text-gray-700 border-gray-200' :
                               res.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' :
@@ -1248,7 +1264,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
 
                         {/* Status Label */}
                         <div className="pt-2">
-                          <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter border-2 inline-block ${
+                          <span className={`inline-block whitespace-nowrap px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter border-2 ${
                             res.estadias?.[0]?.status === 'ativa' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                             res.estadias?.[0]?.status === 'finalizada' ? 'bg-gray-100 text-gray-700 border-gray-200' :
                             res.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' :
@@ -1334,7 +1350,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
             )}
 
             {adminTab === 'in_house' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 md:gap-6 px-0 md:px-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl">
                 {activeStays.length === 0 ? (
                   <div className="col-span-full bg-white p-20 rounded-3xl border border-dashed border-gray-200 text-center">
                     <IconUser className="w-16 h-16 text-gray-100 mx-auto mb-4" />
@@ -1735,192 +1751,220 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
             )}
 
             {((profileComplete && isVisitor) || !isVisitor) && (
-              <div className="max-w-2xl mx-auto">
-                {submitted ? (
-                  <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-8 rounded-2xl text-center shadow-sm animate-fade-in">
-                    <p className="font-bold text-lg mb-2">{isAutoApproved ? 'Reserva Confirmada!' : 'Solicitação Enviada!'}</p>
-                    <p>
-                        {isAutoApproved 
-                            ? 'Sua reserva para sua residência foi registrada com sucesso. No dia da chegada, basta realizar o check-in no portal.' 
-                            : 'Sua solicitação de reserva foi enviada para análise da administração. Você será avisado em breve sobre a confirmação.'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100">
-                    <div className="h-2 bg-farm-600 w-full"></div>
-                    <form onSubmit={handleSubmit} className="p-8 space-y-6">
-                      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
-                      <div className="space-y-1">
-                        <label className="block text-sm font-bold text-gray-700 mb-1.5">{isVisitor ? 'Nome do sócio anfitrião' : 'Nome do Sócio Principal'}</label>
-                        <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" />
+              <>
+                {userTab === 'form' && (
+                  <div className="max-w-2xl mx-auto animate-fade-in">
+                    {submitted ? (
+                      <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-8 rounded-2xl text-center shadow-sm animate-fade-in">
+                        <p className="font-bold text-lg mb-2">{isAutoApproved ? 'Reserva Confirmada!' : (isVisitor ? 'Solicitação Enviada!' : 'Reserva Informada!')}</p>
+                        <p>
+                            {isAutoApproved 
+                                ? 'Sua reserva para sua residência foi registrada com sucesso. No dia da chegada, basta realizar o check-in no portal.' 
+                                : isVisitor 
+                                  ? 'Sua solicitação de reserva foi enviada para análise da administração. Você será avisado em breve sobre a confirmação.'
+                                  : 'Suas informações de reserva foram enviadas para a administração. Você será avisado em breve sobre a confirmação.'}
+                        </p>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <label className="block text-sm font-bold text-gray-700 mb-1.5">Chegada</label>
-                          <input type="date" required value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all text-sm font-bold" />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="block text-sm font-bold text-gray-700 mb-1.5">Saída</label>
-                          <input type="date" required value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all text-sm font-bold" />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-sm font-bold text-gray-700 mb-1.5">Número de Pessoas</label>
-                        <input type="number" min="1" required value={numGuests} onChange={handleNumGuestsChange} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" />
-                      </div>
-
-                      {isMember && userDependents.length > 0 && (
-                        <div className="space-y-2 p-4 bg-amber-50/50 rounded-2xl border border-amber-100 mb-4">
-                            <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-2 flex items-center gap-1">
-                                <IconUser className="w-3 h-3" /> Seus Dependentes
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                                {userDependents.map((dep, idx) => (
-                                    <button
-                                        key={idx}
-                                        type="button"
-                                        onClick={() => handleQuickAddDependent(dep)}
-                                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 ${
-                                            guestsDetails.some(g => g.name === dep.name)
-                                            ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-200'
-                                            : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-100 shadow-sm'
-                                        }`}
-                                    >
-                                        {dep.name} {guestsDetails.some(g => g.name === dep.name) ? '✓' : '+'}
-                                    </button>
-                                ))}
+                    ) : (
+                      <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100">
+                        <div className="h-2 bg-farm-600 w-full"></div>
+                        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                          {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
+                          <div className="space-y-1">
+                            <label className="block text-sm font-bold text-gray-700 mb-1.5">{isVisitor ? 'Nome do sócio anfitrião' : 'Nome do Sócio Principal'}</label>
+                            <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="block text-sm font-bold text-gray-700 mb-1.5">Chegada</label>
+                              <input type="date" required value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all text-sm font-bold" />
                             </div>
-                        </div>
-                      )}
-
-                      {numGuests > 1 && (
-                        <div className="space-y-4 p-5 bg-gray-50 rounded-2xl border border-gray-100 animate-fade-in shadow-inner">
-                          <div className="flex justify-between items-center mb-2 px-1">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Detalhes dos Hóspedes Adicionais</p>
+                            <div className="space-y-1">
+                              <label className="block text-sm font-bold text-gray-700 mb-1.5">Saída</label>
+                              <input type="date" required value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all text-sm font-bold" />
+                            </div>
                           </div>
 
-                          {guestsDetails.slice(1).map((_, i) => (
-                            <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-3 border-b border-gray-200 last:border-0 last:pb-0">
-                              <input
-                                type="text"
-                                placeholder={`Nome do Hóspede ${i + 2}`}
-                                required
-                                value={guestsDetails[i + 1].name}
-                                onChange={(e) => handleGuestDetailChange(i + 1, 'name', e.target.value)}
-                                className="px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-farm-500 outline-none font-medium"
-                              />
-                              <input
-                                type="number"
-                                placeholder="Idade"
-                                required
-                                value={guestsDetails[i + 1].age}
-                                onChange={(e) => handleGuestDetailChange(i + 1, 'age', e.target.value)}
-                                className="px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-farm-500 outline-none font-medium"
-                              />
+                          <div className="space-y-1">
+                            <label className="block text-sm font-bold text-gray-700 mb-1.5">Número de Pessoas</label>
+                            <input type="number" min="1" required value={numGuests} onChange={handleNumGuestsChange} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" />
+                          </div>
+
+                          {isMember && userDependents.length > 0 && (
+                            <div className="space-y-2 p-4 bg-amber-50/50 rounded-2xl border border-amber-100 mb-4">
+                                <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-2 flex items-center gap-1">
+                                    <IconUser className="w-3 h-3" /> Seus Dependentes
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    {userDependents.map((dep, idx) => (
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={() => handleQuickAddDependent(dep)}
+                                            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 ${
+                                                guestsDetails.some(g => g.name === dep.name)
+                                                ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-200'
+                                                : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-100 shadow-sm'
+                                            }`}
+                                        >
+                                            {dep.name} {guestsDetails.some(g => g.name === dep.name) ? '✓' : '+'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                          )}
+
+                          {numGuests > 1 && (
+                            <div className="space-y-4 p-5 bg-gray-50 rounded-2xl border border-gray-100 animate-fade-in shadow-inner">
+                              <div className="flex justify-between items-center mb-2 px-1">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Detalhes dos Hóspedes Adicionais</p>
+                              </div>
+
+                              {guestsDetails.slice(1).map((_, i) => (
+                                <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-3 border-b border-gray-200 last:border-0 last:pb-0">
+                                  <input
+                                    type="text"
+                                    placeholder={`Nome do Hóspede ${i + 2}`}
+                                    required
+                                    value={guestsDetails[i + 1].name}
+                                    onChange={(e) => handleGuestDetailChange(i + 1, 'name', e.target.value)}
+                                    className="px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-farm-500 outline-none font-medium"
+                                  />
+                                  <input
+                                    type="number"
+                                    placeholder="Idade"
+                                    required
+                                    value={guestsDetails[i + 1].age}
+                                    onChange={(e) => handleGuestDetailChange(i + 1, 'age', e.target.value)}
+                                    className="px-4 py-2 bg-white border border-gray-100 rounded-xl text-sm focus:ring-2 focus:ring-farm-500 outline-none font-medium"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {isMember && (
+                              <div className="p-5 bg-gradient-to-br from-farm-50/50 to-white border border-farm-100 rounded-2xl space-y-4 shadow-sm">
+                                <p className="text-[10px] font-black text-farm-600 uppercase tracking-[0.2em] px-1 border-b border-farm-100 pb-2 mb-1">Local da Hospedagem</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setAccommodationPreference('house'); setAccommodation('Casa de Sócio'); }}
+                                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${
+                                            accommodationPreference === 'house'
+                                            ? 'bg-farm-600 text-white border-farm-600 shadow-lg shadow-farm-100'
+                                            : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <IconHome className={`w-6 h-6 ${accommodationPreference === 'house' ? 'text-white' : 'text-gray-300'}`} />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-center">Casa de Sócio</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setAccommodationPreference('guest'); setAccommodation('A definir'); }}
+                                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${
+                                            accommodationPreference === 'guest'
+                                            ? 'bg-farm-600 text-white border-farm-600 shadow-lg shadow-farm-100'
+                                            : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <IconZap className={`w-6 h-6 ${accommodationPreference === 'guest' ? 'text-white' : 'text-gray-300'}`} />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-center">Casa Grande / Chalé</span>
+                                    </button>
+                                </div>
+                              </div>
+                          )}
+
+                          {/* Local de Hospedagem - Admin chooses later, only shown if user is admin now or if it's already set.
+                              For visitors and members, we hide it as per request. */}
+                          {!isVisitor && !isMember && (
+                            <div className="space-y-1">
+                              <label className="block text-sm font-bold text-gray-700">Local de Hospedagem</label>
+                              <select required value={accommodation} onChange={(e) => setAccommodation(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all bg-white">
+                                {ACCOMMODATIONS_BASE.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                              </select>
+                            </div>
+                          )}
+
+                          {/* We'll set a placeholder if hidden */}
+                          {(isVisitor || isMember) && (
+                            <input type="hidden" value={accommodation} />
+                          )}
+
+                          <div className="space-y-1">
+                            <label className="block text-sm font-bold text-gray-700">Observações</label>
+                            <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" placeholder="Informações extras para a administração..."></textarea>
+                          </div>
+
+                          <button type="submit" disabled={loading} className="w-full bg-farm-600 text-white font-bold py-4 rounded-xl hover:bg-farm-700 transition-all shadow-lg shadow-farm-100 flex items-center justify-center gap-2">
+                            {loading ? 'Processando...' : (isVisitor ? 'Solicitar Reserva' : 'Informar Reserva')}
+                          </button>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {userTab === 'list' && (
+                  <div className="max-w-4xl mx-auto animate-fade-in">
+                    {reservations.length > 0 ? (
+                      <div>
+                        <h3 className="text-2xl font-bold text-gray-800 font-serif mb-6">Minhas Próximas Reservas</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {reservations.map(res => (
+                            <div key={res.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative group overflow-hidden">
+                              <div className={`absolute top-0 right-0 px-4 py-1.5 rounded-bl-xl text-[10px] font-black uppercase tracking-widest ${
+                                (res.status === 'confirmed' || res.status === 'em_curso') ? 
+                                  (res.estadias?.[0]?.status === 'finalizada' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700') : 
+                                res.status === 'rejected' ? 'bg-red-100 text-red-700' : 
+                                res.status === 'finalizada' ? 'bg-gray-100 text-gray-700' : 'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {res.status === 'confirmed' ? 'Confirmada' : 
+                                 res.status === 'em_curso' ? 
+                                   (res.estadias?.[0]?.status === 'finalizada' ? 'Pagamento Pendente' : 'Em Andamento') : 
+                                 res.status === 'finalizada' ? 'Encerrada' :
+                                 res.status === 'rejected' ? 'RECUSADA' : 'AGUARDANDO'}
+                              </div>
+                              <h4 className="font-bold text-gray-800 text-lg mb-2">{res.accommodation}</h4>
+                              <div className="space-y-2 text-sm text-gray-500">
+                                <p className="flex items-center gap-2"><IconClock className="w-4 h-4" /> {formatDate(res.check_in)} - {formatDate(res.check_out)}</p>
+                                <p className="flex items-center gap-2"><IconUser className="w-4 h-4" /> {res.num_guests} hóspedes</p>
+                              </div>
+                              {(res.status === 'confirmed' || res.status === 'em_curso') && res.estadias?.[0]?.id && (
+                                <button 
+                                  onClick={() => handleViewProforma(res.estadias[0].id)}
+                                  className="mt-6 w-full py-3 bg-gray-50 text-gray-700 rounded-xl font-bold text-xs hover:bg-farm-50 hover:text-farm-700 transition-all border border-gray-100"
+                                >
+                                  Ver Minha Comanda / Consumo
+                                </button>
+                              )}
+                              {!isAdmin && !isVisitor && res.status === 'confirmed' && (!res.estadias || res.estadias.length === 0) && (
+                                <button 
+                                  onClick={() => handleStartCheckin(res)}
+                                  className="mt-6 w-full py-3.5 bg-farm-600 text-white rounded-xl font-bold text-xs hover:bg-farm-700 transition-all shadow-md shadow-farm-100 flex items-center justify-center gap-2"
+                                >
+                                  <IconZap className="w-4 h-4" /> Realizar Check-in
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>
-                      )}
-
-                      {isMember && (
-                          <div className="p-5 bg-gradient-to-br from-farm-50/50 to-white border border-farm-100 rounded-2xl space-y-4 shadow-sm">
-                            <p className="text-[10px] font-black text-farm-600 uppercase tracking-[0.2em] px-1 border-b border-farm-100 pb-2 mb-1">Local da Hospedagem</p>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => { setAccommodationPreference('house'); setAccommodation('Casa de Sócio'); }}
-                                    className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${
-                                        accommodationPreference === 'house'
-                                        ? 'bg-farm-600 text-white border-farm-600 shadow-lg shadow-farm-100'
-                                        : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    <IconHome className={`w-6 h-6 ${accommodationPreference === 'house' ? 'text-white' : 'text-gray-300'}`} />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-center">Sua Própria Casa</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { setAccommodationPreference('guest'); setAccommodation('A definir'); }}
-                                    className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${
-                                        accommodationPreference === 'guest'
-                                        ? 'bg-farm-600 text-white border-farm-600 shadow-lg shadow-farm-100'
-                                        : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    <IconZap className={`w-6 h-6 ${accommodationPreference === 'guest' ? 'text-white' : 'text-gray-300'}`} />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-center">Casa Grande / Chalé</span>
-                                </button>
-                            </div>
-                          </div>
-                      )}
-
-                      {/* Local de Hospedagem - Admin chooses later, only shown if user is admin now or if it's already set.
-                          For visitors and members, we hide it as per request. */}
-                      {!isVisitor && !isMember && (
-                        <div className="space-y-1">
-                          <label className="block text-sm font-bold text-gray-700">Local de Hospedagem</label>
-                          <select required value={accommodation} onChange={(e) => setAccommodation(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all bg-white">
-                            {ACCOMMODATIONS_BASE.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                          </select>
-                        </div>
-                      )}
-
-                      {/* We'll set a placeholder if hidden */}
-                      {(isVisitor || isMember) && (
-                        <input type="hidden" value={accommodation} />
-                      )}
-
-                      <div className="space-y-1">
-                        <label className="block text-sm font-bold text-gray-700">Observações</label>
-                        <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none transition-all" placeholder="Informações extras para a administração..."></textarea>
                       </div>
-
-                      <button type="submit" disabled={loading} className="w-full bg-farm-600 text-white font-bold py-4 rounded-xl hover:bg-farm-700 transition-all shadow-lg shadow-farm-100 flex items-center justify-center gap-2">
-                        {loading ? 'Processando...' : 'Solicitar Reserva'}
-                      </button>
-                    </form>
+                    ) : (
+                      <div className="bg-white p-12 rounded-3xl text-center border border-gray-100 shadow-sm animate-fade-in">
+                        <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <IconCalendar className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-800 font-serif mb-1">Nenhuma Reserva Encontrada</h3>
+                        <p className="text-gray-500 text-sm max-w-sm mx-auto mb-6">Você não possui nenhuma reserva ativa ou futura no momento.</p>
+                        <button onClick={() => setUserTab('form')} className="px-6 py-3 bg-farm-600 text-white font-bold rounded-xl hover:bg-farm-700 transition-all text-xs shadow-md shadow-farm-100">
+                          {isVisitor ? 'Solicitar Nova Reserva' : 'Informar Nova Reserva'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* My Future Reservations for Users */}
-            {reservations.length > 0 && (
-              <div className="max-w-4xl mx-auto mt-12">
-                <h3 className="text-2xl font-bold text-gray-800 font-serif mb-6">Minhas Próximas Reservas</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {reservations.map(res => (
-                    <div key={res.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative group overflow-hidden">
-                      <div className={`absolute top-0 right-0 px-4 py-1.5 rounded-bl-xl text-[10px] font-black uppercase tracking-widest ${
-                        (res.status === 'confirmed' || res.status === 'em_curso') ? 
-                          (res.estadias?.[0]?.status === 'finalizada' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700') : 
-                        res.status === 'rejected' ? 'bg-red-100 text-red-700' : 
-                        res.status === 'finalizada' ? 'bg-gray-100 text-gray-700' : 'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {res.status === 'confirmed' ? 'Confirmada' : 
-                         res.status === 'em_curso' ? 
-                           (res.estadias?.[0]?.status === 'finalizada' ? 'Pagamento Pendente' : 'Em Andamento') : 
-                         res.status === 'finalizada' ? 'Encerrada' :
-                         res.status === 'rejected' ? 'RECUSADA' : 'AGUARDANDO'}
-                      </div>
-                      <h4 className="font-bold text-gray-800 text-lg mb-2">{res.accommodation}</h4>
-                      <div className="space-y-2 text-sm text-gray-500">
-                        <p className="flex items-center gap-2"><IconClock className="w-4 h-4" /> {formatDate(res.check_in)} - {formatDate(res.check_out)}</p>
-                        <p className="flex items-center gap-2"><IconUser className="w-4 h-4" /> {res.num_guests} hóspedes</p>
-                      </div>
-                      {(res.status === 'confirmed' || res.status === 'em_curso') && res.estadias?.[0]?.id && (
-                        <button 
-                          onClick={() => handleViewProforma(res.estadias[0].id)}
-                          className="mt-6 w-full py-3 bg-gray-50 text-gray-700 rounded-xl font-bold text-xs hover:bg-farm-50 hover:text-farm-700 transition-all border border-gray-100"
-                        >
-                          Ver Minha Comanda / Consumo
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              </>
             )}
           </div>
         )}
@@ -1957,7 +2001,12 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
               <div className="h-2 bg-farm-600 w-full"></div>
               <div className="p-8">
                 <h3 className="text-2xl font-bold text-gray-800 font-serif mb-2">Realizar Check-in</h3>
-                <p className="text-gray-400 text-sm mb-6">Confirme os dados e vincule a biometria para iniciar a estadia de <strong>{selectedResForCheckin.name || selectedResForCheckin.profiles?.full_name}</strong>.</p>
+                <p className="text-gray-400 text-sm mb-6">
+                  {isAdmin 
+                    ? <>Confirme os dados e vincule a biometria para iniciar a estadia de <strong>{selectedResForCheckin.name || selectedResForCheckin.profiles?.full_name}</strong>.</>
+                    : <>Confirme os nomes e idades dos hóspedes para iniciar a estadia de <strong>{selectedResForCheckin.name || selectedResForCheckin.profiles?.full_name}</strong>.</>
+                  }
+                </p>
                 
                 <div className="bg-gray-50 rounded-2xl p-6 mb-8 space-y-4">
                   <div className="flex justify-between text-sm">
@@ -1971,7 +2020,9 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                 </div>
 
                 <div className="space-y-4">
-                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest">Hóspedes e Biometria</label>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest">
+                    {isAdmin ? 'Hóspedes e Biometria' : 'Hóspedes'}
+                  </label>
                   <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
                     {Array.from({ length: selectedResForCheckin.num_guests || 1 }).map((_, idx) => {
                       const guest = checkinGuests[idx] || { name: '', age: '' };
@@ -2010,30 +2061,31 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2">
-
-                            <div className="flex gap-1.5 w-full">
-                              <input
-                                type="text"
-                                value={faceIds[idx] || ''}
-                                onChange={(e) => {
-                                  const newFaceIds = [...faceIds];
-                                  newFaceIds[idx] = e.target.value;
-                                  setFaceIds(newFaceIds);
-                                }}
-                                className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-[10px] font-mono text-center placeholder:font-sans placeholder:text-gray-300 min-w-0"
-                                placeholder="Face ID (ControlID)"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => startEnroll(idx, guest.name || (idx === 0 ? selectedResForCheckin.name : `Hóspede ${idx + 1}`))}
-                                className="bg-farm-50 text-farm-600 px-2 py-2 rounded-xl border border-farm-200 hover:bg-farm-100 transition-all font-bold text-[9px] flex items-center gap-0.5 shrink-0"
-                                title="Capturar biometria usando o leitor do escritório"
-                              >
-                                <IconZap className="w-3 h-3 text-farm-500 animate-pulse" /> Capturar
-                              </button>
+                          {isAdmin && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="flex gap-1.5 w-full">
+                                <input
+                                  type="text"
+                                  value={faceIds[idx] || ''}
+                                  onChange={(e) => {
+                                    const newFaceIds = [...faceIds];
+                                    newFaceIds[idx] = e.target.value;
+                                    setFaceIds(newFaceIds);
+                                  }}
+                                  className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-[10px] font-mono text-center placeholder:font-sans placeholder:text-gray-300 min-w-0"
+                                  placeholder="Face ID (ControlID)"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => startEnroll(idx, guest.name || (idx === 0 ? selectedResForCheckin.name : `Hóspede ${idx + 1}`))}
+                                  className="bg-farm-50 text-farm-600 px-2 py-2 rounded-xl border border-farm-200 hover:bg-farm-100 transition-all font-bold text-[9px] flex items-center gap-0.5 shrink-0"
+                                  title="Capturar biometria usando o leitor do escritório"
+                                >
+                                  <IconZap className="w-3 h-3 text-farm-500 animate-pulse" /> Capturar
+                                </button>
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       );
                     })}

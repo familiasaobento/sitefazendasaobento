@@ -228,6 +228,9 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         categoria: 'all',
         isYtd: false
     });
+    const [selectedReportType, setSelectedReportType] = useState<'financial' | 'consumption'>('financial');
+    const [consumptionData, setConsumptionData] = useState<any[]>([]);
+    const [fetchingConsumption, setFetchingConsumption] = useState(false);
     const [viewFilters, setViewFilters] = useState({
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
@@ -354,6 +357,53 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         URL.revokeObjectURL(url);
     };
 
+    const exportConsumptionToExcel = (meals: any[], products: any[], filename: string) => {
+        const formattedMeals = meals.map(m => ({
+            'Refeição': m.name,
+            'Quantidade Servida': m.quantidade,
+            'Valor Total Cobrado': m.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+        }));
+
+        const formattedProducts = products.map(p => ({
+            'Produto': p.name,
+            'Quantidade Vendida': p.quantidade,
+            'Valor Total Vendas': p.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+        }));
+
+        const rows = [
+            ['RELATORIO DE CONSUMO - FAZENDA SAO BENTO'],
+            [`Periodo: ${reportFilters.month}/${reportFilters.year} (Acumulado YTD: ${reportFilters.isYtd ? 'Sim' : 'Nao'})`],
+            [],
+            ['REFEICOES SERVIDAS'],
+            ['Refeicao', 'Quantidade Servida', 'Valor Total Cobrado']
+        ];
+
+        formattedMeals.forEach(m => {
+            rows.push([m['Refeição'], String(m['Quantidade Servida']), m['Valor Total Cobrado']]);
+        });
+
+        rows.push([]);
+        rows.push(['PRODUTOS VENDIDOS']);
+        rows.push(['Produto', 'Quantidade Vendida', 'Valor Total Vendas']);
+
+        formattedProducts.forEach(p => {
+            rows.push([p['Produto'], String(p['Quantidade Vendida']), p['Valor Total Vendas']]);
+        });
+
+        const csvContent = "\ufeff" + rows.map(r => r.map(v => `"${v}"`).join(';')).join('\n');
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `${filename}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     useEffect(() => {
         fetchCashFlow(viewFilters.month, viewFilters.year);
         fetchCategories();
@@ -362,6 +412,12 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
         fetchTags();
         fetchProjects();
     }, [viewFilters.month, viewFilters.year]);
+
+    useEffect(() => {
+        if (activeTab === 'reports') {
+            fetchConsumptionData(reportFilters.month, reportFilters.year, reportFilters.isYtd);
+        }
+    }, [reportFilters.month, reportFilters.year, reportFilters.isYtd, activeTab]);
 
     const fetchProjects = async () => {
         const { data } = await supabase.from('finance_projects').select('*').eq('ativo', true).order('nome');
@@ -455,6 +511,28 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             console.error('Error fetching cash flow:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchConsumptionData = async (m: number, y: number, isYtd: boolean) => {
+        setFetchingConsumption(true);
+        try {
+            const startStr = isYtd ? `${y}-01-01T00:00:00Z` : `${y}-${String(m).padStart(2, '0')}-01T00:00:00Z`;
+            const lastDay = new Date(y, m, 0).getDate();
+            const endStr = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59Z`;
+
+            const { data, error } = await supabase
+                .from('lancamentos_consumo')
+                .select('*, item:item_id(name)')
+                .gte('created_at', startStr)
+                .lte('created_at', endStr);
+
+            if (error) throw error;
+            setConsumptionData(data || []);
+        } catch (err) {
+            console.error('Error fetching consumption for report:', err);
+        } finally {
+            setFetchingConsumption(false);
         }
     };
 
@@ -1547,49 +1625,83 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                 const tEntrada = filteredReports.reduce((acc, curr) => curr.tipo === 'entrada' ? acc + curr.valor : acc, 0);
                 const tSaida = filteredReports.reduce((acc, curr) => curr.tipo === 'saida' ? acc + curr.valor : acc, 0);
 
+                const groupedConsumption = consumptionData.reduce((acc: any, curr: any) => {
+                    const name = curr.nome_item_snapshot || curr.item?.name || 'Desconhecido';
+                    const isMeal = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('almoco') ||
+                                   name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('jantar') ||
+                                   name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('refeicao') ||
+                                   name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('cafe');
+                    if (!acc[name]) {
+                        acc[name] = {
+                            name,
+                            quantidade: 0,
+                            valorTotal: 0,
+                            isMeal
+                        };
+                    }
+                    acc[name].quantidade += Number(curr.quantidade || 0);
+                    acc[name].valorTotal += Number(curr.quantidade || 0) * Number(curr.valor_unitario_aplicado || 0);
+                    return acc;
+                }, {});
+
+                const consumptionList = Object.values(groupedConsumption);
+                const mealsReport = consumptionList.filter((c: any) => c.isMeal);
+                const productsReport = consumptionList.filter((c: any) => !c.isMeal);
+
                 return (
                     <div className="space-y-6 animate-fade-in">
                         <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
+                            {/* Report Type Selector Tab */}
+                            <div className="flex gap-6 mb-6 border-b border-gray-100 pb-3 no-print">
+                                <button
+                                    onClick={() => setSelectedReportType('financial')}
+                                    className={`pb-2 font-bold text-sm transition-all relative ${selectedReportType === 'financial' ? 'text-farm-800 border-b-2 border-farm-800' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    📊 Movimentação Financeira
+                                </button>
+                                <button
+                                    onClick={() => setSelectedReportType('consumption')}
+                                    className={`pb-2 font-bold text-sm transition-all relative ${selectedReportType === 'consumption' ? 'text-farm-800 border-b-2 border-farm-800' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    🍽️ Consumo (Refeições/Produtos)
+                                </button>
+                            </div>
+
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 pb-6 border-b border-gray-100">
                                 <div>
-                                    <h3 className="text-2xl font-bold text-gray-800 font-serif italic">Relatório de Movimentação</h3>
-                                    <p className="text-gray-500">Filtragem avançada por banco, caixa ou visão consolidada.</p>
+                                    <h3 className="text-2xl font-bold text-gray-800 font-serif italic">
+                                        {selectedReportType === 'financial' ? 'Relatório de Movimentação' : 'Relatório de Consumo (Refeições & Produtos)'}
+                                    </h3>
+                                    <p className="text-gray-500">
+                                        {selectedReportType === 'financial' 
+                                            ? 'Filtragem avançada por banco, caixa ou visão consolidada.' 
+                                            : 'Relatório quantitativo de refeições servidas e outros itens de consumo.'}
+                                    </p>
                                 </div>
                                 <div className="flex gap-3 w-full md:w-auto overflow-x-auto no-print">
-                                    <button 
-                                        onClick={() => exportToExcel(filteredReports, `relatorio_${reportFilters.isYtd ? 'YTD_' : ''}${reportFilters.month}_${reportFilters.year}`)} 
-                                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-50 text-green-800 border-2 border-green-100 px-6 py-3 rounded-xl font-bold text-sm hover:bg-green-100 transition-all shadow-md"
-                                    >
-                                        📥 Excel
-                                    </button>
+                                    {selectedReportType === 'financial' ? (
+                                        <button 
+                                            onClick={() => exportToExcel(filteredReports, `relatorio_${reportFilters.isYtd ? 'YTD_' : ''}${reportFilters.month}_${reportFilters.year}`)} 
+                                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-50 text-green-800 border-2 border-green-100 px-6 py-3 rounded-xl font-bold text-sm hover:bg-green-100 transition-all shadow-md"
+                                        >
+                                            📥 Excel
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onClick={() => exportConsumptionToExcel(mealsReport, productsReport, `relatorio_consumo_${reportFilters.isYtd ? 'YTD_' : ''}${reportFilters.month}_${reportFilters.year}`)} 
+                                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-50 text-green-800 border-2 border-green-100 px-6 py-3 rounded-xl font-bold text-sm hover:bg-green-100 transition-all shadow-md"
+                                        >
+                                            📥 Excel Consumo
+                                        </button>
+                                    )}
                                     <button onClick={() => window.print()} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-800 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-black transition-all shadow-lg">
                                         <IconFileText className="w-4 h-4" /> Imprimir / PDF
                                     </button>
                                 </div>
                             </div>
 
+                            {/* Common Filters: Month, Year, YTD */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9 gap-4 mb-8 no-print">
-                                <div className="xl:col-span-2">
-                                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Origem / Conta</label>
-                                    <select 
-                                        value={reportFilters.origem} 
-                                        onChange={e => setReportFilters({...reportFilters, origem: e.target.value})}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
-                                    >
-                                        <option value="all">CONSOLIDADO (TODAS)</option>
-                                        <optgroup label="Grupos">
-                                            <option value="type:Banco">APENAS BANCOS 🏦</option>
-                                            <option value="type:Dinheiro">APENAS DINHEIRO 💵</option>
-                                        </optgroup>
-                                        <optgroup label="Contas Específicas">
-                                            {accounts.map(a => (
-                                                <option key={a.id} value={`account:${a.nome}`}>
-                                                    {a.tipo === 'Banco' ? '🏦' : '💵'} {a.nome}
-                                                </option>
-                                            ))}
-                                        </optgroup>
-                                    </select>
-                                </div>
                                 <div>
                                     <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Mês</label>
                                     <select 
@@ -1623,114 +1735,230 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                         <span className="text-xs font-bold text-gray-700">Acumulado (YTD)</span>
                                     </label>
                                 </div>
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Projeto</label>
-                                    <select 
-                                        value={reportFilters.projeto} 
-                                        onChange={e => setReportFilters({...reportFilters, projeto: e.target.value})}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200 text-amber-800"
-                                    >
-                                        <option value="">-- TODOS OS PROJETOS --</option>
-                                        {registeredProjects.map(p => <option key={p.id} value={p.nome}>{p.nome}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Área (Tag)</label>
-                                    <select 
-                                        value={reportFilters.tag} 
-                                        onChange={e => setReportFilters({...reportFilters, tag: e.target.value})}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200 text-indigo-800"
-                                    >
-                                        <option value="">-- TODAS AS ÁREAS --</option>
-                                        {registeredTags.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Fluxo</label>
-                                    <select 
-                                        value={reportFilters.flowType} 
-                                        onChange={e => setReportFilters({...reportFilters, flowType: e.target.value as any})}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
-                                    >
-                                        <option value="all">TODOS</option>
-                                        <option value="entrada">RECEITAS</option>
-                                        <option value="saida">DESPESAS</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Classificação</label>
-                                    <select 
-                                        value={reportFilters.categoria} 
-                                        onChange={e => setReportFilters({...reportFilters, categoria: e.target.value})}
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
-                                    >
-                                        <option value="all">TODAS</option>
-                                        <optgroup label="Receitas">
-                                            {groupsReceita.flatMap(g => g.items).sort().map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                        </optgroup>
-                                        <optgroup label="Despesas">
-                                            {groupsDespesa.flatMap(g => g.items).sort().map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                        </optgroup>
-                                    </select>
-                                </div>
+
+                                {selectedReportType === 'financial' && (
+                                    <>
+                                        <div className="xl:col-span-2">
+                                            <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Origem / Conta</label>
+                                            <select 
+                                                value={reportFilters.origem} 
+                                                onChange={e => setReportFilters({...reportFilters, origem: e.target.value})}
+                                                className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
+                                            >
+                                                <option value="all">CONSOLIDADO (TODAS)</option>
+                                                <optgroup label="Grupos">
+                                                    <option value="type:Banco">APENAS BANCOS 🏦</option>
+                                                    <option value="type:Dinheiro">APENAS DINHEIRO 💵</option>
+                                                </optgroup>
+                                                <optgroup label="Contas Específicas">
+                                                    {accounts.map(a => (
+                                                        <option key={a.id} value={`account:${a.nome}`}>
+                                                            {a.tipo === 'Banco' ? '🏦' : '💵'} {a.nome}
+                                                        </option>
+                                                    ))}
+                                                </optgroup>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Projeto</label>
+                                            <select 
+                                                value={reportFilters.projeto} 
+                                                onChange={e => setReportFilters({...reportFilters, projeto: e.target.value})}
+                                                className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200 text-amber-800"
+                                            >
+                                                <option value="">-- TODOS OS PROJETOS --</option>
+                                                {registeredProjects.map(p => <option key={p.id} value={p.nome}>{p.nome}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Área (Tag)</label>
+                                            <select 
+                                                value={reportFilters.tag} 
+                                                onChange={e => setReportFilters({...reportFilters, tag: e.target.value})}
+                                                className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200 text-indigo-800"
+                                            >
+                                                <option value="">-- TODAS AS ÁREAS --</option>
+                                                {registeredTags.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Fluxo</label>
+                                            <select 
+                                                value={reportFilters.flowType} 
+                                                onChange={e => setReportFilters({...reportFilters, flowType: e.target.value as any})}
+                                                className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
+                                            >
+                                                <option value="all">TODOS</option>
+                                                <option value="entrada">RECEITAS</option>
+                                                <option value="saida">DESPESAS</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Classificação</label>
+                                            <select 
+                                                value={reportFilters.categoria} 
+                                                onChange={e => setReportFilters({...reportFilters, categoria: e.target.value})}
+                                                className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 font-bold text-sm outline-none focus:ring-2 focus:ring-farm-200"
+                                            >
+                                                <option value="all">TODAS</option>
+                                                <optgroup label="Receitas">
+                                                    {groupsReceita.flatMap(g => g.items).sort().map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                                </optgroup>
+                                                <optgroup label="Despesas">
+                                                    {groupsDespesa.flatMap(g => g.items).sort().map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                                </optgroup>
+                                            </select>
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
-                                        <p className="text-[10px] font-black text-green-700 uppercase mb-1 tracking-widest">{reportFilters.isYtd ? 'Entradas Acumuladas (YTD)' : 'Entradas no Período'}</p>
-                                        <p className="text-2xl font-black text-green-800">R$ {tEntrada.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                            {selectedReportType === 'financial' ? (
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
+                                            <p className="text-[10px] font-black text-green-700 uppercase mb-1 tracking-widest">{reportFilters.isYtd ? 'Entradas Acumuladas (YTD)' : 'Entradas no Período'}</p>
+                                            <p className="text-2xl font-black text-green-800">R$ {tEntrada.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                        </div>
+                                        <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
+                                            <p className="text-[10px] font-black text-red-700 uppercase mb-1 tracking-widest">{reportFilters.isYtd ? 'Saídas Acumuladas (YTD)' : 'Saídas no Período'}</p>
+                                            <p className="text-2xl font-black text-red-800">R$ {tSaida.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                        </div>
+                                        <div className="bg-farm-50 p-6 rounded-2xl border border-farm-100">
+                                            <p className="text-[10px] font-black text-farm-700 uppercase mb-1 tracking-widest">{reportFilters.isYtd ? 'Saldo Acumulado (YTD)' : 'Saldo do Período'}</p>
+                                            <p className="text-2xl font-black text-farm-800">R$ {(tEntrada - tSaida).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                        </div>
                                     </div>
-                                    <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
-                                        <p className="text-[10px] font-black text-red-700 uppercase mb-1 tracking-widest">{reportFilters.isYtd ? 'Saídas Acumuladas (YTD)' : 'Saídas no Período'}</p>
-                                        <p className="text-2xl font-black text-red-800">R$ {tSaida.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                                    </div>
-                                    <div className="bg-farm-50 p-6 rounded-2xl border border-farm-100">
-                                        <p className="text-[10px] font-black text-farm-700 uppercase mb-1 tracking-widest">{reportFilters.isYtd ? 'Saldo Acumulado (YTD)' : 'Saldo do Período'}</p>
-                                        <p className="text-2xl font-black text-farm-800">R$ {(tEntrada - tSaida).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+
+                                    <div className="bg-gray-50 rounded-2xl overflow-hidden border">
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-xs min-w-[600px]">
+                                                <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
+                                                    <tr>
+                                                        <th className="px-6 py-5 text-left">Data</th>
+                                                        <th className="px-6 py-5 text-left">Conta</th>
+                                                        <th className="px-6 py-5 text-left">Descrição / Fornecedor</th>
+                                                        <th className="px-6 py-5 text-right">Valor</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100 bg-white">
+                                                    {filteredReports.length === 0 ? (
+                                                        <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400 italic">Nenhuma movimentação encontrada para este filtro.</td></tr>
+                                                    ) : (
+                                                        filteredReports.map(e => (
+                                                            <tr key={e.id} className="hover:bg-gray-50">
+                                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                                    {new Date(e.data_pagamento + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                                </td>
+                                                                <td className="px-4 py-3">
+                                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${e.meio_pagamento === 'Banco' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                                        {e.meio_pagamento === 'Banco' ? '🏦' : '💵'} {e.conta_origem}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-3">
+                                                                    <div className="font-bold">{e.descricao}</div>
+                                                                    {e.cnpj_fornecedor && <div className="text-[10px] text-gray-400">{e.cnpj_fornecedor}</div>}
+                                                                </td>
+                                                                <td className={`px-4 py-3 text-right font-black whitespace-nowrap ${e.tipo === 'entrada' ? 'text-green-600' : 'text-red-500'}`}>
+                                                                    {e.tipo === 'entrada' ? '+' : '-'} R$ {e.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
-
-                                <div className="bg-gray-50 rounded-2xl overflow-hidden border">
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-xs min-w-[600px]">
-                                            <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
-                                                <tr>
-                                                    <th className="px-6 py-5 text-left">Data</th>
-                                                    <th className="px-6 py-5 text-left">Conta</th>
-                                                    <th className="px-6 py-5 text-left">Descrição / Fornecedor</th>
-                                                    <th className="px-6 py-5 text-right">Valor</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100 bg-white">
-                                                {filteredReports.length === 0 ? (
-                                                    <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400 italic">Nenhuma movimentação encontrada para este filtro.</td></tr>
-                                                ) : (
-                                                    filteredReports.map(e => (
-                                                        <tr key={e.id} className="hover:bg-gray-50">
-                                                            <td className="px-4 py-3 whitespace-nowrap">
-                                                                {new Date(e.data_pagamento + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                                            </td>
-                                                            <td className="px-4 py-3">
-                                                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${e.meio_pagamento === 'Banco' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                                    {e.meio_pagamento === 'Banco' ? '🏦' : '💵'} {e.conta_origem}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-4 py-3">
-                                                                <div className="font-bold">{e.descricao}</div>
-                                                                {e.cnpj_fornecedor && <div className="text-[10px] text-gray-400">{e.cnpj_fornecedor}</div>}
-                                                            </td>
-                                                            <td className={`px-4 py-3 text-right font-black whitespace-nowrap ${e.tipo === 'entrada' ? 'text-green-600' : 'text-red-500'}`}>
-                                                                {e.tipo === 'entrada' ? '+' : '-'} R$ {e.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                                                            </td>
+                            ) : (
+                                fetchingConsumption ? (
+                                    <div className="flex justify-center items-center py-12">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-farm-700"></div>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                        {/* Section 1: Refeições Servidas */}
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center bg-farm-50 p-6 rounded-2xl border border-farm-100">
+                                                <div>
+                                                    <h4 className="font-bold text-farm-900 text-lg">🍽️ Refeições Servidas</h4>
+                                                    <p className="text-xs text-farm-600">Almoços, jantares e bufês servidos na fazenda.</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className="text-[10px] font-black text-farm-600 uppercase tracking-widest block">Total Servido</span>
+                                                    <span className="text-2xl font-black text-farm-800">
+                                                        {mealsReport.reduce((acc: number, curr: any) => acc + curr.quantidade, 0)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                                                <table className="w-full text-xs text-left">
+                                                    <thead className="bg-gray-50 border-b border-gray-100 font-bold uppercase tracking-wider text-gray-500 text-[10px]">
+                                                        <tr>
+                                                            <th className="px-6 py-4">Refeição</th>
+                                                            <th className="px-6 py-4 text-center">Quantidade</th>
+                                                            <th className="px-6 py-4 text-right">Faturado</th>
                                                         </tr>
-                                                    ))
-                                                )}
-                                            </tbody>
-                                        </table>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {mealsReport.length === 0 ? (
+                                                            <tr><td colSpan={3} className="px-6 py-8 text-center text-gray-400 italic">Nenhuma refeição servida no período.</td></tr>
+                                                        ) : (
+                                                            mealsReport.map((m: any) => (
+                                                                <tr key={m.name} className="hover:bg-gray-50/50">
+                                                                    <td className="px-6 py-4 font-bold text-gray-800">{m.name}</td>
+                                                                    <td className="px-6 py-4 text-center font-mono font-bold text-gray-700">{m.quantidade}</td>
+                                                                    <td className="px-6 py-4 text-right font-mono font-bold text-gray-800">R$ {m.valorTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                                                </tr>
+                                                            ))
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        {/* Section 2: Outros Produtos Vendidos */}
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                                                <div>
+                                                    <h4 className="font-bold text-gray-800 text-lg">🛒 Outros Produtos Vendidos</h4>
+                                                    <p className="text-xs text-gray-500">Produtos, bebidas e extras comprados pelos hóspedes.</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Total Itens</span>
+                                                    <span className="text-2xl font-black text-gray-800">
+                                                        {productsReport.reduce((acc: number, curr: any) => acc + curr.quantidade, 0)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                                                <table className="w-full text-xs text-left">
+                                                    <thead className="bg-gray-50 border-b border-gray-100 font-bold uppercase tracking-wider text-gray-500 text-[10px]">
+                                                        <tr>
+                                                            <th className="px-6 py-4">Produto</th>
+                                                            <th className="px-6 py-4 text-center">Quantidade</th>
+                                                            <th className="px-6 py-4 text-right">Total</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {productsReport.length === 0 ? (
+                                                            <tr><td colSpan={3} className="px-6 py-8 text-center text-gray-400 italic">Nenhum produto vendido no período.</td></tr>
+                                                        ) : (
+                                                            productsReport.map((p: any) => (
+                                                                <tr key={p.name} className="hover:bg-gray-50/50">
+                                                                    <td className="px-6 py-4 font-bold text-gray-800">{p.name}</td>
+                                                                    <td className="px-6 py-4 text-center font-mono font-bold text-gray-700">{p.quantidade}</td>
+                                                                    <td className="px-6 py-4 text-right font-mono font-bold text-gray-800">R$ {p.valorTotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                                                                </tr>
+                                                            ))
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
+                                )
+                            )}
                         </div>
                     </div>
                 );

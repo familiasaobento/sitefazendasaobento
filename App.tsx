@@ -575,9 +575,9 @@ const App: React.FC = () => {
       case Page.HARDWARE:
         return (isAdmin || isFinanceManager) ? <HardwarePage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.TIME_TRACKING:
-        return (isManagement) ? <TimeTrackingPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+        return (isManagement) ? <TimeTrackingPage userRole={userRole || 'member'} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.EMPLOYEES:
-        return (isManagement) ? <EmployeesPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+        return (isManagement) ? <EmployeesPage userRole={userRole || 'member'} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
 
       default:
         return <HomePage isManagement={isManagement} canEditNews={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
