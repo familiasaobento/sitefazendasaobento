@@ -30,7 +30,7 @@ serve(async (req) => {
     const isResult = path.endsWith('/result');
 
     // ==========================================
-    // ROTA /push (GET): O dispositivo busca comandos
+    // ROTA /push: O dispositivo busca comandos (GET) ou envia eventos (POST)
     // ==========================================
     if (isPush) {
       const deviceId = url.searchParams.get("deviceId") || url.searchParams.get("device_id");
@@ -41,7 +41,176 @@ serve(async (req) => {
         });
       }
 
-      // Consulta a tabela de comandos para ver se há alguma captura facial pendente para esse número de série
+      // Se for POST, o dispositivo está enviando object_changes (logs de acesso)
+      if (req.method === 'POST') {
+        let payload: any = {};
+        try {
+          payload = await req.json();
+          await supabaseClient.from('webhook_logs').insert({ log: `[PUSH PAYLOAD] ${JSON.stringify(payload).substring(0, 500)}` });
+        } catch (e) {
+          console.log("Empty or non-JSON body in POST /push");
+        }
+
+        if (payload && payload.object_changes && payload.object_changes[0] && payload.object_changes[0].object === 'access_logs') {
+          const logs = payload.object_changes[0].values;
+          for (const log of logs) {
+            // event: 7 = Acesso Negado, 3/6 = Acesso Permitido
+            // Mesmo se negado, vamos registrar a refeição! (Pois o FaceID está na catraca, mas sem regra de acesso)
+            const userId = log.user_id;
+            
+            // Busca o PDV
+            const { data: devices, error: devError } = await supabaseClient
+              .from('idface_dispositivos')
+              .select('nome_identificador, pdv_id, ativo')
+              .eq('serial_number', deviceId)
+              .limit(1);
+
+            if (!devError && devices && devices.length > 0) {
+              const pdvId = devices[0].pdv_id;
+              
+              if (pdvId === 2) {
+                // RESTAURANTE LOGIC (mesma lógica já existente)
+                let estadia = null;
+                let { data: estadias } = await supabaseClient
+                  .from('estadias')
+                  .select('id, hospede_nome, reserva_id')
+                  .eq('status', 'ativa')
+                  .eq('controlid_id', String(userId));
+                  
+                estadia = estadias && estadias.length > 0 ? estadias[0] : null;
+
+                if (!estadia) {
+                  let titularId = null;
+                  let personName = null;
+
+                  const { data: titularProfile } = await supabaseClient
+                    .from('profiles')
+                    .select('id, full_name')
+                    .eq('controlid_id', String(userId));
+
+                  if (titularProfile && titularProfile.length > 0) {
+                    titularId = titularProfile[0].id;
+                    personName = titularProfile[0].full_name;
+                  } else {
+                    const { data: depProfile } = await supabaseClient
+                      .from('profiles')
+                      .select('id, dependents')
+                      .contains('dependents', `[{"controlid_id": "${String(userId)}"}]`);
+
+                    if (depProfile && depProfile.length > 0) {
+                      titularId = depProfile[0].id;
+                      const deps = depProfile[0].dependents || [];
+                      const matchedDep = deps.find((d: any) => String(d.controlid_id) === String(userId));
+                      if (matchedDep) personName = matchedDep.name;
+                    }
+                  }
+
+                  if (titularId) {
+                    const { data: reservas } = await supabaseClient
+                      .from('reservations')
+                      .select('id')
+                      .eq('user_id', titularId)
+                      .in('status', ['confirmed', 'em_curso'])
+                      .order('created_at', { ascending: false })
+                      .limit(1);
+
+                    if (reservas && reservas.length > 0) {
+                      const reservaId = reservas[0].id;
+                      const { data: titularEstadias } = await supabaseClient
+                        .from('estadias')
+                        .select('id, hospede_nome, reserva_id')
+                        .eq('reserva_id', reservaId)
+                        .eq('status', 'ativa');
+
+                      if (titularEstadias && titularEstadias.length > 0) {
+                        const estadiaMatch = titularEstadias.find((e: any) => 
+                          e.hospede_nome && personName && e.hospede_nome.toLowerCase().includes(personName.toLowerCase())
+                        );
+                        estadia = estadiaMatch || titularEstadias[0];
+                        await supabaseClient.from('webhook_logs').insert({ log: `Resolvido via Profile: ${personName} -> Estadia ${estadia.id}` });
+                      }
+                    }
+                  }
+                }
+
+                if (estadia) {
+                  const now = new Date();
+                  const brazilTime = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+                  const hour = brazilTime.getUTCHours();
+                  const minutes = brazilTime.getUTCMinutes();
+                  const timeVal = hour + (minutes / 60);
+
+                  let productNameToSearch = null;
+                  if (timeVal >= 11.5 && timeVal <= 15.5) productNameToSearch = 'Almoço';
+                  else if (timeVal >= 18.0 && timeVal <= 22.5) productNameToSearch = 'Jantar';
+
+                  if (productNameToSearch) {
+                    const { data: produtos } = await supabaseClient
+                      .from('products')
+                      .select('id, name, price')
+                      .ilike('name', `%${productNameToSearch}%`)
+                      .limit(1);
+
+                    if (produtos && produtos.length > 0) {
+                      const produto = produtos[0];
+                      const nomeParaAnotar = personName || estadia.hospede_nome || 'Desconhecido';
+                      
+                      const { error: insertConsumoError } = await supabaseClient
+                        .from('lancamentos_consumo')
+                        .insert({
+                          estadia_id: estadia.id,
+                          item_id: produto.id,
+                          nome_item_snapshot: produto.name,
+                          quantidade: 1,
+                          valor_unitario_aplicado: produto.price,
+                          aprovado_admin: true,
+                          pago: false,
+                          observacoes: `Buffet de ${productNameToSearch} (Face ID: ${nomeParaAnotar})`
+                        });
+
+                      if (!insertConsumoError) {
+                        await supabaseClient.from('webhook_logs').insert({ log: `Sucesso: Consumo registrado para ${nomeParaAnotar} na estadia ${estadia.id}` });
+                      }
+                    }
+                  }
+                }
+              } else if (pdvId === 3) {
+                // ESCRITORIO PONTO LOGIC
+                const { data: employees } = await supabaseClient
+                  .from('employees')
+                  .select('id, name')
+                  .eq('controlid_id', String(userId))
+                  .limit(1);
+
+                if (employees && employees.length > 0) {
+                  const employeeId = employees[0].id;
+                  const { data: lastEntries } = await supabaseClient
+                    .from('time_entries')
+                    .select('entry_type')
+                    .eq('employee_id', employeeId)
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+
+                  let nextType = 'Entrada';
+                  if (lastEntries && lastEntries.length > 0) {
+                    nextType = lastEntries[0].entry_type === 'Entrada' ? 'Saída' : 'Entrada';
+                  }
+
+                  await supabaseClient
+                    .from('time_entries')
+                    .insert({
+                      employee_id: employeeId,
+                      entry_type: nextType,
+                      device_id: deviceId
+                    });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Após processar possível payload, envia os comandos pendentes se houver
       const { data: commands, error: cmdError } = await supabaseClient
         .from('controlid_commands')
         .select('*')
@@ -363,7 +532,14 @@ serve(async (req) => {
     // ==========================================
     // ROTA BASE (POST): Recebimento de logs de acessos normais
     // ==========================================
-    const payload = await req.json();
+    let payload: any = {};
+    try {
+      payload = await req.json();
+      await supabaseClient.from('webhook_logs').insert({ log: `[BASE PUSH] ${JSON.stringify(payload).substring(0, 500)}` });
+    } catch (e) {
+      console.log("Empty or non-JSON body in base route");
+    }
+
     console.log("Logs de acesso recebidos do Control iD:", JSON.stringify(payload));
 
     const deviceId = payload.device_id;
