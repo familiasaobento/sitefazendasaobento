@@ -85,7 +85,7 @@ export const AdminAlerts: React.FC<AdminAlertsProps> = ({ onNavigate }) => {
                     <div className="flex-1">
                         <h4 className="text-red-900 font-black text-lg">Consumos Pendentes</h4>
                         <p className="text-red-800 text-sm">
-                            Há {unapprovedConsumptions.length} lançamentos de pulseira/extra aguardando sua validação manual.
+                            Há {unapprovedConsumptions.length} lançamentos de consumo/extra aguardando sua validação manual.
                         </p>
                     </div>
                     <button onClick={() => onNavigate(Page.CONSUMPTION_REVIEW)} className="bg-red-600 text-white px-6 py-2 rounded-xl font-bold text-sm hover:bg-red-700 transition-all">

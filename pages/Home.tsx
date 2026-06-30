@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { IconInstagram, IconWhatsapp, IconMail } from '../components/Icons';
+import { IconInstagram, IconWhatsapp, IconMail, IconEdit, IconTrash, IconX } from '../components/Icons';
 import { AdminAlerts } from '../components/AdminAlerts';
+import { InstagramFeed } from '../components/InstagramFeed';
 
 import { Page } from '../types';
 
@@ -13,12 +14,14 @@ interface NewsItem {
     published_at: string;
     author_name?: string;
     file_url?: string;
+    images?: string[];
 }
 
 export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; isVisitor?: boolean; onNavigate: (page: Page) => void }> = ({ isManagement, canEditNews, isVisitor, onNavigate }) => {
     const [news, setNews] = useState<NewsItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAddForm, setShowAddForm] = useState(false);
+    const [editingItem, setEditingItem] = useState<NewsItem | null>(null);
 
     // Form state
     const [title, setTitle] = useState('');
@@ -27,6 +30,87 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
     const [fileUrl, setFileUrl] = useState('');
     const [uploadingFile, setUploadingFile] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+    const [uploadingImages, setUploadingImages] = useState(false);
+
+    const handleCancelForm = () => {
+        setTitle('');
+        setBody('');
+        setCategory('Social');
+        setFileUrl('');
+        setUploadedImages([]);
+        setEditingItem(null);
+        setShowAddForm(false);
+    };
+
+    const handleEditClick = (item: NewsItem) => {
+        setEditingItem(item);
+        setTitle(item.title);
+        setCategory(item.category);
+        setBody(item.body);
+        setFileUrl(item.file_url || '');
+        setUploadedImages(item.images || []);
+        setShowAddForm(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleDeleteNews = async (id: string) => {
+        if (!window.confirm('Tem certeza de que deseja apagar esta notícia/aviso?')) return;
+        try {
+            const { error } = await supabase
+                .from('news')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            fetchNews();
+        } catch (err) {
+            console.error('Erro ao excluir notícia:', err);
+            alert('Erro ao excluir notícia.');
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        const newImages = [...uploadedImages];
+        if (newImages.length + files.length > 4) {
+            alert('Você só pode adicionar até 4 fotos por notícia.');
+            return;
+        }
+
+        setUploadingImages(true);
+        try {
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+                const filePath = `news-photos/${fileName}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('documents')
+                    .upload(filePath, file);
+
+                if (uploadError) throw uploadError;
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('documents')
+                    .getPublicUrl(filePath);
+
+                newImages.push(publicUrl);
+            }
+            setUploadedImages(newImages);
+        } catch (err: any) {
+            alert('Erro no upload das fotos: ' + err.message);
+        } finally {
+            setUploadingImages(false);
+        }
+    };
+
+    const handleRemoveImage = (indexToRemove: number) => {
+        setUploadedImages(uploadedImages.filter((_, idx) => idx !== indexToRemove));
+    };
 
     useEffect(() => {
         fetchNews();
@@ -43,7 +127,8 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
           body,
           category,
           published_at,
-          file_url
+          file_url,
+          images
         `)
                 .order('published_at', { ascending: false });
 
@@ -90,27 +175,39 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
         try {
             const { data: { user } } = await supabase.auth.getUser();
 
-            const { error } = await supabase
-                .from('news')
-                .insert([{
-                    title,
-                    category,
-                    body,
-                    file_url: fileUrl || null,
-                    author: user?.id
-                }]);
+            if (editingItem) {
+                const { error } = await supabase
+                    .from('news')
+                    .update({
+                        title,
+                        category,
+                        body,
+                        file_url: fileUrl || null,
+                        images: uploadedImages
+                    })
+                    .eq('id', editingItem.id);
 
-            if (error) throw error;
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from('news')
+                    .insert([{
+                        title,
+                        category,
+                        body,
+                        file_url: fileUrl || null,
+                        author: user?.id,
+                        images: uploadedImages
+                    }]);
 
-            setTitle('');
-            setBody('');
-            setCategory('Social');
-            setFileUrl('');
-            setShowAddForm(false);
+                if (error) throw error;
+            }
+
+            handleCancelForm();
             fetchNews();
         } catch (err) {
-            console.error('Erro ao adicionar notícia:', err);
-            alert('Erro ao adicionar notícia.');
+            console.error('Erro ao salvar notícia:', err);
+            alert('Erro ao salvar notícia.');
         } finally {
             setSubmitting(false);
         }
@@ -171,7 +268,13 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
                         </h3>
                         {canEditNews && (
                             <button
-                                onClick={() => setShowAddForm(!showAddForm)}
+                                onClick={() => {
+                                    if (showAddForm) {
+                                        handleCancelForm();
+                                    } else {
+                                        setShowAddForm(true);
+                                    }
+                                }}
                                 className="bg-farm-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-farm-700 transition-colors shadow-sm"
                             >
                                 {showAddForm ? 'Cancelar' : '+ Novo Aviso'}
@@ -181,7 +284,9 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
 
                     {showAddForm && (
                         <div className="bg-white p-6 rounded-xl shadow-md border border-farm-100 mb-8 fade-in">
-                            <h4 className="text-lg font-bold text-farm-800 mb-4">Novo Aviso ou Notícia</h4>
+                            <h4 className="text-lg font-bold text-farm-800 mb-4">
+                                {editingItem ? 'Editar Notícia/Aviso' : 'Novo Aviso ou Notícia'}
+                            </h4>
                             <form onSubmit={handleAddNews} className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                     <div className="md:col-span-2 lg:col-span-2">
@@ -244,12 +349,46 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
                                         placeholder="Escreva a notícia resumidamente..."
                                     ></textarea>
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1.5">Fotos da Notícia (Até 4)</label>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-3">
+                                        {uploadedImages.map((imgUrl, index) => (
+                                            <div key={index} className="relative group rounded-lg overflow-hidden border border-gray-200 h-24 bg-gray-50">
+                                                <img src={imgUrl} alt={`Preview ${index + 1}`} className="w-full h-full object-cover" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveImage(index)}
+                                                    className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-85 hover:opacity-100 transition-opacity shadow-sm animate-fade-in"
+                                                    title="Remover Foto"
+                                                >
+                                                    <IconX className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {uploadedImages.length < 4 && (
+                                            <label className="border-2 border-dashed border-farm-200 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-farm-50 transition-all h-24 text-farm-700">
+                                                <input
+                                                    type="file"
+                                                    multiple
+                                                    accept="image/*"
+                                                    onChange={handleImageUpload}
+                                                    className="hidden"
+                                                    disabled={uploadingImages}
+                                                />
+                                                <svg className="w-6 h-6 mb-1 text-farm-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                                                </svg>
+                                                <span className="text-xs font-bold">{uploadingImages ? 'Enviando...' : 'Adicionar Foto'}</span>
+                                            </label>
+                                        )}
+                                    </div>
+                                </div>
                                 <button
                                     type="submit"
                                     disabled={submitting || uploadingFile}
                                     className="w-full bg-farm-600 text-white font-bold py-2 rounded-lg hover:bg-farm-700 disabled:opacity-50 transition-all font-serif"
                                 >
-                                    {submitting ? 'Publicando...' : 'Publicar Notícia'}
+                                    {submitting ? (editingItem ? 'Salvando...' : 'Publicando...') : (editingItem ? 'Salvar Alterações' : 'Publicar Notícia')}
                                 </button>
                             </form>
                         </div>
@@ -266,23 +405,78 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
                     ) : (
                         <div className="grid md:grid-cols-3 gap-6">
                             {news.map(item => (
-                                <div key={item.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
-                                    <span className={`text-xs font-bold uppercase tracking-wider px-2 py-1 rounded-full 
-                  ${item.category === 'Importante' ? 'bg-red-100 text-red-700' :
-                                            item.category === 'Manutenção' ? 'bg-orange-100 text-orange-700' :
-                                                item.category === 'Aviso' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
-                                        {item.category}
-                                    </span>
-                                    <h4 className="font-bold text-lg mt-3 mb-2 text-gray-800">{item.title}</h4>
-                                    <p className="text-gray-400 text-[10px] mb-3">{formatDate(item.published_at)}</p>
-                                    <p className="text-gray-600 text-sm whitespace-pre-wrap mb-4">{item.body}</p>
+                                <div key={item.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col justify-between">
+                                    <div>
+                                        <div className="flex justify-between items-start mb-3">
+                                            <span className={`text-xs font-bold uppercase tracking-wider px-2 py-1 rounded-full 
+                          ${item.category === 'Importante' ? 'bg-red-100 text-red-700' :
+                                                    item.category === 'Manutenção' ? 'bg-orange-100 text-orange-700' :
+                                                        item.category === 'Aviso' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                {item.category}
+                                            </span>
+                                            {canEditNews && (
+                                                <div className="flex gap-1">
+                                                    <button
+                                                        onClick={() => handleEditClick(item)}
+                                                        className="text-gray-400 hover:text-farm-600 transition-colors p-1"
+                                                        title="Editar"
+                                                    >
+                                                        <IconEdit className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteNews(item.id)}
+                                                        className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                                                        title="Excluir"
+                                                    >
+                                                        <IconTrash className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <h4 className="font-bold text-lg mb-2 text-gray-800">{item.title}</h4>
+                                        <p className="text-gray-400 text-[10px] mb-3">{formatDate(item.published_at)}</p>
+                                        <p className="text-gray-600 text-sm whitespace-pre-wrap mb-4">{item.body}</p>
+
+                                        {/* Imagens da notícia */}
+                                        {item.images && item.images.length > 0 && (
+                                            <div className="mb-4">
+                                                {item.images.length === 1 ? (
+                                                    <div className="rounded-xl overflow-hidden border border-gray-100 h-44 bg-gray-50">
+                                                        <img 
+                                                            src={item.images[0]} 
+                                                            alt={item.title} 
+                                                            className="w-full h-full object-cover cursor-pointer hover:scale-102 transition-all duration-300" 
+                                                            onClick={() => window.open(item.images![0], '_blank')} 
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className={`grid gap-2 ${
+                                                        item.images.length === 3 ? 'grid-cols-3' : 'grid-cols-2'
+                                                    }`}>
+                                                        {item.images.map((img, idx) => (
+                                                            <div key={idx} className={`rounded-lg overflow-hidden border border-gray-100 bg-gray-50 ${
+                                                                item.images!.length === 2 ? 'h-32' : 'h-24'
+                                                            }`}>
+                                                                <img 
+                                                                    src={img} 
+                                                                    alt={`${item.title} ${idx + 1}`} 
+                                                                    className="w-full h-full object-cover cursor-pointer hover:scale-102 transition-all duration-300" 
+                                                                    onClick={() => window.open(img, '_blank')} 
+                                                                />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
 
                                     {item.file_url && (
                                         <a
                                             href={item.file_url}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 text-xs font-bold text-farm-700 bg-farm-50 px-3 py-2 rounded-lg hover:bg-farm-100 transition-colors w-full justify-center border border-farm-100"
+                                            className="inline-flex items-center gap-2 text-xs font-bold text-farm-700 bg-farm-50 px-3 py-2 rounded-lg hover:bg-farm-100 transition-colors w-full justify-center border border-farm-100 mt-auto"
                                         >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -296,6 +490,9 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
                     )}
                 </div>
             )}
+
+            {/* Instagram Feed Section */}
+            <InstagramFeed isAdmin={canEditNews} />
         </div>
     );
 };

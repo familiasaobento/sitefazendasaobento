@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { IconCamera, IconLoader, IconCheck, IconShoppingCart, IconUser, IconZap } from '../components/Icons';
-import { BiometricSimulator } from '../components/BiometricSimulator';
 
 interface Stay {
     id: number;
@@ -48,7 +47,6 @@ export const PDVPage: React.FC = () => {
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<'Dinheiro' | 'Pix' | 'Cartão' | 'Transferência'>('Dinheiro');
     const [isAdmin, setIsAdmin] = useState(false);
-    const [showBiometricSimulator, setShowBiometricSimulator] = useState(false);
 
     // Manual Search State
     const [searchQuery, setSearchQuery] = useState('');
@@ -393,27 +391,12 @@ export const PDVPage: React.FC = () => {
                             🏠 {operatingPoint} (Trocar)
                         </button>
                         
-                        {isAdmin && (
-                            <button
-                                onClick={() => setShowBiometricSimulator(true)}
-                                className="mt-2 ml-2 inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-bold hover:bg-blue-200 transition-colors"
-                            >
-                                🤖 Simulador ControlID
-                            </button>
-                        )}
-                        
                         {isRestaurante && (
                             <div className="flex flex-col items-center">
                                 <div className="bg-farm-900 text-white px-6 py-2 rounded-2xl font-black text-xl shadow-lg uppercase tracking-tighter border-2 border-farm-500">
                                     Modo Facial ControlID: {getCurrentMeal() || 'Fechado'}
                                 </div>
                                 <p className="text-farm-600 text-sm mt-2 font-bold animate-pulse">Aguardando identificação facial no hardware...</p>
-                                <button 
-                                    onClick={() => setShowBiometricSimulator(true)}
-                                    className="mt-6 text-gray-400 text-xs underline hover:text-gray-600 font-bold"
-                                >
-                                    [Admin] Simular Evento Facial
-                                </button>
                             </div>
                         )}
                     </div>
@@ -434,14 +417,6 @@ export const PDVPage: React.FC = () => {
                             </button>
                         ))}
                     </div>
-                    {isAdmin && (
-                        <button
-                            onClick={() => setShowBiometricSimulator(true)}
-                            className="mt-8 bg-blue-50 text-blue-600 px-6 py-3 rounded-xl font-bold hover:bg-blue-100 transition-colors flex items-center gap-2 border border-blue-200 shadow-sm"
-                        >
-                            Abrir Simulador Biométrico (Dev)
-                        </button>
-                    )}
                 </div>
             )}
 
@@ -865,10 +840,6 @@ export const PDVPage: React.FC = () => {
                         </div>
                     </div>
                 </div>
-            )}
-
-            {showBiometricSimulator && (
-                <BiometricSimulator onClose={() => setShowBiometricSimulator(false)} />
             )}
         </div>
     );
