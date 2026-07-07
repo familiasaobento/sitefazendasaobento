@@ -78,6 +78,8 @@ export const FinancePage: React.FC<{
   isAdmin?: boolean;
   onNavigate?: (page: any) => void;
 }> = ({ userRole, isAdmin, onNavigate }) => {
+  const showBudgetTabs = isAdmin || userRole === 'admin' || userRole === 'site_admin' || userRole === 'finance_manager' || userRole === 'finance' || userRole === 'accounting';
+
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'month' | 'quarter' | 'year'>('month');
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
@@ -88,6 +90,7 @@ export const FinancePage: React.FC<{
   
   // Budget & Tabs States
   const [activeTab, setActiveTab] = useState<'dashboard' | 'approved_budget' | 'draft_budget'>(() => {
+    if (!showBudgetTabs) return 'dashboard';
     const saved = localStorage.getItem('finance_active_tab');
     if (saved === 'dashboard' || saved === 'approved_budget' || saved === 'draft_budget') return saved;
     if (saved === 'budget') return 'approved_budget';
@@ -856,8 +859,9 @@ export const FinancePage: React.FC<{
           </div>
         </div>
         
-        <div className="flex flex-col md:flex-row gap-4 items-center">
-          <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100 items-center overflow-x-auto">
+        <div className="flex flex-col items-stretch sm:items-end gap-3 w-full lg:w-auto">
+          {/* Linha Superior: Seletor de Período (Mês, Trimestre, Ano) */}
+          <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100 items-center justify-between sm:justify-start">
             {(['month', 'quarter', 'year'] as const).map((r) => (
               <button
                 key={r}
@@ -869,24 +873,27 @@ export const FinancePage: React.FC<{
             ))}
           </div>
           
-          <select 
-            value={selectedYear} 
-            onChange={e => setSelectedYear(e.target.value)}
-            className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 text-xs font-bold text-gray-500 outline-none focus:ring-2 focus:ring-farm-200"
-          >
-            {Array.from({length: 6}, (_, i) => (new Date().getFullYear() + 1) - i).map(y => (
-                <option key={y} value={y.toString()}>{y}</option>
-            ))}
-          </select>
+          {/* Linha Inferior: Dropdowns de Ano e Projeto */}
+          <div className="flex gap-3 w-full sm:w-auto justify-stretch sm:justify-end">
+            <select 
+              value={selectedYear} 
+              onChange={e => setSelectedYear(e.target.value)}
+              className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 text-xs font-bold text-gray-500 outline-none focus:ring-2 focus:ring-farm-200 flex-1 sm:flex-none min-w-[80px] cursor-pointer"
+            >
+              {Array.from({length: 6}, (_, i) => (new Date().getFullYear() + 1) - i).map(y => (
+                  <option key={y} value={y.toString()}>{y}</option>
+              ))}
+            </select>
 
-          <select 
-            value={selectedProject} 
-            onChange={e => setSelectedProject(e.target.value)}
-            className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 text-xs font-bold text-gray-500 outline-none focus:ring-2 focus:ring-farm-200"
-          >
-            <option value="">TODOS OS PROJETOS</option>
-            {projects.map(p => <option key={p.id} value={p.nome}>{p.nome.toUpperCase()}</option>)}
-          </select>
+            <select 
+              value={selectedProject} 
+              onChange={e => setSelectedProject(e.target.value)}
+              className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 text-xs font-bold text-gray-500 outline-none focus:ring-2 focus:ring-farm-200 flex-1 sm:flex-none min-w-[150px] cursor-pointer"
+            >
+              <option value="">TODOS OS PROJETOS</option>
+              {projects.map(p => <option key={p.id} value={p.nome}>{p.nome.toUpperCase()}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -898,18 +905,22 @@ export const FinancePage: React.FC<{
         >
           Painel Geral
         </button>
-        <button
-          onClick={() => setActiveTab('approved_budget')}
-          className={`px-6 py-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'approved_budget' ? 'border-farm-600 text-farm-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-        >
-          Orçamento Aprovado
-        </button>
-        <button
-          onClick={() => setActiveTab('draft_budget')}
-          className={`px-6 py-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'draft_budget' ? 'border-farm-600 text-farm-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-        >
-          Elaboração de Orçamento
-        </button>
+        {showBudgetTabs && (
+          <>
+            <button
+              onClick={() => setActiveTab('approved_budget')}
+              className={`px-6 py-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'approved_budget' ? 'border-farm-600 text-farm-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+            >
+              Orçamento Aprovado
+            </button>
+            <button
+              onClick={() => setActiveTab('draft_budget')}
+              className={`px-6 py-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'draft_budget' ? 'border-farm-600 text-farm-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+            >
+              Elaboração de Orçamento
+            </button>
+          </>
+        )}
       </div>
 
       {activeTab === 'dashboard' && (
@@ -1338,7 +1349,7 @@ export const FinancePage: React.FC<{
           </div>
         </>
       )}
-      {activeTab === 'approved_budget' && (
+      {activeTab === 'approved_budget' && showBudgetTabs && (
         <div className="space-y-6">
           {isApproved && approvedInfo && (
             <div className="bg-green-50 text-green-800 p-4 rounded-3xl border border-green-100 flex items-center gap-3 text-sm">
@@ -1500,7 +1511,7 @@ export const FinancePage: React.FC<{
         </div>
       )}
 
-      {activeTab === 'draft_budget' && (
+      {activeTab === 'draft_budget' && showBudgetTabs && (
         <div className="space-y-6">
           {isApproved && (
             <div className="bg-gray-50 text-gray-700 p-4 rounded-3xl border border-gray-200 flex items-center gap-3 text-sm">

@@ -92,4 +92,6 @@ export interface Document {
   file_type: string;
   file_size: string;
   created_at: string;
+  folder?: string | null;
+  meeting?: string | null;
 }

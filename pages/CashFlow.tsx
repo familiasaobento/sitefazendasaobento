@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { IconLoader, IconCheck, IconPlus, IconFileText, IconTrash, IconUser, IconRefresh } from '../components/Icons';
 import { BankReconciliation } from '../components/BankReconciliation';
 import { ReconciliationSessions } from '../components/ReconciliationSessions';
@@ -231,6 +232,26 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
     const [selectedReportType, setSelectedReportType] = useState<'financial' | 'consumption'>('financial');
     const [consumptionData, setConsumptionData] = useState<any[]>([]);
     const [fetchingConsumption, setFetchingConsumption] = useState(false);
+
+    // Consumption Manual Entry States
+    const [showManualConsumptionModal, setShowManualConsumptionModal] = useState(false);
+    const [isSavingManualConsumption, setIsSavingManualConsumption] = useState(false);
+    const [manualConsumptionForm, setManualConsumptionForm] = useState<{
+        item_id: number | 'custom' | '';
+        custom_name: string;
+        quantidade: number;
+        valor_unitario_aplicado: number;
+        date: string;
+        observacoes: string;
+    }>({
+        item_id: '',
+        custom_name: '',
+        quantidade: 1,
+        valor_unitario_aplicado: 0,
+        date: new Date().toISOString().split('T')[0],
+        observacoes: 'Lançamento manual do sistema antigo'
+    });
+    const [productsList, setProductsList] = useState<any[]>([]);
     const [viewFilters, setViewFilters] = useState({
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
@@ -533,6 +554,82 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
             console.error('Error fetching consumption for report:', err);
         } finally {
             setFetchingConsumption(false);
+        }
+    };
+
+    const fetchProductsList = async () => {
+        try {
+            const { data } = await supabase
+                .from('products')
+                .select('id, name, price, category')
+                .eq('is_active', true)
+                .order('name');
+            if (data) setProductsList(data);
+        } catch (err) {
+            console.error('Error fetching products list:', err);
+        }
+    };
+
+    const handleOpenManualConsumption = async () => {
+        setManualConsumptionForm({
+            item_id: '',
+            custom_name: '',
+            quantidade: 1,
+            valor_unitario_aplicado: 0,
+            date: new Date().toISOString().split('T')[0],
+            observacoes: 'Lançamento manual do sistema antigo'
+        });
+        setShowManualConsumptionModal(true);
+
+        if (productsList.length === 0) {
+            const { data } = await supabase
+                .from('products')
+                .select('id, name, price, category')
+                .eq('is_active', true)
+                .order('name');
+            if (data) setProductsList(data);
+        }
+    };
+
+    const handleSaveManualConsumption = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSavingManualConsumption(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            const itemId = manualConsumptionForm.item_id === 'custom' || !manualConsumptionForm.item_id ? null : manualConsumptionForm.item_id;
+            
+            let finalName = manualConsumptionForm.custom_name;
+            if (itemId) {
+                const product = productsList.find(p => p.id === itemId);
+                if (product) finalName = product.name;
+            }
+
+            const payload = {
+                estadia_id: null,
+                item_id: itemId,
+                nome_item_snapshot: finalName,
+                quantidade: manualConsumptionForm.quantidade,
+                valor_unitario_aplicado: manualConsumptionForm.valor_unitario_aplicado,
+                pago: true,
+                aprovado_admin: true,
+                criado_por: user?.id || null,
+                created_at: manualConsumptionForm.date ? `${manualConsumptionForm.date}T12:00:00Z` : new Date().toISOString(),
+                observacoes: manualConsumptionForm.observacoes || 'Lançamento manual do sistema antigo'
+            };
+
+            const { error } = await supabase.from('lancamentos_consumo').insert([payload]);
+            if (error) throw error;
+
+            alert('Consumo lançado manualmente com sucesso!');
+            setShowManualConsumptionModal(false);
+            
+            // Reload data
+            fetchConsumptionData(reportFilters.month, reportFilters.year, reportFilters.isYtd);
+        } catch (err: any) {
+            console.error('Error saving manual consumption:', err);
+            alert('Erro ao salvar lançamento manual: ' + err.message);
+        } finally {
+            setIsSavingManualConsumption(false);
         }
     };
 
@@ -1687,12 +1784,20 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                             📥 Excel
                                         </button>
                                     ) : (
-                                        <button 
-                                            onClick={() => exportConsumptionToExcel(mealsReport, productsReport, `relatorio_consumo_${reportFilters.isYtd ? 'YTD_' : ''}${reportFilters.month}_${reportFilters.year}`)} 
-                                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-50 text-green-800 border-2 border-green-100 px-6 py-3 rounded-xl font-bold text-sm hover:bg-green-100 transition-all shadow-md"
-                                        >
-                                            📥 Excel Consumo
-                                        </button>
+                                        <>
+                                            <button 
+                                                onClick={() => exportConsumptionToExcel(mealsReport, productsReport, `relatorio_consumo_${reportFilters.isYtd ? 'YTD_' : ''}${reportFilters.month}_${reportFilters.year}`)} 
+                                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-50 text-green-800 border-2 border-green-100 px-6 py-3 rounded-xl font-bold text-sm hover:bg-green-100 transition-all shadow-md"
+                                            >
+                                                📥 Excel Consumo
+                                            </button>
+                                            <button 
+                                                onClick={handleOpenManualConsumption} 
+                                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-farm-700 border-2 border-farm-100 px-6 py-3 rounded-xl font-bold text-sm hover:bg-farm-50 transition-colors shadow-md animate-fade-in"
+                                            >
+                                                🍽️ Lançar Consumo Manual
+                                            </button>
+                                        </>
                                     )}
                                     <button onClick={() => window.print()} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gray-800 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-black transition-all shadow-lg">
                                         <IconFileText className="w-4 h-4" /> Imprimir / PDF
@@ -2301,6 +2406,129 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                                 onReconciled={fetchCashFlow} 
                                 onClose={() => setReconciliationView('sessions')} 
                             />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showManualConsumptionModal && (
+                <div className="fixed inset-0 z-[110] overflow-y-auto no-print animate-fade-in">
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowManualConsumptionModal(false)}></div>
+                    <div className="flex min-h-full items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] relative z-10">
+                            <header className="p-6 border-b flex justify-between items-center bg-gray-50 shrink-0">
+                                <h3 className="text-xl font-bold font-serif text-farm-800">🍽️ Lançar Consumo Manual (Histórico)</h3>
+                                <button 
+                                    onClick={() => setShowManualConsumptionModal(false)} 
+                                    className="text-gray-400 hover:text-gray-600 font-bold"
+                                >
+                                    ✕
+                                </button>
+                            </header>
+                            <form onSubmit={handleSaveManualConsumption} className="p-8 space-y-4 overflow-y-auto">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Produto / Item</label>
+                                    <select
+                                        value={manualConsumptionForm.item_id}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            const itemId = val === 'custom' ? 'custom' : (val ? parseInt(val) : '');
+                                            const product = productsList.find(p => p.id === itemId);
+                                            setManualConsumptionForm(prev => ({
+                                                ...prev,
+                                                item_id: itemId,
+                                                custom_name: product ? product.name : '',
+                                                valor_unitario_aplicado: product ? Number(product.price) : 0
+                                            }));
+                                        }}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-sm outline-none focus:ring-2 focus:ring-farm-200"
+                                        required
+                                    >
+                                        <option value="">-- Selecione um produto --</option>
+                                        <option value="custom">Outro (Inserir nome personalizado)</option>
+                                        <optgroup label="Produtos Cadastrados">
+                                            {productsList.map(p => (
+                                                <option key={p.id} value={p.id}>{p.name} (R$ {Number(p.price).toFixed(2)})</option>
+                                            ))}
+                                        </optgroup>
+                                    </select>
+                                </div>
+
+                                {manualConsumptionForm.item_id === 'custom' && (
+                                    <div className="animate-fade-in">
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Nome Personalizado do Item</label>
+                                        <input
+                                            type="text"
+                                            value={manualConsumptionForm.custom_name}
+                                            onChange={(e) => setManualConsumptionForm(prev => ({ ...prev, custom_name: e.target.value }))}
+                                            className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-farm-200 text-sm"
+                                            placeholder="Ex: Almoço Especial"
+                                            required
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Quantidade</label>
+                                        <input
+                                            type="number"
+                                            step="0.001"
+                                            min="0.001"
+                                            value={manualConsumptionForm.quantidade}
+                                            onChange={(e) => setManualConsumptionForm(prev => ({ ...prev, quantidade: parseFloat(e.target.value) }))}
+                                            className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-farm-200 text-sm font-bold"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Valor Unitário (R$)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={manualConsumptionForm.valor_unitario_aplicado}
+                                            onChange={(e) => setManualConsumptionForm(prev => ({ ...prev, valor_unitario_aplicado: parseFloat(e.target.value) }))}
+                                            className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-farm-200 text-sm font-bold"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Data de Lançamento</label>
+                                    <input
+                                        type="date"
+                                        value={manualConsumptionForm.date}
+                                        onChange={(e) => setManualConsumptionForm(prev => ({ ...prev, date: e.target.value }))}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-farm-200 text-sm font-bold"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Observações</label>
+                                    <textarea
+                                        value={manualConsumptionForm.observacoes}
+                                        onChange={(e) => setManualConsumptionForm(prev => ({ ...prev, observacoes: e.target.value }))}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-farm-200 text-sm min-h-[80px]"
+                                    />
+                                </div>
+
+                                <button 
+                                    type="submit" 
+                                    disabled={isSavingManualConsumption} 
+                                    className="w-full py-4 bg-farm-800 text-white font-bold rounded-2xl hover:bg-farm-900 transition-all font-serif italic text-lg shadow-xl shadow-farm-100 flex items-center justify-center gap-2"
+                                >
+                                    {isSavingManualConsumption ? (
+                                        <>
+                                            <IconLoader className="w-5 h-5 animate-spin" /> Salvando...
+                                        </>
+                                    ) : (
+                                        'Confirmar Lançamento'
+                                    )}
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>

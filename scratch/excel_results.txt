@@ -1,0 +1,10 @@
+CashFlow.tsx Line 1289: <input type="file" id="csvFileInput" accept=".csv" className="hidden" onChange={handleCsvImport} disabled={isImportingCsv} />
+CashFlow.tsx Line 1368: <input type="file" className="hidden" accept=".pdf,image/*" onChange={handleFileChange} />
+Documents.tsx Line 236: type="file"
+Events.tsx Line 191: type="file"
+Gallery.tsx Line 306: type="file"
+History.tsx Line 124: <input type="file" accept=".ged" className="hidden" onChange={handleFileUpload} disabled={isUploading} />
+Home.tsx Line 320: type="file"
+Home.tsx Line 371: type="file"
+Members.tsx Line 1679: type="file"
+Shop.tsx Line 679: type="file"
