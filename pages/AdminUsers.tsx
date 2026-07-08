@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { IconUser, IconCalendar, IconTrash, IconPlus, IconX, IconLoader, IconMail, IconCheck, IconLock, IconEdit, IconDotsVertical } from '../components/Icons';
+import { IconUser, IconCalendar, IconTrash, IconPlus, IconX, IconLoader, IconMail, IconCheck, IconLock, IconEdit, IconDotsVertical, IconSearch } from '../components/Icons';
 
 interface Profile {
     id: string;
@@ -37,6 +37,7 @@ export const AdminUsersPage: React.FC = () => {
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'pending' | 'approved'>('pending');
+    const [searchQuery, setSearchQuery] = useState('');
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     
     // Admin Registration States
@@ -367,8 +368,21 @@ export const AdminUsersPage: React.FC = () => {
     };
 
     const filteredProfiles = profiles.filter(p => {
-        if (filter === 'pending') return !p.approved;
-        if (filter === 'approved') return p.approved;
+        // Filter by tab
+        if (filter === 'pending' && p.approved) return false;
+        if (filter === 'approved' && !p.approved) return false;
+
+        // Filter by search query
+        if (searchQuery.trim() !== '') {
+            const query = searchQuery.toLowerCase();
+            const nameMatch = p.full_name?.toLowerCase().includes(query);
+            const emailMatch = p.email?.toLowerCase().includes(query);
+            const hostMatch = p.host_name?.toLowerCase().includes(query);
+            const roleLabel = p.role === 'member' ? 'sócio' : p.role === 'visitor' ? 'visitante' : p.role === 'consu' ? 'conselheiro' : p.role === 'admin' ? 'administrador' : '';
+            const roleMatch = roleLabel.includes(query) || p.role?.toLowerCase().includes(query);
+            return nameMatch || emailMatch || hostMatch || roleMatch;
+        }
+
         return true;
     });
 
@@ -391,25 +405,48 @@ export const AdminUsersPage: React.FC = () => {
                 </div>
             </header>
 
-            <div className="flex bg-white rounded-lg shadow-sm p-1 border border-gray-100 w-fit">
-                <button
-                    onClick={() => setFilter('pending')}
-                    className={`px-4 py-2 rounded-md transition-all ${filter === 'pending' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                    Pendentes
-                </button>
-                <button
-                    onClick={() => setFilter('approved')}
-                    className={`px-4 py-2 rounded-md transition-all ${filter === 'approved' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                    Aprovados
-                </button>
-                <button
-                    onClick={() => setFilter('all')}
-                    className={`px-4 py-2 rounded-md transition-all ${filter === 'all' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                    Todos
-                </button>
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                <div className="flex bg-white rounded-lg shadow-sm p-1 border border-gray-100 w-fit">
+                    <button
+                        onClick={() => setFilter('pending')}
+                        className={`px-4 py-2 rounded-md transition-all ${filter === 'pending' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        Pendentes
+                    </button>
+                    <button
+                        onClick={() => setFilter('approved')}
+                        className={`px-4 py-2 rounded-md transition-all ${filter === 'approved' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        Aprovados
+                    </button>
+                    <button
+                        onClick={() => setFilter('all')}
+                        className={`px-4 py-2 rounded-md transition-all ${filter === 'all' ? 'bg-farm-700 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        Todos
+                    </button>
+                </div>
+
+                <div className="relative w-full sm:w-80">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <IconSearch className="h-5 w-5 text-gray-400" />
+                    </span>
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Buscar por nome, e-mail..."
+                        className="w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-farm-500 focus:border-transparent shadow-sm text-sm"
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => setSearchQuery('')}
+                            className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                        >
+                            <IconX className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {loading ? (
