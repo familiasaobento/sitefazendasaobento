@@ -232,7 +232,7 @@ export const PublicGuestReservation: React.FC<PublicGuestReservationProps> = ({ 
                 type="number"
                 min="1"
                 required
-                placeholder="Quantos visitantes no total (incluindo você)?"
+                placeholder="Quantos convidados no total (incluindo você)?"
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm"
                 value={formData.num_guests || ''}
                 onChange={handleNumGuestsChange}

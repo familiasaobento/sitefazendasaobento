@@ -136,10 +136,10 @@ export const VisitorsPage: React.FC = () => {
                 if (fallbackResponse.error) throw fallbackResponse.error;
             }
             setVisitors(visitors.filter(v => v.id !== id));
-            alert('Cadastro de visitante excluído com sucesso.');
+            alert('Cadastro de convidado excluído com sucesso.');
         } catch (err) {
             console.error('Error deleting visitor:', err);
-            alert('Erro ao excluir visitante.');
+            alert('Erro ao excluir convidado.');
         }
     };
 
@@ -156,8 +156,8 @@ export const VisitorsPage: React.FC = () => {
         <div className="space-y-8">
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                    <h1 className="text-4xl font-bold text-gray-900 font-serif">Cadastro de Visitantes</h1>
-                    <p className="text-gray-500 mt-2 text-lg">Gerencie as informações e histórico completo dos visitantes.</p>
+                    <h1 className="text-4xl font-bold text-gray-900 font-serif">Cadastro de Convidados</h1>
+                    <p className="text-gray-500 mt-2 text-lg">Gerencie as informações e histórico completo dos convidados.</p>
                 </div>
 
                 <div>
@@ -177,7 +177,7 @@ export const VisitorsPage: React.FC = () => {
             ) : filteredVisitors.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-sm p-12 text-center border border-gray-100">
                     <IconUser className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-                    <h3 className="text-xl font-medium text-gray-600">Nenhum visitante encontrado</h3>
+                    <h3 className="text-xl font-medium text-gray-600">Nenhum convidado encontrado</h3>
                 </div>
             ) : (
                 <div className="space-y-6">
@@ -188,7 +188,7 @@ export const VisitorsPage: React.FC = () => {
                                 <table className="w-full text-left min-w-[1200px] divide-y divide-gray-100">
                                     <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
                                         <tr>
-                                            <th className="px-6 py-5 text-left">Visitante</th>
+                                            <th className="px-6 py-5 text-left">Convidado</th>
                                             <th className="px-6 py-5 text-left">Identificação</th>
                                             <th className="px-6 py-5 text-left">Responsável</th>
                                             <th className="px-6 py-5 text-left">Histórico</th>
@@ -204,7 +204,7 @@ export const VisitorsPage: React.FC = () => {
                                                             {visitor.full_name?.charAt(0) || '?'}
                                                         </div>
                                                         <div>
-                                                            <p className="font-bold text-gray-800">{visitor.full_name || 'Visitante'}</p>
+                                                            <p className="font-bold text-gray-800">{visitor.full_name || 'Convidado'}</p>
                                                             <p className="text-xs text-gray-400">{visitor.email}</p>
                                                         </div>
                                                     </div>
@@ -249,7 +249,7 @@ export const VisitorsPage: React.FC = () => {
                                                         <button
                                                             onClick={() => handleDeleteVisitor(visitor.id, visitor.full_name)}
                                                             className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                            title="Excluir Visitante"
+                                                            title="Excluir Convidado"
                                                         >
                                                             <IconTrash className="w-5 h-5" />
                                                         </button>

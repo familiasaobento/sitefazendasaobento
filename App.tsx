@@ -63,7 +63,7 @@ const LoginPage = ({ onAuthChange }: { onAuthChange: () => void }) => {
           }
         });
         if (error) throw error;
-        setMessage(mode === 'visitor' ? 'Cadastro de visitante realizado! Seu acesso será liberado em breve.' : 'Cadastro realizado! Aguarde a aprovação manual da administração para acessar o portal.');
+        setMessage(mode === 'visitor' ? 'Cadastro de convidado realizado! Seu acesso será liberado em breve.' : 'Cadastro realizado! Aguarde a aprovação manual da administração para acessar o portal.');
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -457,7 +457,7 @@ const App: React.FC = () => {
       } else {
         setIsApproved(false);
         setUserRole('member');
-        setUserName('Visitante');
+        setUserName('Convidado');
       }
     } finally {
       setLoading(false);

@@ -368,7 +368,7 @@ serve(async (req) => {
           } else if (metadata.target_type === 'dependent') {
             userName = metadata.dependent_name || "Dependente Fazenda";
           } else if (metadata.target_type === 'visitor_checkin') {
-            userName = metadata.guest_name || "Visitante Fazenda";
+            userName = metadata.guest_name || "Convidado Fazenda";
           }
         } catch (e) {
           console.log("Erro ao buscar nome do usuário para criação remota:", e.message);
@@ -668,7 +668,7 @@ serve(async (req) => {
             .update({ controlid_id: faceId })
             .eq('id', targetId);
 
-          if (stayError) console.error("Erro ao salvar ID na estadia do visitante:", stayError);
+          if (stayError) console.error("Erro ao salvar ID na estadia do convidado:", stayError);
           else console.log(`Sucesso: ID Facial ${faceId} associado à estadia ${targetId}`);
         }
       } else {

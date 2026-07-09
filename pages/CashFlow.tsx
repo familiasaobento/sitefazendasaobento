@@ -707,7 +707,7 @@ export const CashFlowPage: React.FC<{ canApprove?: boolean; isViewOnly?: boolean
                         const vencStr = String(getVal(['vencimento', 'vcto', 'vencto', 'data_venc']));
                         const valorStr = String(getVal(['valor', 'montante', 'preço', 'total']));
                         const criadoStr = String(getVal(['criado em', 'data', 'pagamento', 'atualizadoem', 'lançado']));
-                        const empresaStr = String(getVal(['empres', 'socio', 'visitante', 'cliente', 'fornecedor', 'nome', 'contato']));
+                        const empresaStr = String(getVal(['empres', 'socio', 'visitante', 'convidado', 'cliente', 'fornecedor', 'nome', 'contato']));
                         const categoriaCsvStr = String(getVal(['categoria', 'classe', 'classificação', 'classificacao', 'natureza', 'grupo', 'plano']));
                         const idCsvStr = String(getVal(['id', 'código', 'codigo', 'referência', 'referencia', 'nº doc', 'nº documento', 'numero_documento', 'documento', 'transação', 'transacao', 'ref']));
 

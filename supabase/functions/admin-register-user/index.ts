@@ -106,7 +106,7 @@ async function sendInviteEmail(supabaseAdmin: any, email: string, full_name: str
     // Send Welcome Email via Resend
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
     if (resendApiKey && inviteLink) {
-        const roleLabel = (role === 'member' || role === 'consu') ? 'Sócio' : role === 'visitor' ? 'Visitante' : 'Usuário';
+        const roleLabel = (role === 'member' || role === 'consu') ? 'Sócio' : role === 'visitor' ? 'Convidado' : 'Usuário';
         
         await fetch('https://api.resend.com/emails', {
             method: 'POST',

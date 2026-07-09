@@ -122,7 +122,7 @@ export const ContactPage: React.FC<{
                     <h1 className="text-4xl font-bold text-gray-900 font-serif">Contatos e Sugestões</h1>
                     <p className="text-gray-500 mt-2 text-lg">
                         {canViewMessages 
-                            ? 'Gerencie as comunicações enviadas pelos sócios e visitantes.'
+                            ? 'Gerencie as comunicações enviadas pelos sócios e convidados.'
                             : 'Envie sua mensagem direta para a administração da fazenda.'}
                     </p>
                 </div>

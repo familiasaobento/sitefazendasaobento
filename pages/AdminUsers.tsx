@@ -378,7 +378,7 @@ export const AdminUsersPage: React.FC = () => {
             const nameMatch = p.full_name?.toLowerCase().includes(query);
             const emailMatch = p.email?.toLowerCase().includes(query);
             const hostMatch = p.host_name?.toLowerCase().includes(query);
-            const roleLabel = p.role === 'member' ? 'sócio' : p.role === 'visitor' ? 'visitante' : p.role === 'consu' ? 'conselheiro' : p.role === 'admin' ? 'administrador' : '';
+            const roleLabel = p.role === 'member' ? 'sócio' : p.role === 'visitor' ? 'convidado' : p.role === 'consu' ? 'conselheiro' : p.role === 'admin' ? 'administrador' : '';
             const roleMatch = roleLabel.includes(query) || p.role?.toLowerCase().includes(query);
             return nameMatch || emailMatch || hostMatch || roleMatch;
         }
@@ -556,7 +556,7 @@ export const AdminUsersPage: React.FC = () => {
                                                             className="bg-gray-100/50 border-none rounded-lg px-3 py-2 text-[10px] font-black uppercase text-gray-600 cursor-pointer hover:bg-gray-200 transition-all font-sans min-w-[120px]"
                                                         >
                                                             <option value="member">Sócio</option>
-                                                            <option value="visitor">Visitante</option>
+                                                            <option value="visitor">Convidado</option>
                                                             <option value="finance">Financeiro</option>
                                                             <option value="finance_manager">Gerente Financeiro</option>
                                                             <option value="accounting">Contabilidade</option>
@@ -709,7 +709,7 @@ export const AdminUsersPage: React.FC = () => {
                                         <input type="text" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.phone} onChange={e => setNewUser({...newUser, phone: e.target.value})} placeholder="(00) 00000-0000" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Responsável (Sócio Anfitrião se Visitante)</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">Responsável (Sócio Anfitrião se Convidado)</label>
                                         <input type="text" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none" value={newUser.host_name} onChange={e => setNewUser({...newUser, host_name: e.target.value})} placeholder="Nome do Sócio" />
                                     </div>
                                     <div className="md:col-span-2 space-y-4 pt-4 border-t border-gray-100">
@@ -812,7 +812,7 @@ export const AdminUsersPage: React.FC = () => {
                                         <label className="block text-sm font-bold text-gray-700 mb-1">Tipo de Perfil</label>
                                         <select className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none bg-white font-sans" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
                                             <option value="member">Sócio</option>
-                                            <option value="visitor">Visitante</option>
+                                            <option value="visitor">Convidado</option>
                                             <option value="finance">Financeiro</option>
                                             <option value="finance_manager">Gerente Financeiro</option>
                                             <option value="accounting">Contabilidade</option>

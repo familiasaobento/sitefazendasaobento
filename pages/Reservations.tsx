@@ -422,7 +422,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
         });
 
         if (error) throw error;
-        alert('Reserva aprovada! O visitante recebeu o voucher por e-mail.');
+        alert('Reserva aprovada! O convidado recebeu o voucher por e-mail.');
       } else {
         const reason = window.prompt('Por que esta solicitação está sendo recusada?');
         if (reason === null) return; // Cancelled
@@ -1063,7 +1063,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                                         </span>
                                       );
                                   })()}
-                                  {isGuestRequest && <span className="text-amber-600 font-extrabold uppercase text-[8px] tracking-[0.1em] bg-amber-50/50 px-2 py-0.5 rounded-md border border-amber-100/50">Visitante</span>}
+                                  {isGuestRequest && <span className="text-amber-600 font-extrabold uppercase text-[8px] tracking-[0.1em] bg-amber-50/50 px-2 py-0.5 rounded-md border border-amber-100/50">Convidado</span>}
                                   {!isGuestRequest && <span className="text-farm-600 font-extrabold uppercase text-[8px] tracking-[0.1em] bg-farm-50/50 px-2 py-0.5 rounded-md border border-farm-100/50">Sócio</span>}
                                   {res.status === 'em_curso' && res.estadias?.[0]?.status === 'finalizada' && (
                                     <span className="text-red-600 font-black uppercase text-[8px] tracking-[0.1em] bg-red-50 px-2 py-0.5 rounded-md border border-red-100 animate-pulse">Saldo Devedor</span>

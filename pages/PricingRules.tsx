@@ -340,7 +340,7 @@ export const PricingRulesPage: React.FC = () => {
                                 >
                                     <option value="Todos">Global (Aplica a Todos)</option>
                                     <option value="Sócio">Sócio Titular / Convidados Vinculados</option>
-                                    <option value="Visitante">Visitante Externo</option>
+                                    <option value="Visitante">Convidado Externo</option>
                                     <option value="Morador">Sócio Morador Fixo</option>
                                 </select>
                             </div>
@@ -419,7 +419,7 @@ export const PricingRulesPage: React.FC = () => {
                                                     {rule.season}
                                                 </span>
                                                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${rule.audience === 'Sócio' ? 'bg-green-100 text-green-700' : rule.audience === 'Visitante' ? 'bg-yellow-100 text-yellow-700' : rule.audience === 'Morador' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-700'}`}>
-                                                    {rule.audience}
+                                                    {rule.audience === 'Visitante' ? 'Convidado' : rule.audience}
                                                 </span>
                                                 {rule.mandatory_meals && (
                                                     <span className="px-2 py-0.5 rounded text-xs font-bold bg-indigo-100 text-indigo-700 flex items-center gap-1">

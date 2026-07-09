@@ -243,7 +243,7 @@ export const PDVPage: React.FC = () => {
             }
 
             const targetStay = targetStayForRegular!;
-            const guestCat = targetStay.reservations?.profiles?.role || 'visitante';
+            const guestCat = targetStay.reservations?.profiles?.role || 'visitor';
 
             if (isRestaurante && product?.category === 'Refeições' && !priceOverride) {
                 // Fetch Pricing Season
@@ -264,7 +264,7 @@ export const PDVPage: React.FC = () => {
                     .eq('active', true)
                     .eq('category', 'Refeição')
                     .eq('season', determinedSeason)
-                    .eq('audience', guestCat !== 'visitante' ? 'Sócio' : 'Visitante')
+                    .eq('audience', guestCat === 'visitor' ? 'Visitante' : 'Sócio')
                     .limit(1);
 
                 if (rules && rules.length > 0) {
