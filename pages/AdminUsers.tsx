@@ -307,7 +307,7 @@ export const AdminUsersPage: React.FC = () => {
 
         try {
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: 'https://portal.fazendafamiliasaobento.com.br'
+                redirectTo: 'https://www.familiasaobento.com'
             });
             if (error) throw error;
             alert('E-mail enviado!');

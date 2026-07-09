@@ -65,7 +65,7 @@ serve(async (req) => {
                             <p><strong>Pessoas:</strong> ${request.num_guests}</p>
                             <p><strong>Obs:</strong> ${request.notes || '-'}</p>
                             <br/>
-                            <a href="https://portal.fazendafamiliasaobento.com.br/#reservations" style="background:#556C3B;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">Ver e Aprovar no Painel</a>
+                            <a href="https://www.familiasaobento.com/#reservations" style="background:#556C3B;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">Ver e Aprovar no Painel</a>
                         `
                     })
                 })
@@ -145,7 +145,7 @@ serve(async (req) => {
                     email: request.email,
                     options: {
                         // PRODUÇÃO
-                        redirectTo: 'https://portal.fazendafamiliasaobento.com.br'
+                        redirectTo: 'https://www.familiasaobento.com'
                     }
                 });
 
@@ -156,7 +156,7 @@ serve(async (req) => {
                         email: request.email,
                         options: { 
                             // PRODUÇÃO
-                            redirectTo: 'https://portal.fazendafamiliasaobento.com.br' 
+                            redirectTo: 'https://www.familiasaobento.com' 
                         }
                     });
                 }
@@ -164,7 +164,7 @@ serve(async (req) => {
                 await logToDB("Exception during generateLink", { error: e.message });
             }
 
-            const inviteLink = linkResult?.data?.properties?.action_link || 'https://portal.fazendafamiliasaobento.com.br';
+            const inviteLink = linkResult?.data?.properties?.action_link || 'https://www.familiasaobento.com';
             
             if (!linkResult?.data?.properties?.action_link) {
                 await logToDB("AVISO: Link de convite não gerado, usando fallback de URL", { 
@@ -197,7 +197,7 @@ serve(async (req) => {
                             max-width: 600px; 
                             margin: 0 auto; 
                             background-color: #f4f6f2; 
-                            background-image: url('https://portal.fazendafamiliasaobento.com.br/login-bg.jpg');
+                            background-image: url('https://www.familiasaobento.com/login-bg.jpg');
                             background-size: cover;
                             background-position: center;
                             border-radius: 24px;

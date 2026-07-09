@@ -96,7 +96,7 @@ async function sendInviteEmail(supabaseAdmin: any, email: string, full_name: str
         type: 'recovery',
         email,
         options: {
-            redirectTo: 'https://portal.fazendafamiliasaobento.com.br'
+            redirectTo: 'https://www.familiasaobento.com'
         }
     })
 
