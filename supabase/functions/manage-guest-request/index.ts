@@ -52,7 +52,7 @@ serve(async (req) => {
                         'Authorization': `Bearer ${resendApiKey}`
                     },
                     body: JSON.stringify({
-                        from: 'Fazenda São Bento <onboarding@resend.dev>',
+                        from: 'Fazenda São Bento <portaria@familiasaobento.com>',
                         to: ['admin@fazendasaobento.com'], // In production, this should be configurable
                         subject: `🔔 Nova Solicitação de Reserva de Convidado: ${request.full_name}`,
                         html: `
@@ -314,7 +314,7 @@ serve(async (req) => {
                             </div>
                             
                             <h3 style="color:#1b4332; font-family: 'Merriweather', serif; margin-top: 40px; text-align: center;">Crie seu Acesso</h3>
-                            <p style="text-align: center; font-size: 14px;">Para acessar seus QR Codes de entrada e gerenciar sua estadia, defina uma senha de acesso:</p>
+                            <p style="text-align: center; font-size: 14px;">Para acessar o portal e gerenciar sua estadia, defina uma senha de acesso:</p>
                             
                             <div style="margin: 30px 0; text-align: center;">
                                 <a href="${inviteLink}" class="btn" style="color: #ffffff !important; display: inline-block;">DEFINIR SENHA E ACESSAR</a>
@@ -333,7 +333,7 @@ serve(async (req) => {
                 `;
 
                 const emailPayload = {
-                    from: 'Fazenda São Bento <onboarding@resend.dev>',
+                    from: 'Fazenda São Bento <portaria@familiasaobento.com>',
                     to: [request.email],
                     subject: `✅ Reserva Confirmada - Voucher Fazenda São Bento`,
                     html: emailHtml

@@ -101,7 +101,7 @@ const LoginPage = ({ onAuthChange }: { onAuthChange: () => void }) => {
               <p className="text-blue-800 text-sm leading-relaxed">
                 Sua reserva e cadastro foram enviados para a administração da Fazenda São Bento. <br/><br/>
                 <strong>O que acontece agora?</strong><br/> 
-                Assim que sua reserva for aprovada, você receberá um **voucher por e-mail** com o link para definir sua senha e acessar seus QR Codes de entrada.
+                Assim que sua reserva for aprovada, você receberá um **voucher por e-mail** com o link para definir sua senha e acessar o portal.
               </p>
             </div>
             <button 
@@ -596,7 +596,17 @@ const App: React.FC = () => {
       fullWidth={currentPage === Page.RESERVATIONS || currentPage === Page.ACTIVE_STAYS || currentPage === Page.ADMIN_USERS || currentPage === Page.MEMBERS || currentPage === Page.VISITORS || currentPage === Page.HARDWARE || currentPage === Page.TIME_TRACKING || currentPage === Page.EMPLOYEES || currentPage === Page.FINANCE}
     >
       {renderContent()}
-      {showPasswordSetup && <PasswordSetupModal onComplete={() => setShowPasswordSetup(false)} />}
+      {showPasswordSetup && (
+        <PasswordSetupModal 
+          onComplete={() => {
+            setShowPasswordSetup(false);
+            setCurrentPage(Page.PROFILE);
+            setTimeout(() => {
+              alert("Senha definida com sucesso! Por favor, preencha e complete as informações do seu cadastro (CPF, Telefone, etc.) para concluir o acesso.");
+            }, 100);
+          }} 
+        />
+      )}
     </Layout>
   );
 };
