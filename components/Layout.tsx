@@ -50,7 +50,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
   const peopleManagementItems = [
     { page: Page.ADMIN_USERS, label: 'Controle de Acesso', icon: IconUser },
     { page: Page.MEMBERS, label: 'Gestão de Sócios', icon: IconUser },
-    { page: Page.VISITORS, label: 'Cadastro de Convidados', icon: IconUser },
+    { page: Page.VISITORS, label: 'Gestão de Convidados', icon: IconUser },
     { page: Page.EMPLOYEES, label: 'Gestão de Funcionários', icon: IconUser },
     { page: Page.TIME_TRACKING, label: 'Controle de Ponto', icon: IconClock },
   ];
