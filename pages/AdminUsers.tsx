@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { IconUser, IconCalendar, IconTrash, IconPlus, IconX, IconLoader, IconMail, IconCheck, IconLock, IconEdit, IconDotsVertical, IconSearch } from '../components/Icons';
+import { IconUser, IconCalendar, IconTrash, IconPlus, IconX, IconLoader, IconMail, IconCheck, IconLock, IconEdit, IconDotsVertical, IconSearch, IconZap } from '../components/Icons';
 
 interface Profile {
     id: string;
@@ -39,6 +39,15 @@ export const AdminUsersPage: React.FC = () => {
     const [filter, setFilter] = useState<'all' | 'pending' | 'approved'>('pending');
     const [searchQuery, setSearchQuery] = useState('');
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+    // States for Linking User
+    const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+    const [linkingUser, setLinkingUser] = useState<Profile | null>(null);
+    const [linkSearchQuery, setLinkSearchQuery] = useState('');
+    const [selectedTargetMemberId, setSelectedTargetMemberId] = useState('');
+    const [linkLoading, setLinkLoading] = useState(false);
+    const [linkError, setLinkError] = useState('');
+    const [linkSuccess, setLinkSuccess] = useState('');
     
     // Admin Registration States
     const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -316,6 +325,50 @@ export const AdminUsersPage: React.FC = () => {
         }
     };
 
+    const handleOpenLinkModal = (profile: Profile) => {
+        setLinkingUser(profile);
+        setLinkSearchQuery('');
+        setSelectedTargetMemberId('');
+        setLinkError('');
+        setLinkSuccess('');
+        setIsLinkModalOpen(true);
+    };
+
+    const handleLinkUser = async () => {
+        if (!linkingUser || !selectedTargetMemberId) {
+            setLinkError('Por favor, selecione um sócio para vincular.');
+            return;
+        }
+
+        setLinkLoading(true);
+        setLinkError('');
+        setLinkSuccess('');
+
+        try {
+            const { error } = await supabase.rpc('link_profile_request', {
+                new_user_id: linkingUser.id,
+                old_member_id: selectedTargetMemberId
+            });
+
+            if (error) throw error;
+
+            setLinkSuccess('Usuário vinculado e aprovado com sucesso!');
+            fetchProfiles(); // Refresh list
+
+            setTimeout(() => {
+                setIsLinkModalOpen(false);
+                setLinkingUser(null);
+                setSelectedTargetMemberId('');
+                setLinkSuccess('');
+            }, 1500);
+        } catch (err: any) {
+            console.error('Error linking user:', err);
+            setLinkError(err.message || 'Erro ao vincular usuário.');
+        } finally {
+            setLinkLoading(false);
+        }
+    };
+
     const handleAdminRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         setRegisterLoading(true);
@@ -501,6 +554,14 @@ export const AdminUsersPage: React.FC = () => {
                                     >
                                         <IconEdit className="w-3 h-3" /> Editar
                                     </button>
+                                    {!profile.approved && (
+                                        <button
+                                            onClick={() => handleOpenLinkModal(profile)}
+                                            className="py-2 rounded-lg font-bold text-[10px] text-purple-600 bg-purple-50 flex items-center justify-center gap-1 col-span-2"
+                                        >
+                                            <IconZap className="w-3 h-3" /> Vincular a Sócio Existente
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => handleSendInvite(profile)}
                                         className="py-2 rounded-lg font-bold text-[10px] text-gray-600 bg-gray-100 flex items-center justify-center gap-1"
@@ -521,7 +582,7 @@ export const AdminUsersPage: React.FC = () => {
                     {/* Desktop View */}
                     <div className="bg-white rounded-[2rem] shadow-xl border border-gray-100 overflow-hidden hidden md:block">
                         <div className="w-full">
-                            <div className="overflow-x-auto custom-scrollbar">
+                             <div className={`overflow-x-auto custom-scrollbar transition-all ${openMenuId ? 'pb-64' : ''}`}>
                                 <table className="min-w-[1000px] w-full divide-y divide-gray-100">
                                     <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-500 text-[10px] uppercase font-black tracking-[0.2em]">
                                         <tr>
@@ -602,6 +663,14 @@ export const AdminUsersPage: React.FC = () => {
                                                                             >
                                                                                 <IconCheck className="w-4 h-4" /> {profile.approved ? 'Bloquear Acesso' : 'Liberar Acesso'}
                                                                             </button>
+                                                                            {!profile.approved && (
+                                                                                <button
+                                                                                    onClick={() => { handleOpenLinkModal(profile); setOpenMenuId(null); }}
+                                                                                    className="flex items-center gap-3 w-full px-4 py-3 text-sm text-purple-700 hover:bg-purple-50 font-bold transition-colors"
+                                                                                >
+                                                                                    <IconZap className="w-4 h-4 text-purple-500" /> Vincular a Sócio
+                                                                                </button>
+                                                                            )}
                                                                             <button
                                                                                 onClick={() => { handleOpenEditModal(profile); setOpenMenuId(null); }}
                                                                                 className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 font-medium transition-colors"
@@ -893,6 +962,106 @@ export const AdminUsersPage: React.FC = () => {
                             >
                                 {registerLoading ? <IconLoader className="w-6 h-6 animate-spin" /> : isEditModalOpen ? <IconEdit className="w-6 h-6" /> : <IconCheck className="w-6 h-6" />}
                                 {registerLoading ? 'Processando...' : isEditModalOpen ? 'Salvar Alterações' : 'Salvar Cadastro e Finalizar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Vinculação de Sócio */}
+            {isLinkModalOpen && linkingUser && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+                    <div className="bg-white rounded-[2rem] shadow-2xl max-w-xl w-full overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
+                        <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center shrink-0">
+                            <div>
+                                <h3 className="text-2xl font-bold text-gray-900 font-serif">Vincular a Sócio Existente</h3>
+                                <p className="text-gray-500 text-sm">Vincule o acesso de <strong>{linkingUser.full_name}</strong> a um sócio pré-cadastrado.</p>
+                            </div>
+                            <button onClick={() => { setIsLinkModalOpen(false); setLinkingUser(null); setSelectedTargetMemberId(''); }} className="p-2 hover:bg-white rounded-xl">
+                                <IconX className="w-6 h-6 text-gray-400" />
+                            </button>
+                        </div>
+
+                        <div className="p-8 space-y-6 overflow-y-auto flex-1">
+                            {linkError && <div className="bg-red-50 text-red-700 p-4 rounded-xl text-sm font-bold">{linkError}</div>}
+                            {linkSuccess && <div className="bg-green-50 text-green-700 p-4 rounded-xl text-sm font-bold">{linkSuccess}</div>}
+
+                            <div className="space-y-4">
+                                <label className="block text-sm font-bold text-gray-700">Buscar Sócio Existente</label>
+                                <div className="relative">
+                                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                        <IconSearch className="h-5 w-5 text-gray-400" />
+                                    </span>
+                                    <input 
+                                        type="text" 
+                                        value={linkSearchQuery} 
+                                        onChange={e => setLinkSearchQuery(e.target.value)} 
+                                        placeholder="Digite o nome ou CPF..." 
+                                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-farm-500 outline-none text-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <label className="block text-xs font-bold uppercase tracking-widest text-gray-400">Sócios Disponíveis</label>
+                                <div className="max-h-[250px] overflow-y-auto border border-gray-100 rounded-2xl divide-y divide-gray-50 custom-scrollbar bg-gray-50/50">
+                                    {profiles
+                                        .filter(p => 
+                                            p.id !== linkingUser.id && 
+                                            p.role !== 'visitor' && 
+                                            (linkSearchQuery.trim() === '' || 
+                                                p.full_name?.toLowerCase().includes(linkSearchQuery.toLowerCase()) || 
+                                                p.cpf?.includes(linkSearchQuery))
+                                        )
+                                        .map(member => (
+                                            <label 
+                                                key={member.id} 
+                                                className={`flex items-center gap-4 p-4 cursor-pointer transition-all hover:bg-white select-none ${selectedTargetMemberId === member.id ? 'bg-purple-50/50 border border-purple-200' : ''}`}
+                                            >
+                                                <input 
+                                                    type="radio" 
+                                                    name="selectedTargetMember" 
+                                                    value={member.id} 
+                                                    checked={selectedTargetMemberId === member.id}
+                                                    onChange={() => setSelectedTargetMemberId(member.id)}
+                                                    className="w-5 h-5 accent-purple-600"
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-bold text-gray-800 text-sm truncate">{member.full_name}</p>
+                                                    <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
+                                                        {member.cpf && <span className="font-mono text-gray-500">CPF: {member.cpf}</span>}
+                                                        <span>•</span>
+                                                        <span className="truncate">{member.email}</span>
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        ))
+                                    }
+                                    {profiles.filter(p => p.id !== linkingUser.id && p.role !== 'visitor' && (linkSearchQuery.trim() === '' || p.full_name?.toLowerCase().includes(linkSearchQuery.toLowerCase()) || p.cpf?.includes(linkSearchQuery))).length === 0 && (
+                                        <div className="p-8 text-center text-gray-400 text-sm italic">Nenhum sócio encontrado.</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {selectedTargetMemberId && (
+                                <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex gap-3 text-xs text-amber-800 leading-relaxed">
+                                    <div className="shrink-0 font-bold">⚠️ Atenção:</div>
+                                    <div>
+                                        Esta operação transferirá <strong>todos</strong> os registros do sócio selecionado (dados cadastrais, dependentes, histórico de reservas, licenças e boletos) para a nova conta de e-mail de <strong>{linkingUser.full_name}</strong>. O cadastro antigo será excluído. Esta ação não pode ser desfeita.
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="p-8 border-t border-gray-100 bg-gray-50 shrink-0">
+                            <button 
+                                type="button" 
+                                onClick={handleLinkUser} 
+                                disabled={linkLoading || !selectedTargetMemberId || !!linkSuccess} 
+                                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-2xl shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-lg"
+                            >
+                                {linkLoading ? <IconLoader className="w-6 h-6 animate-spin" /> : <IconZap className="w-6 h-6" />}
+                                {linkLoading ? 'Vinculando...' : 'Confirmar Vinculação'}
                             </button>
                         </div>
                     </div>

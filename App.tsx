@@ -548,7 +548,7 @@ const App: React.FC = () => {
 
       // FINANCEIRO (Grupo 3 e 4)
       case Page.FINANCE: // Painel Financeiro
-        return (isAdmin || isMember || isConsu || isSiteAdmin || isFinanceManager || isAccounting || isFinance) ? <FinancePage isAdmin={isAdmin || isFinanceManager} userRole={userRole || 'member'} onNavigate={setCurrentPage} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
+        return (isAdmin || isSiteAdmin || isFinanceManager || isAccounting || isFinance) ? <FinancePage isAdmin={isAdmin || isFinanceManager} userRole={userRole || 'member'} onNavigate={setCurrentPage} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.CASH_FLOW: // Transações
         return (isManagement || isAccounting) ? <CashFlowPage canApprove={canApproveTransactions} isViewOnly={isAccounting} /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.CONSUMPTION_REVIEW: // Conferência e aprovação

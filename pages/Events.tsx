@@ -29,6 +29,44 @@ export const EventsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin: isAdminPr
   const [fileUrl, setFileUrl] = useState('');
   const [uploadingFile, setUploadingFile] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
+
+  const clearForm = () => {
+    setNewTitle('');
+    setNewDescription('');
+    setStartDate('');
+    setEndDate('');
+    setFileUrl('');
+    setEditingEvent(null);
+    setShowAddForm(false);
+  };
+
+  const handleEditClick = (event: EventItem) => {
+    setEditingEvent(event);
+    setNewTitle(event.title);
+    setNewDescription(event.description);
+    setStartDate(event.start_date);
+    setEndDate(event.end_date || '');
+    setFileUrl(event.file_url || '');
+    setShowAddForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    if (!window.confirm('Tem certeza de que deseja excluir este evento?')) return;
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      fetchEvents();
+    } catch (err) {
+      console.error('Erro ao excluir evento:', err);
+      alert('Erro ao excluir evento.');
+    }
+  };
 
   useEffect(() => {
     fetchEvents();
@@ -95,28 +133,38 @@ export const EventsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin: isAdminPr
     e.preventDefault();
     setSubmitting(true);
     try {
-      const { error } = await supabase
-        .from('events')
-        .insert([{
-          title: newTitle,
-          description: newDescription,
-          start_date: startDate,
-          end_date: endDate || null,
-          file_url: fileUrl || null
-        }]);
+      if (editingEvent) {
+        const { error } = await supabase
+          .from('events')
+          .update({
+            title: newTitle,
+            description: newDescription,
+            start_date: startDate,
+            end_date: endDate || null,
+            file_url: fileUrl || null
+          })
+          .eq('id', editingEvent.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('events')
+          .insert([{
+            title: newTitle,
+            description: newDescription,
+            start_date: startDate,
+            end_date: endDate || null,
+            file_url: fileUrl || null
+          }]);
 
-      setNewTitle('');
-      setNewDescription('');
-      setStartDate('');
-      setEndDate('');
-      setFileUrl('');
-      setShowAddForm(false);
+        if (error) throw error;
+      }
+
+      clearForm();
       fetchEvents();
     } catch (err) {
-      console.error('Erro ao adicionar evento:', err);
-      alert('Erro ao adicionar evento.');
+      console.error('Erro ao salvar evento:', err);
+      alert('Erro ao salvar evento.');
     } finally {
       setSubmitting(false);
     }
@@ -141,7 +189,13 @@ export const EventsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin: isAdminPr
         <h2 className="text-2xl sm:text-3xl font-bold text-farm-900 font-serif">Agenda da Fazenda</h2>
         {isAdmin && (
           <button
-            onClick={() => setShowAddForm(!showAddForm)}
+            onClick={() => {
+              if (showAddForm) {
+                clearForm();
+              } else {
+                setShowAddForm(true);
+              }
+            }}
             className="bg-farm-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-farm-700 transition-colors shadow-sm"
           >
             {showAddForm ? 'Cancelar' : '+ Novo Evento'}
@@ -151,7 +205,9 @@ export const EventsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin: isAdminPr
 
       {showAddForm && (
         <div className="bg-white p-6 rounded-xl shadow-md border border-farm-100 mb-8 fade-in">
-          <h3 className="text-xl font-bold text-farm-800 mb-4">Adicionar Novo Evento</h3>
+          <h3 className="text-xl font-bold text-farm-800 mb-4">
+            {editingEvent ? 'Editar Evento' : 'Adicionar Novo Evento'}
+          </h3>
           <form onSubmit={handleAddEvent} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Título do Evento</label>
@@ -186,26 +242,39 @@ export const EventsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin: isAdminPr
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Anexar Detalhamento</label>
-                <div className="relative">
-                  <input
-                    type="file"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    id="event-file-upload"
-                    disabled={uploadingFile}
-                  />
-                  <label
-                    htmlFor="event-file-upload"
-                    className={`w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed rounded-lg cursor-pointer transition-all ${fileUrl ? 'bg-green-50 border-green-500 text-green-700' : 'bg-farm-50 border-farm-200 text-farm-700 hover:bg-farm-100'
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="file"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      id="event-file-upload"
+                      disabled={uploadingFile}
+                    />
+                    <label
+                      htmlFor="event-file-upload"
+                      className={`w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed rounded-lg cursor-pointer transition-all ${
+                        fileUrl ? 'bg-green-50 border-green-500 text-green-700' : 'bg-farm-50 border-farm-200 text-farm-700 hover:bg-farm-100'
                       }`}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                    <span className="text-sm font-bold truncate">
-                      {uploadingFile ? 'Enviando...' : fileUrl ? 'PDF/Arquivo Pronto' : 'Selecionar Arquivo'}
-                    </span>
-                  </label>
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      <span className="text-sm font-bold truncate">
+                        {uploadingFile ? 'Enviando...' : fileUrl ? 'PDF/Arquivo Pronto' : 'Selecionar Arquivo'}
+                      </span>
+                    </label>
+                  </div>
+                  {fileUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setFileUrl('')}
+                      className="px-3 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 font-bold text-xs"
+                      title="Remover anexo"
+                    >
+                      Remover
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -225,7 +294,7 @@ export const EventsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin: isAdminPr
               disabled={submitting || uploadingFile}
               className="w-full bg-farm-600 text-white font-bold py-2 rounded-lg hover:bg-farm-700 disabled:opacity-50 transition-all"
             >
-              {submitting ? 'Salvando...' : 'Salvar Evento'}
+              {submitting ? 'Salvando...' : editingEvent ? 'Salvar Alterações' : 'Salvar Evento'}
             </button>
           </form>
         </div>
@@ -244,8 +313,32 @@ export const EventsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin: isAdminPr
           {events.map(event => (
             <div key={event.id} className="bg-white rounded-xl shadow-sm border-l-4 border-farm-500 overflow-hidden hover:shadow-md transition-shadow">
               <div className="p-5">
-                <div className="text-sm font-bold text-farm-600 mb-1">
-                  {formatEventDate(event.start_date, event.end_date)}
+                <div className="flex justify-between items-start gap-2 mb-1">
+                  <div className="text-sm font-bold text-farm-600">
+                    {formatEventDate(event.start_date, event.end_date)}
+                  </div>
+                  {isAdmin && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleEditClick(event)}
+                        className="p-1 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Editar Evento"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteEvent(event.id)}
+                        className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Excluir Evento"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <h3 className="text-xl font-bold text-gray-800 mb-2">{event.title}</h3>
                 <p className="text-gray-600 text-sm leading-relaxed mb-4">{event.description}</p>
@@ -268,8 +361,6 @@ export const EventsPage: React.FC<{ isAdmin?: boolean }> = ({ isAdmin: isAdminPr
           ))}
         </div>
       )}
-
-
     </div>
   );
 };

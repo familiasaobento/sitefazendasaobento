@@ -63,7 +63,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
       { page: Page.PDV, label: 'PDV / Consumo', icon: IconShoppingCart },
     ];
   } else if (userRole === 'member' || userRole === 'consu') {
-    filteredNavItems = sosoItems;
+    filteredNavItems = sosoItems.filter(item => item.page !== Page.FINANCE);
   } else if (userRole === 'accounting') {
     filteredNavItems = [
       { page: Page.FINANCE, label: 'Painel Financeiro', icon: IconChart },

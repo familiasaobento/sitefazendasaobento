@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { IconInstagram, IconWhatsapp, IconMail, IconEdit, IconTrash, IconX } from '../components/Icons';
 import { AdminAlerts } from '../components/AdminAlerts';
-import { InstagramFeed } from '../components/InstagramFeed';
+
 
 import { Page } from '../types';
 
@@ -240,7 +240,19 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
                         <div className="bg-farm-50 p-3 rounded-lg text-farm-800 flex items-center gap-2 overflow-hidden">
                             {isVisitor ? <IconMail className="w-5 h-5 flex-shrink-0" /> : <IconInstagram className="w-5 h-5 flex-shrink-0" />}
                             <span className="break-all sm:break-normal">
-                                <strong>{isVisitor ? 'E-mail:' : 'Instagram:'}</strong> {isVisitor ? 'contato@familiasaobento.com' : '@fazendasb23'}
+                                <strong>{isVisitor ? 'E-mail:' : 'Instagram:'}</strong>{' '}
+                                {isVisitor ? (
+                                    'contato@familiasaobento.com'
+                                ) : (
+                                    <a
+                                        href="https://www.instagram.com/fazendasb23"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="hover:underline text-farm-700 font-semibold"
+                                    >
+                                        @fazendasb23
+                                    </a>
+                                )}
                             </span>
                         </div>
                         <div className="bg-farm-50 p-3 rounded-lg text-farm-800 flex items-center gap-2">
@@ -491,8 +503,6 @@ export const HomePage: React.FC<{ isManagement: boolean; canEditNews?: boolean; 
                 </div>
             )}
 
-            {/* Instagram Feed Section */}
-            <InstagramFeed isAdmin={canEditNews} />
         </div>
     );
 };

@@ -114,6 +114,87 @@ export const DocumentsPage: React.FC<{ isManagement?: boolean }> = ({ isManageme
     }
   };
 
+  const handleDeleteFolder = async (folderName: string, catName: string) => {
+    if (
+      !window.confirm(
+        `Tem certeza que deseja excluir a pasta "${folderName}" (da categoria "${catName}") e TODOS os seus documentos? Esta ação não pode ser desfeita.`
+      )
+    )
+      return;
+
+    try {
+      setLoading(true);
+      const docsToDelete = documents.filter(
+        (doc) => doc.category === catName && doc.folder?.trim() === folderName.trim()
+      );
+
+      if (docsToDelete.length > 0) {
+        // 1. Delete files from Storage
+        const filePaths = docsToDelete.map((doc) => doc.file_path);
+        const { error: storageError } = await supabase.storage
+          .from('documents')
+          .remove(filePaths);
+        if (storageError) console.error('Erro ao remover arquivos do storage:', storageError);
+
+        // 2. Delete rows from DB
+        const ids = docsToDelete.map((doc) => doc.id);
+        const { error: dbError } = await supabase
+          .from('documents')
+          .delete()
+          .in('id', ids);
+        if (dbError) throw dbError;
+      }
+
+      fetchDocuments();
+    } catch (err) {
+      console.error('Erro ao excluir pasta:', err);
+      alert('Erro ao excluir pasta.');
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteMeeting = async (folderName: string, meetingName: string, catName: string) => {
+    if (
+      !window.confirm(
+        `Tem certeza que deseja excluir a reunião/subpasta "${meetingName}" e TODOS os seus documentos? Esta ação não pode ser desfeita.`
+      )
+    )
+      return;
+
+    try {
+      setLoading(true);
+      const docsToDelete = documents.filter(
+        (doc) =>
+          doc.category === catName &&
+          doc.folder?.trim() === folderName.trim() &&
+          doc.meeting?.trim() === meetingName.trim()
+      );
+
+      if (docsToDelete.length > 0) {
+        // 1. Delete files from Storage
+        const filePaths = docsToDelete.map((doc) => doc.file_path);
+        const { error: storageError } = await supabase.storage
+          .from('documents')
+          .remove(filePaths);
+        if (storageError) console.error('Erro ao remover arquivos do storage:', storageError);
+
+        // 2. Delete rows from DB
+        const ids = docsToDelete.map((doc) => doc.id);
+        const { error: dbError } = await supabase
+          .from('documents')
+          .delete()
+          .in('id', ids);
+        if (dbError) throw dbError;
+      }
+
+      fetchDocuments();
+    } catch (err) {
+      console.error('Erro ao excluir subpasta:', err);
+      alert('Erro ao excluir subpasta.');
+      setLoading(false);
+    }
+  };
+
   const getDownloadUrl = (path: string) => {
     const { data } = supabase.storage
       .from('documents')
@@ -323,11 +404,11 @@ export const DocumentsPage: React.FC<{ isManagement?: boolean }> = ({ isManageme
                     return (
                       <div key={folderName} className="bg-white">
                         {/* Folder Row Header */}
-                        <button
-                          onClick={() => toggleFolder(folderKey)}
-                          className="w-full px-6 py-4 hover:bg-gray-50/80 transition-colors flex items-center justify-between font-medium text-gray-800 text-left border-b border-gray-100"
-                        >
-                          <div className="flex items-center space-x-3">
+                        <div className="w-full px-6 py-4 hover:bg-gray-50/80 transition-colors flex items-center justify-between font-medium text-gray-800 text-left border-b border-gray-100 group/folder">
+                          <button
+                            onClick={() => toggleFolder(folderKey)}
+                            className="flex items-center space-x-3 flex-1"
+                          >
                             <IconChevronRight
                               className={`w-5 h-5 text-gray-400 transform transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
                             />
@@ -340,8 +421,22 @@ export const DocumentsPage: React.FC<{ isManagement?: boolean }> = ({ isManageme
                                 ({folderDocs.length} {folderDocs.length === 1 ? 'documento' : 'documentos'})
                               </span>
                             </div>
-                          </div>
-                        </button>
+                          </button>
+                          {isManagement && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteFolder(folderName, cat);
+                              }}
+                              className="text-red-500 hover:text-red-700 p-2 opacity-0 group-hover/folder:opacity-100 transition-opacity"
+                              title="Excluir pasta e todos os seus documentos"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
 
                         {/* Folder Content */}
                         {isExpanded && (
@@ -355,11 +450,11 @@ export const DocumentsPage: React.FC<{ isManagement?: boolean }> = ({ isManageme
                               return (
                                 <div key={meetingName} className="bg-white/50 border-b border-gray-100/50 last:border-b-0">
                                   {/* Meeting Row Header */}
-                                  <button
-                                    onClick={() => toggleFolder(meetingKey)}
-                                    className="w-full pr-6 py-3 hover:bg-gray-50/80 transition-colors flex items-center justify-between font-medium text-gray-700 text-left"
-                                  >
-                                    <div className="flex items-center space-x-2.5">
+                                  <div className="w-full pr-6 py-3 hover:bg-gray-50/80 transition-colors flex items-center justify-between font-medium text-gray-700 text-left group/meeting">
+                                    <button
+                                      onClick={() => toggleFolder(meetingKey)}
+                                      className="flex items-center space-x-2.5 flex-1"
+                                    >
                                       <IconChevronRight
                                         className={`w-4 h-4 text-gray-400 transform transition-transform duration-200 ${isMeetingExpanded ? 'rotate-90' : ''}`}
                                       />
@@ -372,8 +467,22 @@ export const DocumentsPage: React.FC<{ isManagement?: boolean }> = ({ isManageme
                                           ({meetingDocs.length} {meetingDocs.length === 1 ? 'documento' : 'documentos'})
                                         </span>
                                       </div>
-                                    </div>
-                                  </button>
+                                    </button>
+                                    {isManagement && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteMeeting(folderName, meetingName, cat);
+                                        }}
+                                        className="text-red-500 hover:text-red-700 p-2 opacity-0 group-hover/meeting:opacity-100 transition-opacity"
+                                        title="Excluir reunião e todos os seus documentos"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                      </button>
+                                    )}
+                                  </div>
 
                                   {/* Meeting Files */}
                                   {isMeetingExpanded && (
