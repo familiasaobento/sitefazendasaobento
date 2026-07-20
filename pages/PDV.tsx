@@ -4,7 +4,6 @@ import { IconCamera, IconLoader, IconCheck, IconShoppingCart, IconUser, IconZap 
 
 interface Stay {
     id: number;
-    codigo_pulseira: string;
     status: string;
     reservations: {
         num_guests: number;
@@ -200,7 +199,6 @@ export const PDVPage: React.FC = () => {
                 .select(`
                     id,
                     reserva_id,
-                    codigo_pulseira,
                     status,
                     hospede_nome,
                     hospede_idade,

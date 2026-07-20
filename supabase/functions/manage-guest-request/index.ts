@@ -29,8 +29,181 @@ serve(async (req) => {
         }
     }
 
+    if (req.method === 'GET') {
+        const url = new URL(req.url)
+        const action = url.searchParams.get('action') // 'confirm' or 'reject'
+        const requestId = url.searchParams.get('requestId')
+        
+        if (!requestId || !action) {
+            return new Response('Parâmetros inválidos.', { status: 400 })
+        }
+        
+        try {
+            const { data: request, error: fetchError } = await supabaseAdmin
+                .from('guest_reservations')
+                .select('*')
+                .eq('id', requestId)
+                .single();
+                
+            if (fetchError || !request) {
+                return new Response('Solicitação de reserva não encontrada.', { status: 404 })
+            }
+            
+            const newStatus = action === 'confirm' ? 'confirmed' : 'rejected';
+            
+            const { error: updateError } = await supabaseAdmin
+                .from('guest_reservations')
+                .update({
+                    host_confirmation_status: newStatus,
+                    host_confirmed_at: new Date().toISOString()
+                })
+                .eq('id', requestId);
+                
+            if (updateError) throw updateError;
+            
+            await logToDB(`Confirmação do sócio via link: ${newStatus}`, { requestId, host_member_name: request.host_member_name });
+            
+            const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <title>Confirmação de Responsabilidade - Fazenda São Bento</title>
+                <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+                <style>
+                    body {
+                        font-family: 'Inter', sans-serif;
+                        background-color: #f4f6f2;
+                        color: #374151;
+                        margin: 0;
+                        padding: 0;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        min-height: 100vh;
+                        box-sizing: border-box;
+                    }
+                    .card {
+                        background-color: #ffffff;
+                        padding: 40px;
+                        border-radius: 24px;
+                        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+                        max-width: 500px;
+                        width: 100%;
+                        text-align: center;
+                        border: 1px solid #e2e8f0;
+                    }
+                    .logo-header {
+                        color: #556C3B;
+                        font-family: 'Merriweather', serif;
+                        font-weight: 700;
+                        font-size: 24px;
+                        margin-bottom: 20px;
+                        letter-spacing: 1px;
+                        text-transform: uppercase;
+                    }
+                    .icon {
+                        width: 72px;
+                        height: 72px;
+                        border-radius: 50%;
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin-bottom: 24px;
+                        margin-left: auto;
+                        margin-right: auto;
+                    }
+                    .icon-success {
+                        background-color: #ecfdf5;
+                        color: #059669;
+                    }
+                    .icon-danger {
+                        background-color: #fef2f2;
+                        color: #dc2626;
+                    }
+                    h1 {
+                        font-family: 'Merriweather', serif;
+                        font-size: 22px;
+                        color: #1b4332;
+                        margin: 0 0 16px 0;
+                    }
+                    p {
+                        font-size: 15px;
+                        line-height: 1.6;
+                        color: #4b5563;
+                        margin-bottom: 24px;
+                    }
+                    .details {
+                        background-color: #f9fafb;
+                        border: 1px solid #f3f4f6;
+                        border-radius: 16px;
+                        padding: 20px;
+                        margin-bottom: 30px;
+                        text-align: left;
+                    }
+                    .details-row {
+                        margin-bottom: 8px;
+                        font-size: 14px;
+                    }
+                    .details-row:last-child {
+                        margin-bottom: 0;
+                    }
+                    .details-label {
+                        font-weight: 600;
+                        color: #1f2937;
+                    }
+                    .footer-text {
+                        font-size: 12px;
+                        color: #9ca3af;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <div class="logo-header">Fazenda São Bento</div>
+                    
+                    <div class="icon ${action === 'confirm' ? 'icon-success' : 'icon-danger'}">
+                        ${action === 'confirm' ? `
+                            <svg style="width: 36px; height: 36px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                        ` : `
+                            <svg style="width: 36px; height: 36px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        `}
+                    </div>
+                    
+                    <h1>${action === 'confirm' ? 'Responsabilidade Confirmada!' : 'Responsabilidade Recusada'}</h1>
+                    
+                    <p>
+                        ${action === 'confirm' 
+                            ? 'Obrigado! Você confirmou que é o sócio responsável por esta visita. A administração da fazenda já foi notificada.' 
+                            : 'Você recusou a responsabilidade por esta visita. A administração foi notificada para tomar as devidas providências.'}
+                    </p>
+                    
+                    <div class="details">
+                        <div class="details-row"><span class="details-label">Convidado:</span> ${request.full_name}</div>
+                        <div class="details-row"><span class="details-label">Período:</span> ${request.check_in.split('-').reverse().join('/')} a ${request.check_out.split('-').reverse().join('/')}</div>
+                        <div class="details-row"><span class="details-label">Acomodação pretendida:</span> ${request.preferred_accommodation || 'A definir'}</div>
+                    </div>
+                    
+                    <div class="footer-text">Este é um registro oficial do Portal Família São Bento.</div>
+                </div>
+            </body>
+            </html>
+            `
+            
+            return new Response(html, {
+                headers: {
+                    'Content-Type': 'text/html; charset=utf-8'
+                }
+            })
+            
+        } catch (err) {
+            return new Response('Erro ao processar confirmação: ' + err.message, { status: 500 })
+        }
+    }
+
     try {
-        const { action, requestId, rejectionReason, accommodation } = await req.json()
+        const { action, requestId, rejectionReason, accommodation, hostMemberId } = await req.json()
         await logToDB(`Início da ação: ${action}`, { requestId });
 
         if (action === 'notify-admin') {
@@ -362,6 +535,114 @@ serve(async (req) => {
             }
 
             return new Response(JSON.stringify({ ok: true, message: "Aprovado com sucesso" }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
+
+        if (action === 'send-host-verification') {
+            const { data: request } = await supabaseAdmin
+                .from('guest_reservations')
+                .select('*')
+                .eq('id', requestId)
+                .single()
+
+            if (!request) throw new Error('Request not found')
+
+            const { data: hostProfile } = await supabaseAdmin
+                .from('profiles')
+                .select('id, email, full_name')
+                .eq('id', hostMemberId)
+                .single()
+
+            if (!hostProfile) throw new Error('Host profile not found')
+
+            await supabaseAdmin
+                .from('guest_reservations')
+                .update({
+                    host_member_id: hostProfile.id,
+                    host_confirmation_status: 'requested'
+                })
+                .eq('id', requestId)
+
+            const resendApiKey = Deno.env.get('RESEND_API_KEY');
+            if (resendApiKey) {
+                const functionUrl = 'https://nxnxqwmqeujaiuqajmhc.supabase.co/functions/v1/manage-guest-request';
+                const confirmLink = `${functionUrl}?action=confirm&requestId=${requestId}`;
+                const rejectLink = `${functionUrl}?action=reject&requestId=${requestId}`;
+                
+                const emailHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+                    <style>
+                        body { margin: 0; padding: 0; background-color: #f4f6f2; font-family: 'Inter', sans-serif; color: #374151; }
+                        .container { width: 100%; max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #e0e4da; }
+                        .header { background-color: #556C3B; padding: 30px 20px; text-align: center; color: #ffffff; }
+                        .content { padding: 40px; }
+                        .title { font-family: 'Merriweather', serif; color: #1b4332; font-size: 22px; margin-bottom: 20px; text-align: center; }
+                        .details-box { background-color: #f9fafb; border: 1px solid #f0f2ed; border-radius: 16px; padding: 24px; margin: 24px 0; }
+                        .details-title { font-weight: 700; color: #556C3B; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+                        .btn-group { display: flex; gap: 16px; margin: 30px 0; }
+                        .btn { flex: 1; padding: 16px 20px; border-radius: 12px; text-align: center; font-weight: 700; font-size: 14px; text-decoration: none; display: inline-block; }
+                        .btn-confirm { background-color: #556C3B; color: #ffffff !important; box-shadow: 0 4px 12px rgba(85,108,59,0.2); }
+                        .btn-reject { background-color: #f3f4f6; color: #4b5563 !important; border: 1px solid #e5e7eb; }
+                        .footer { text-align: center; padding-bottom: 30px; color: #9ca3af; font-size: 12px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h2 style="margin:0; font-family: 'Merriweather', serif; letter-spacing: 2px; font-size: 18px;">PORTAL FAZENDA SÃO BENTO</h2>
+                        </div>
+                        <div class="content">
+                            <h1 class="title">Confirmação de Convidado</h1>
+                            <p>Olá, <strong>${hostProfile.full_name}</strong>,</p>
+                            <p>O convidado abaixo solicitou uma reserva na Fazenda São Bento e indicou você como o <strong>sócio anfitrião responsável</strong> pela estadia dele.</p>
+                            
+                            <div class="details-box">
+                                <div class="details-title">Dados da Solicitação</div>
+                                <p style="margin: 4px 0;"><strong>Convidado:</strong> ${request.full_name}</p>
+                                <p style="margin: 4px 0;"><strong>Período:</strong> ${request.check_in.split('-').reverse().join('/')} até ${request.check_out.split('-').reverse().join('/')}</p>
+                                <p style="margin: 4px 0;"><strong>Hóspedes:</strong> ${request.num_guests}</p>
+                                <p style="margin: 4px 0;"><strong>Acomodação pretendida:</strong> ${request.preferred_accommodation || 'A definir'}</p>
+                            </div>
+                            
+                            <p><strong>IMPORTANTE:</strong> Ao confirmar, você assume a responsabilidade pela conduta do convidado e de seus acompanhantes durante a permanência na fazenda.</p>
+                            
+                            <div class="btn-group">
+                                <a href="${confirmLink}" class="btn btn-confirm">CONFIRMAR RESPONSABILIDADE</a>
+                                <a href="${rejectLink}" class="btn btn-reject">NÃO CONHEÇO / RECUSAR</a>
+                            </div>
+                            
+                            <p style="font-size: 12px; color: #9ca3af; text-align: center; font-style: italic;">
+                                Se você não solicitou este convite ou não reconhece o visitante, por favor, clique em Recusar.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        &copy; 2026 Fazenda São Bento • Portal da Família
+                    </div>
+                </body>
+                </html>
+                `;
+
+                await fetch('https://api.resend.com/emails', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${resendApiKey}`
+                    },
+                    body: JSON.stringify({
+                        from: 'Fazenda São Bento <portaria@familiasaobento.com>',
+                        to: [hostProfile.email],
+                        subject: `❓ Confirmação de Convidado: ${request.full_name}`,
+                        html: emailHtml
+                    })
+                });
+                
+                await logToDB("E-mail de confirmação enviado ao sócio", { hostEmail: hostProfile.email, requestId });
+            }
+            
+            return new Response(JSON.stringify({ ok: true, message: "Solicitação enviada ao sócio" }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
         }
 
         return new Response('Action not found', { status: 404, headers: corsHeaders })

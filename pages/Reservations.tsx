@@ -282,6 +282,10 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
   const [viewingResDetails, setViewingResDetails] = useState<any | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showHostModal, setShowHostModal] = useState(false);
+  const [selectedRequestForHost, setSelectedRequestForHost] = useState<any>(null);
+  const [selectedHostId, setSelectedHostId] = useState<string>('');
+  const [allMembers, setAllMembers] = useState<any[]>([]);
   const [userDependents, setUserDependents] = useState<any[]>([]);
   const [accommodationPreference, setAccommodationPreference] = useState<'house' | 'guest'>('guest');
 
@@ -325,6 +329,7 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
         setIsAdmin(true);
         fetchAllReservations();
         fetchGuestRequests();
+        fetchMembers();
       } else {
         fetchReservations();
         setName(profile?.full_name || '');
@@ -377,6 +382,62 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
   const handleViewDetails = (res: any) => {
     setViewingResDetails(res);
     setShowDetailsModal(true);
+  };
+
+  const fetchMembers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .or('role.eq.member,role.eq.consu,role.eq.admin,role.eq.site_admin,role.eq.finance_manager,role.eq.finance')
+        .order('full_name');
+      if (!error && data) {
+        setAllMembers(data);
+      }
+    } catch (err) {
+      console.error('Error fetching members:', err);
+    }
+  };
+
+  const handleOpenHostModal = (res: any) => {
+    setSelectedRequestForHost(res);
+    setSelectedHostId('');
+    
+    if (res.host_member_name && allMembers.length > 0) {
+      const match = allMembers.find(m => 
+        m.full_name?.toLowerCase().includes(res.host_member_name.toLowerCase()) ||
+        res.host_member_name.toLowerCase().includes(m.full_name?.toLowerCase())
+      );
+      if (match) {
+        setSelectedHostId(match.id);
+      }
+    }
+    setShowHostModal(true);
+  };
+
+  const handleSendHostVerification = async () => {
+    if (!selectedRequestForHost || !selectedHostId) return;
+    
+    setProcessingRequestId(selectedRequestForHost.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-guest-request', {
+        body: { 
+          action: 'send-host-verification', 
+          requestId: selectedRequestForHost.id, 
+          hostMemberId: selectedHostId 
+        }
+      });
+
+      if (error) throw error;
+      
+      alert('Solicitação de confirmação enviada com sucesso ao e-mail do sócio!');
+      setShowHostModal(false);
+      await fetchGuestRequests();
+    } catch (err: any) {
+      alert('Erro ao enviar solicitação: ' + err.message);
+    } finally {
+      setProcessingRequestId(null);
+    }
   };
 
   const fetchGuestRequests = async () => {
@@ -601,7 +662,6 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
         return {
           reserva_id: selectedResForCheckin.id,
           status: 'ativa',
-          codigo_pulseira: `FB-${selectedResForCheckin.id}-${idx + 1}-${Math.floor(Math.random()*1000)}`,
           checkin_at: new Date().toISOString(),
           hospede_nome: guest.name || (idx === 0 ? selectedResForCheckin.name : `Hóspede ${idx + 1}`),
           hospede_idade: guest.age ? parseInt(guest.age) : null,
@@ -1020,187 +1080,213 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
               <div className="bg-transparent shadow-none border-none md:bg-white md:rounded-3xl md:shadow-xl md:border md:border-gray-100 md:overflow-hidden space-y-4 md:space-y-0">
                 <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200 hidden md:block">
                   <table className="w-full text-left text-sm min-w-[1200px]">
-                    <thead className="bg-gray-50/50 backdrop-blur-md border-b border-gray-100 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
+                    <thead className="bg-gray-50 border-b border-gray-100 text-gray-400 text-[10px] uppercase font-semibold tracking-[0.15em]">
                       <tr>
-                        <th className="px-10 py-6 w-80">Sócio / Hóspede</th>
-                        <th className="px-8 py-6 w-80">Acomodação</th>
-                        <th className="px-8 py-6 w-64">Período</th>
-                        <th className="px-8 py-6 w-40">Status</th>
-                        <th className="px-10 py-6 no-print text-right w-80">Ações Administrativas</th>
+                        <th className="px-10 py-5 w-80">Sócio / Hóspede</th>
+                        <th className="px-8 py-5 w-80">Acomodação</th>
+                        <th className="px-8 py-5 w-64">Período</th>
+                        <th className="px-8 py-5 w-40">Status</th>
+                        <th className="px-10 py-5 no-print text-right w-80">Ações</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-gray-100">
                       {combinedListReservations.map((res) => {
                         const isGuestRequest = (res as any).isGuestRequest;
                         return (
-                        <tr key={res.id} className={`group hover:bg-farm-50/30 transition-all duration-300 border-b border-gray-50/80 ${isGuestRequest ? 'bg-amber-50/10' : ''}`}>
-                          <td className="px-10 py-8">
-                            <div className="flex items-center gap-6">
-                              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-lg ring-4 ring-white shadow-lg shadow-gray-200/50 transition-transform group-hover:scale-105 duration-300 ${isGuestRequest ? 'bg-gradient-to-br from-amber-100 to-amber-200 text-amber-700' : 'bg-gradient-to-br from-gray-50 to-gray-100 text-gray-400'}`}>
-                                {isGuestRequest ? <IconMail className="w-7 h-7" /> : (res.name?.[0] || res.full_name?.[0] || res.profiles?.full_name?.[0] || 'U')}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-3 mb-1">
-                                  <p className="font-extrabold text-gray-900 text-lg tracking-tight truncate max-w-[180px]">
-                                    {res.name || res.full_name || res.profiles?.full_name || 'Usuário'}
-                                  </p>
-                                  <button 
-                                    onClick={() => handleViewDetails(res)} 
-                                    className="w-8 h-8 rounded-xl flex items-center justify-center bg-white text-farm-600 hover:bg-farm-600 hover:text-white hover:scale-110 active:scale-95 transition-all shadow-md shadow-farm-100 border border-farm-100 group/info"
-                                    title="Ver detalhes completos"
-                                  >
-                                    <IconInfoCircle className="w-4 h-4 transition-transform duration-500" />
-                                  </button>
-                                </div>
-                                <div className="flex flex-wrap gap-2 items-center">
-                                  {(() => {
-                                      const cpfValue = res.cpf || (res as any).profiles?.cpf;
-                                      return (
-                                        <span className="text-[10px] font-mono font-black text-gray-400 bg-gray-50/80 px-2 py-0.5 rounded-md border border-gray-100/50 shadow-sm whitespace-nowrap" title={cpfValue}>
-                                          {cpfValue && cpfValue.replace(/\D/g, '').length === 11 
-                                              ? cpfValue.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
-                                              : (cpfValue || 'Sem CPF')}
-                                        </span>
-                                      );
-                                  })()}
-                                  {isGuestRequest && <span className="text-amber-600 font-extrabold uppercase text-[8px] tracking-[0.1em] bg-amber-50/50 px-2 py-0.5 rounded-md border border-amber-100/50">Convidado</span>}
-                                  {!isGuestRequest && <span className="text-farm-600 font-extrabold uppercase text-[8px] tracking-[0.1em] bg-farm-50/50 px-2 py-0.5 rounded-md border border-farm-100/50">Sócio</span>}
-                                  {res.status === 'em_curso' && res.estadias?.[0]?.status === 'finalizada' && (
-                                    <span className="text-red-600 font-black uppercase text-[8px] tracking-[0.1em] bg-red-50 px-2 py-0.5 rounded-md border border-red-100 animate-pulse">Saldo Devedor</span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-8 py-8">
-                            {res.status === 'pending' || isGuestRequest ? (
-                              <div className={`p-4 rounded-2xl border-2 transition-all duration-300 shadow-lg ${isGuestRequest ? 'bg-white border-amber-200/50 shadow-amber-100/20' : 'bg-white border-gray-100 shadow-gray-100/20'}`}>
-                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 px-1">
-                                  {isGuestRequest ? `Pretende: ${(res as any).preferred_accommodation || 'S/ Pref'}` : 'Designação Necessária'}
-                                </p>
-                                <select 
-                                  value={selectedRoomsForApproval[res.id] || ''} 
-                                  onChange={(e) => setSelectedRoomsForApproval(prev => ({ ...prev, [res.id]: e.target.value }))}
-                                  className="w-full text-xs p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-farm-500/10 focus:bg-white focus:border-farm-500 transition-all font-bold text-gray-700"
-                                >
-                                  <option value="">Atribuir Local...</option>
+                          <tr key={res.id} className="group hover:bg-gray-50/50 transition-colors border-b border-gray-100/80">
+                           <td className="px-10 py-6">
+                             <div className="flex items-center gap-4">
+                               <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm bg-gray-100 text-gray-500 shrink-0">
+                                 {isGuestRequest ? <IconMail className="w-5 h-5 text-gray-400" /> : (res.name?.[0] || res.full_name?.[0] || res.profiles?.full_name?.[0] || 'U')}
+                               </div>
+                               <div className="min-w-0">
+                                 <div className="flex items-center gap-2 mb-0.5">
+                                   <p className="font-semibold text-gray-800 text-base tracking-tight truncate max-w-[200px]">
+                                     {res.name || res.full_name || res.profiles?.full_name || 'Usuário'}
+                                   </p>
+                                   <button 
+                                     onClick={() => handleViewDetails(res)} 
+                                     className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-farm-600 hover:bg-gray-100 transition-colors"
+                                     title="Ver detalhes completos"
+                                   >
+                                     <IconInfoCircle className="w-4 h-4" />
+                                   </button>
+                                 </div>
+                                 {isGuestRequest && (res as any).host_member_name && (
+                                   <div className="text-xs text-gray-500 mb-1 flex items-center gap-1.5 flex-wrap">
+                                     <span>Anfitrião: <strong className="text-gray-700 font-bold">{(res as any).host_member_name}</strong></span>
+                                     {(() => {
+                                       const status = (res as any).host_confirmation_status;
+                                       if (status === 'confirmed') return <span className="text-green-600 font-medium bg-green-50 px-1.5 py-0.5 rounded text-[10px] border border-green-100">✓ Confirmou</span>;
+                                       if (status === 'rejected') return <span className="text-red-600 font-medium bg-red-50 px-1.5 py-0.5 rounded text-[10px] border border-red-100">✗ Recusou</span>;
+                                       if (status === 'requested') return <span className="text-amber-600 font-medium bg-amber-50 px-1.5 py-0.5 rounded text-[10px] border border-amber-100 animate-pulse">⏳ Aguardando Sócio</span>;
+                                       return <span className="text-gray-500 font-medium bg-gray-100 px-1.5 py-0.5 rounded text-[10px] border border-gray-200">🔍 Não Solicitado</span>;
+                                     })()}
+                                   </div>
+                                 )}
+                                 <div className="flex flex-wrap gap-2 items-center">
+                                   {(() => {
+                                       const cpfValue = res.cpf || (res as any).profiles?.cpf;
+                                       return (
+                                         <span className="text-[10px] font-mono text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100/50 whitespace-nowrap" title={cpfValue}>
+                                           {cpfValue && cpfValue.replace(/\D/g, '').length === 11 
+                                               ? cpfValue.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
+                                               : (cpfValue || 'Sem CPF')}
+                                         </span>
+                                       );
+                                   })()}
+                                   {isGuestRequest && <span className="text-amber-700 font-semibold text-[9px] uppercase tracking-wider bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100/50">Convidado</span>}
+                                   {!isGuestRequest && <span className="text-gray-600 font-semibold text-[9px] uppercase tracking-wider bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200/50">Sócio</span>}
+                                   {res.status === 'em_curso' && res.estadias?.[0]?.status === 'finalizada' && (
+                                     <span className="text-red-600 font-semibold text-[9px] uppercase tracking-wider bg-red-50 px-1.5 py-0.5 rounded border border-red-100/50 animate-pulse">Saldo Devedor</span>
+                                   )}
+                                 </div>
+                               </div>
+                             </div>
+                           </td>
+                           <td className="px-8 py-6">
+                             {res.status === 'pending' || isGuestRequest ? (
+                               <div className="flex flex-col gap-1 w-full max-w-[200px]">
+                                 {isGuestRequest && (res as any).preferred_accommodation && (
+                                   <span className="text-[10px] text-gray-400 font-medium">Pretende: {(res as any).preferred_accommodation}</span>
+                                 )}
+                                 <select 
+                                   value={selectedRoomsForApproval[res.id] || ''} 
+                                   onChange={(e) => setSelectedRoomsForApproval(prev => ({ ...prev, [res.id]: e.target.value }))}
+                                   className="w-full text-xs py-2 px-3 bg-white border border-gray-200 rounded-lg outline-none focus:border-farm-600 font-medium text-gray-700 transition-colors"
+                                 >
+                                  <option value="">Atribuir local...</option>
                                   {accommodationGroups.map(group => (
-                                    <optgroup key={group.name} label={group.name} className="font-black text-black">
-                                      {group.units.map(unit => <option key={unit} value={unit} className="font-medium text-gray-600">{unit}</option>)}
+                                    <optgroup key={group.name} label={group.name} className="font-semibold text-gray-800">
+                                      {group.units.map(unit => <option key={unit} value={unit} className="text-gray-600">{unit}</option>)}
                                       {group.name === 'Casas de Sócios' && group.units.length === 0 && <option value="Casa de Sócio">Casa de Sócio</option>}
                                     </optgroup>
                                   ))}
                                 </select>
                               </div>
                             ) : (
-                              <div className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black bg-gradient-to-r from-gray-50 to-white text-gray-700 border-2 border-gray-100/50 shadow-sm">
-                                <IconHome className="w-4 h-4 text-farm-500" />
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-50 text-gray-700 border border-gray-100">
+                                <IconHome className="w-3.5 h-3.5 text-gray-400" />
                                 {res.accommodation}
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-6">
-                            <div className="flex flex-col gap-1.5 min-w-[130px]">
-                              <div className="flex items-center gap-2 text-sm text-gray-800">
-                                <IconCalendar className="w-3.5 h-3.5 text-farm-500" />
-                                <span className="font-black">{formatDate(res.check_in)}</span>
+                          <td className="px-8 py-6">
+                            <div className="flex flex-col gap-1 min-w-[130px]">
+                              <div className="flex items-center gap-1.5 text-sm text-gray-700 font-semibold">
+                                <IconCalendar className="w-4 h-4 text-gray-400" />
+                                <span>{formatDate(res.check_in)}</span>
                               </div>
-                              <div className="flex items-center gap-2 text-[11px] text-gray-400">
-                                <span className="ml-5.5 italic">até {formatDate(res.check_out)}</span>
+                              <div className="text-xs text-gray-400 ml-5.5">
+                                até {formatDate(res.check_out)}
                               </div>
                               {res.arrival_time && (
-                                <div className="mt-1.5 inline-flex items-center gap-1.5 bg-blue-50 text-blue-600 px-2.5 py-1 rounded-lg text-[10px] font-black w-fit border border-blue-100 uppercase">
+                                <div className="mt-1 inline-flex items-center gap-1 bg-blue-50/50 text-blue-600 px-2 py-0.5 rounded text-[10px] font-medium border border-blue-100/50 w-fit">
                                   <IconClock className="w-3 h-3" /> {res.arrival_time}h
                                 </div>
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-6">
-                            <span className={`inline-block whitespace-nowrap px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter border-2 ${
-                              res.estadias?.[0]?.status === 'ativa' ? 'bg-blue-50 text-blue-700 border-blue-200 ring-2 ring-blue-50' :
-                              res.estadias?.[0]?.status === 'finalizada' ? 'bg-gray-100 text-gray-700 border-gray-200' :
-                              res.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' :
-                              res.status === 'rejected' || res.status === 'canceled' ? 'bg-red-50 text-red-700 border-red-200' :
-                              isGuestRequest ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                            }`}>
-                              {res.estadias?.[0]?.status === 'ativa' ? 'Hóspede Local' :
-                               res.estadias?.[0]?.status === 'finalizada' ? 'Encerrada' :
-                               res.status === 'confirmed' ? 'Confirmada' : 
-                               res.status === 'rejected' ? 'RECUSADA' :
-                               'AGUARDANDO'}
-                            </span>
+                          <td className="px-8 py-6">
+                             <span className={`inline-block whitespace-nowrap px-2.5 py-1 rounded-md text-[11px] font-semibold border ${
+                               res.estadias?.[0]?.status === 'ativa' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                               res.estadias?.[0]?.status === 'finalizada' ? 'bg-gray-50 text-gray-500 border-gray-200' :
+                               res.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-100' :
+                               res.status === 'rejected' || res.status === 'canceled' ? 'bg-red-50 text-red-700 border-red-100' :
+                               isGuestRequest ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                             }`}>
+                               {res.estadias?.[0]?.status === 'ativa' ? 'Hóspede Local' :
+                                res.estadias?.[0]?.status === 'finalizada' ? 'Encerrada' :
+                                res.status === 'confirmed' ? 'Confirmada' : 
+                                res.status === 'rejected' ? 'RECUSADA' :
+                                'AGUARDANDO'}
+                             </span>
                           </td>
-                          <td className="px-10 py-8 no-print text-right">
-                             <div className="flex items-center justify-end gap-3">
+                          <td className="px-10 py-6 no-print text-right">
+                             <div className="flex items-center justify-end gap-2">
                                {isGuestRequest ? (
-                                   <div className="flex items-center gap-3">
-                                     <button 
-                                       onClick={() => handleActionGuestRequest(res.id, 'approve', res)}
-                                       disabled={processingRequestId === res.id}
-                                       className="bg-green-600 text-white px-8 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] hover:bg-green-700 hover:-translate-y-0.5 active:translate-y-0 shadow-xl shadow-green-100 transition-all flex items-center gap-2 disabled:opacity-50"
-                                     >
-                                       {processingRequestId === res.id ? <IconLoader className="w-3.5 h-3.5 animate-spin" /> : <IconCheck className="w-4 h-4" />} Aprovar
-                                     </button>
-                                     <button 
-                                       onClick={() => handleActionGuestRequest(res.id, 'reject', res)}
-                                       disabled={processingRequestId === res.id}
-                                       className="bg-white text-red-500 px-6 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] hover:bg-red-50 hover:text-red-700 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-2 border-2 border-red-100 shadow-lg shadow-red-50/50"
-                                     >
-                                       <IconX className="w-4 h-4" /> Recusar
-                                     </button>
+                                    <div className="flex items-center gap-2">
+                                      {((res as any).host_confirmation_status === 'pending' || !(res as any).host_confirmation_status) && (
+                                        <button 
+                                          onClick={() => handleOpenHostModal(res)}
+                                          disabled={processingRequestId === res.id}
+                                          className="bg-amber-50 text-amber-800 hover:bg-amber-100 px-3 py-2 rounded-xl text-xs font-semibold border border-amber-200 transition-all flex items-center gap-1 disabled:opacity-50"
+                                          title="Solicitar validação de responsabilidade ao sócio"
+                                        >
+                                          {processingRequestId === res.id ? <IconLoader className="w-3.5 h-3.5 animate-spin" /> : <IconMail className="w-4 h-4" />} Validar Sócio
+                                        </button>
+                                      )}
+                                      <button 
+                                        onClick={() => handleActionGuestRequest(res.id, 'approve', res)}
+                                        disabled={processingRequestId === res.id}
+                                        className="bg-farm-600 hover:bg-farm-700 text-white px-4 py-2 rounded-xl text-xs font-semibold hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                                      >
+                                        {processingRequestId === res.id ? <IconLoader className="w-3.5 h-3.5 animate-spin" /> : <IconCheck className="w-4 h-4" />} Aprovar
+                                      </button>
+                                      <button 
+                                        onClick={() => handleActionGuestRequest(res.id, 'reject', res)}
+                                        disabled={processingRequestId === res.id}
+                                        className="bg-white text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl text-xs font-semibold border border-red-100 transition-all flex items-center gap-1 disabled:opacity-50"
+                                      >
+                                        <IconX className="w-4 h-4" /> Recusar
+                                      </button>
+                                    </div>
+                                ) : res.status === 'pending' ? (
+                                    <div className="flex items-center gap-2">
+                                      {canApprove ? (
+                                        <>
+                                          <button 
+                                            onClick={() => {
+                                              const room = selectedRoomsForApproval[res.id];
+                                              if (!room) return alert('Por favor, atribua uma acomodação antes de aprovar.');
+                                              handleUpdateStatus(res.id, 'confirmed', room);
+                                            }} 
+                                            className="bg-farm-600 hover:bg-farm-700 text-white px-4 py-2 rounded-xl text-xs font-semibold hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-1.5"
+                                          >
+                                            <IconCheck className="w-4 h-4" /> Aprovar
+                                          </button>
+                                          <button 
+                                            onClick={() => handleUpdateStatus(res.id, 'rejected')} 
+                                            className="bg-white text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl text-xs font-semibold border border-red-100 transition-all flex items-center gap-1"
+                                          >
+                                            <IconX className="w-3.5 h-3.5" /> Recusar
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <span className="text-[10px] text-amber-600 font-semibold bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100 italic">AGUARDANDO APROVAÇÃO</span>
+                                      )}
+                                    </div>
+                                 ) : (
+                                   <div className="flex items-center gap-2">
+                                      {(res.estadias?.[0]?.status === 'ativa' || res.estadias?.[0]?.status === 'finalizada') && (
+                                        <button 
+                                          onClick={() => handleViewProforma(res.estadias[0].id)} 
+                                          className={`text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${res.estadias[0].status === 'ativa' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-farm-700 hover:bg-farm-800'}`} 
+                                          title={res.estadias[0].status === 'ativa' ? "Ver Conta / Consumo" : "Ver Recibo Final"}
+                                        >
+                                          <IconFileText className="w-4 h-4" /> Comanda
+                                        </button>
+                                      )}
+                                      {res.status === 'confirmed' && !res.estadias?.[0]?.status && (
+                                        <button 
+                                          onClick={() => handleStartCheckin(res)} 
+                                          className="bg-farm-600 hover:bg-farm-700 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                                        >
+                                          <IconZap className="w-4 h-4" /> Check-in
+                                        </button>
+                                      )}
+                                      <button 
+                                        onClick={() => handleDeleteReservation(res.id)} 
+                                        className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-1" 
+                                        title="Excluir Permanentemente"
+                                      >
+                                        <IconX className="w-4 h-4" />
+                                      </button>
                                    </div>
-                               ) : res.status === 'pending' ? (
-                                   <div className="flex items-center gap-3">
-                                     {canApprove ? (
-                                       <>
-                                         <button 
-                                           onClick={() => {
-                                             const room = selectedRoomsForApproval[res.id];
-                                             if (!room) return alert('Por favor, atribua uma acomodação antes de aprovar.');
-                                             handleUpdateStatus(res.id, 'confirmed', room);
-                                           }} 
-                                           className="bg-green-600 text-white px-8 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] hover:bg-green-700 hover:-translate-y-0.5 active:translate-y-0 shadow-xl shadow-green-100 transition-all flex items-center gap-2"
-                                         >
-                                           <IconCheck className="w-4 h-4" /> Aprovar
-                                         </button>
-                                         <button 
-                                           onClick={() => handleUpdateStatus(res.id, 'rejected')} 
-                                           className="bg-white text-red-400 px-6 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-[0.15em] hover:bg-red-50 hover:text-red-600 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-2 border-2 border-red-50"
-                                         >
-                                           <IconX className="w-3.5 h-3.5" /> Recusar
-                                         </button>
-                                       </>
-                                     ) : (
-                                       <span className="text-[10px] text-amber-500 font-black uppercase tracking-widest bg-amber-50 px-5 py-3 rounded-2xl border-2 border-amber-100/50 italic">AGUARDANDO</span>
-                                     )}
-                                   </div>
-                                ) : (
-                                  <div className="flex items-center gap-3">
-                                     {(res.estadias?.[0]?.status === 'ativa' || res.estadias?.[0]?.status === 'finalizada') && (
-                                       <button 
-                                         onClick={() => handleViewProforma(res.estadias[0].id)} 
-                                         className={`${res.estadias[0].status === 'ativa' ? 'bg-blue-600 shadow-blue-100' : 'bg-farm-700 shadow-farm-100'} text-white font-black px-6 py-3.5 rounded-2xl text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:opacity-90 hover:-translate-y-0.5 active:translate-y-0 shadow-xl transition-all`} 
-                                         title={res.estadias[0].status === 'ativa' ? "Ver Conta / Consumo" : "Ver Recibo Final"}
-                                       >
-                                         <IconFileText className="w-4 h-4" /> 
-                                         {res.estadias[0].status === 'ativa' ? 'Financeiro' : 'Recibo'}
-                                       </button>
-                                     )}
-                                     
-                                     {res.status === 'confirmed' && !res.estadias?.[0]?.status && (
-                                       <button onClick={() => handleStartCheckin(res)} className="bg-farm-600 text-white font-black px-8 py-3.5 rounded-2xl text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-farm-700 hover:-translate-y-0.5 active:translate-y-0 shadow-xl shadow-farm-100 transition-all">
-                                         <IconZap className="w-4 h-4" /> Check-in
-                                       </button>
-                                     )}
-
-                                     <button onClick={() => isGuestRequest ? handleActionGuestRequest(res.id, 'reject', res) : handleDeleteReservation(res.id)} className="w-12 h-12 flex items-center justify-center text-red-200 hover:text-red-500 hover:bg-red-50 hover:scale-110 active:scale-95 rounded-2xl transition-all ml-2" title="Excluir Permanentemente">
-                                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                     </button>
-                                  </div>
-                                )}
+                                 )}
                              </div>
-                          </td>
-                        </tr>
+                           </td>
+                         </tr>
                       )})}
                     </tbody>
                   </table>
@@ -1211,65 +1297,98 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                   {combinedListReservations.map((res) => {
                     const isGuestRequest = (res as any).isGuestRequest;
                     return (
-                      <div key={res.id} className={`bg-white p-5 rounded-2xl shadow-sm border ${isGuestRequest ? 'border-amber-300' : 'border-gray-100'} space-y-4`}>
-                        <div className="flex items-start justify-between border-b pb-4 border-gray-50">
-                          <div className="flex items-center gap-4">
-                            <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl ring-4 ring-white shadow-md ${isGuestRequest ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
-                              {isGuestRequest ? <IconMail className="w-7 h-7" /> : (res.name?.[0] || 'U')}
+                      <div key={res.id} className="bg-white p-5 rounded-2xl border border-gray-100 space-y-4">
+                        <div className="flex items-start justify-between border-b pb-4 border-gray-100/50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm bg-gray-100 text-gray-500 shrink-0">
+                              {isGuestRequest ? <IconMail className="w-5 h-5 text-gray-400" /> : (res.name?.[0] || 'U')}
                             </div>
                             <div>
-                                <div className="flex items-center gap-2.5">
-                                    <p className="font-extrabold text-gray-900 text-lg leading-tight">{res.name || 'Usuário'}</p>
-                                    <button 
-                                        onClick={() => handleViewDetails(res)} 
-                                        className="w-8 h-8 rounded-xl flex items-center justify-center bg-farm-50 text-farm-600 border border-farm-100 shadow-sm"
-                                    >
-                                        <IconInfoCircle className="w-4 h-4" />
-                                    </button>
-                                </div>
-                                {(() => {
-                                    const cpfValue = res.cpf || (res as any).profiles?.cpf;
-                                    return (
-                                        <p className="text-xs font-mono text-gray-400 mt-1">
-                                            {cpfValue && cpfValue.replace(/\D/g, '').length === 11 
-                                                ? cpfValue.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
-                                                : (cpfValue || 'Sem CPF')}
-                                        </p>
-                                    );
-                                })()}
-                                {res.status === 'em_curso' && res.estadias?.[0]?.status === 'finalizada' && (
-                                     <span className="mt-2 inline-block bg-red-500 text-white text-[8px] px-2 py-0.5 rounded-full font-black animate-pulse uppercase tracking-widest leading-none">Saldo Devedor</span>
-                                 )}
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-gray-800 text-base leading-tight">{res.name || 'Usuário'}</p>
+                                <button 
+                                  onClick={() => handleViewDetails(res)} 
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-farm-600 hover:bg-gray-100 transition-colors"
+                                >
+                                  <IconInfoCircle className="w-4 h-4" />
+                                </button>
+                              </div>
+                              {(() => {
+                                  const cpfValue = res.cpf || (res as any).profiles?.cpf;
+                                  return (
+                                    <p className="text-xs font-mono text-gray-400 mt-0.5">
+                                      {cpfValue && cpfValue.replace(/\D/g, '').length === 11 
+                                          ? cpfValue.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') 
+                                          : (cpfValue || 'Sem CPF')}
+                                    </p>
+                                  );
+                              })()}
                             </div>
                           </div>
+                          <div className="flex flex-wrap gap-1.5 justify-end">
+                            {isGuestRequest ? (
+                              <span className="text-amber-700 font-semibold text-[9px] uppercase tracking-wider bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100/50">Convidado</span>
+                            ) : (
+                              <span className="text-gray-600 font-semibold text-[9px] uppercase tracking-wider bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200/50">Sócio</span>
+                            )}
+                          </div>
                         </div>
+
+                        {isGuestRequest && (res as any).host_member_name && (
+                          <div className="bg-gray-50/50 border border-gray-100 rounded-xl p-3 text-xs space-y-1">
+                            <div className="text-gray-500">
+                              Anfitrião: <strong className="text-gray-700">{(res as any).host_member_name}</strong>
+                            </div>
+                            <div>
+                              {(() => {
+                                const status = (res as any).host_confirmation_status;
+                                if (status === 'confirmed') return <span className="text-green-600 font-medium">✓ Responsabilidade Confirmada</span>;
+                                if (status === 'rejected') return <span className="text-red-600 font-medium">✗ Responsabilidade Recusada</span>;
+                                if (status === 'requested') return <span className="text-amber-600 font-medium animate-pulse">⏳ Aguardando confirmação do sócio</span>;
+                                return (
+                                  <div className="flex items-center justify-between gap-2 mt-1">
+                                    <span className="text-gray-500">Responsabilidade não validada</span>
+                                    <button 
+                                      onClick={() => handleOpenHostModal(res)}
+                                      disabled={processingRequestId === res.id}
+                                      className="bg-amber-50 text-amber-800 hover:bg-amber-100 px-2 py-1 rounded border border-amber-200 font-semibold text-[10px] transition-all disabled:opacity-50"
+                                    >
+                                      Validar
+                                    </button>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
 
                         <div className="grid grid-cols-2 gap-4 text-xs">
                           <div>
-                            <p className="text-gray-400 font-bold uppercase text-[10px] mb-1">Período Selecionado</p>
-                            <div className="flex items-center gap-1 font-bold text-gray-800">
-                              <IconCalendar className="w-3 h-3 text-farm-500" />
+                            <p className="text-gray-400 font-medium uppercase text-[10px] mb-1">Período</p>
+                            <div className="flex items-center gap-1.5 text-gray-700 font-semibold">
+                              <IconCalendar className="w-4 h-4 text-gray-400" />
                               {formatDate(res.check_in)}
                             </div>
-                            <p className="text-gray-500 text-[10px] italic ml-4 mt-0.5">até {formatDate(res.check_out)}</p>
+                            <p className="text-gray-400 text-[11px] ml-5.5">até {formatDate(res.check_out)}</p>
                           </div>
                           <div>
-                            <p className="text-gray-400 font-bold uppercase text-[10px] mb-1">Acomodação</p>
-                            <span className="px-3 py-1 bg-gray-50 text-gray-700 font-bold rounded-lg border border-gray-100 inline-block">
+                            <p className="text-gray-400 font-medium uppercase text-[10px] mb-1">Acomodação</p>
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-50 text-gray-700 border border-gray-100 font-semibold">
+                              <IconHome className="w-3.5 h-3.5 text-gray-400" />
                               {isGuestRequest ? 'A definir' : res.accommodation}
-                            </span>
-                            {res.arrival_time && <p className="text-blue-600 text-[10px] font-bold mt-1.5 flex items-center gap-1"><IconClock className="w-3 h-3"/> {res.arrival_time}h</p>}
+                            </div>
+                            {res.arrival_time && <p className="text-blue-600 text-[10px] font-medium mt-1 flex items-center gap-1"><IconClock className="w-3 h-3"/> {res.arrival_time}h</p>}
                           </div>
                         </div>
 
-                        {/* Status Label */}
-                        <div className="pt-2">
-                          <span className={`inline-block whitespace-nowrap px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter border-2 ${
-                            res.estadias?.[0]?.status === 'ativa' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                            res.estadias?.[0]?.status === 'finalizada' ? 'bg-gray-100 text-gray-700 border-gray-200' :
-                            res.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' :
-                            res.status === 'rejected' || res.status === 'canceled' ? 'bg-red-50 text-red-700 border-red-200' :
-                            isGuestRequest ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                        {/* Status Badge */}
+                        <div>
+                          <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold border ${
+                            res.estadias?.[0]?.status === 'ativa' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                            res.estadias?.[0]?.status === 'finalizada' ? 'bg-gray-50 text-gray-500 border-gray-200' :
+                            res.status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-100' :
+                            res.status === 'rejected' || res.status === 'canceled' ? 'bg-red-50 text-red-700 border-red-100' :
+                            isGuestRequest ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-yellow-50 text-yellow-700 border-yellow-100'
                           }`}>
                             {res.estadias?.[0]?.status === 'ativa' ? 'Hóspede Local' :
                              res.estadias?.[0]?.status === 'finalizada' ? 'Encerrada' :
@@ -1277,23 +1396,28 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                              res.status === 'rejected' ? 'RECUSADA' :
                              'AGUARDANDO'}
                           </span>
+                          {res.status === 'em_curso' && res.estadias?.[0]?.status === 'finalizada' && (
+                            <span className="ml-2 inline-block bg-red-50 text-red-600 text-[11px] px-2 py-0.5 rounded border border-red-100 font-semibold animate-pulse uppercase tracking-wider">Saldo Devedor</span>
+                          )}
                         </div>
 
                         {/* Mobile Actions block */}
-                        <div className="pt-4 border-t border-gray-100 space-y-3">
+                        <div className="pt-3 border-t border-gray-100 space-y-3">
                             {(res.status === 'pending' || isGuestRequest) ? (
-                              <div className={`p-4 rounded-xl border ${isGuestRequest ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'}`}>
-                                <p className="text-[11px] font-bold text-gray-600 mb-2 uppercase tracking-wider">
-                                  {isGuestRequest ? `Pretende: ${(res as any).preferred_accommodation || 'S/ Pref'}` : 'Nova Reserva'}
-                                </p>
+                              <div className="space-y-3">
+                                {isGuestRequest && (res as any).preferred_accommodation && (
+                                  <p className="text-[11px] font-medium text-gray-400">
+                                    Pretende: {(res as any).preferred_accommodation}
+                                  </p>
+                                )}
                                 <select 
                                   value={selectedRoomsForApproval[res.id] || ''} 
                                   onChange={(e) => setSelectedRoomsForApproval(prev => ({ ...prev, [res.id]: e.target.value }))}
-                                  className="w-full text-sm p-3 bg-white border border-gray-300 rounded-lg outline-none mb-3 font-medium"
+                                  className="w-full text-xs py-2.5 px-3 bg-white border border-gray-200 rounded-lg outline-none font-medium text-gray-700"
                                 >
-                                  <option value="">Atribuir Local...</option>
+                                  <option value="">Atribuir local...</option>
                                   {accommodationGroups.map(group => (
-                                    <optgroup key={group.name} label={group.name}>
+                                    <optgroup key={group.name} label={group.name} className="font-semibold text-gray-800">
                                       {group.units.map(unit => <option key={unit} value={unit}>{unit}</option>)}
                                       {group.name === 'Casas de Sócios' && group.units.length === 0 && <option value="Casa de Sócio">Casa de Sócio</option>}
                                     </optgroup>
@@ -1303,16 +1427,38 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                                 <div className="flex gap-2">
                                   {isGuestRequest ? (
                                     <>
-                                      <button onClick={() => handleActionGuestRequest(res.id, 'approve', res)} disabled={processingRequestId === res.id} className="flex-1 bg-green-600 text-white py-3 rounded-lg text-sm font-bold flex justify-center items-center shadow-lg shadow-green-100 active:scale-95 transition-all">Aprovar</button>
-                                      <button onClick={() => handleActionGuestRequest(res.id, 'reject', res)} disabled={processingRequestId === res.id} className="flex-1 bg-red-50 text-red-600 py-3 rounded-lg text-sm font-bold flex justify-center items-center active:scale-95 transition-all border border-red-100">Recusar</button>
+                                      <button 
+                                        onClick={() => handleActionGuestRequest(res.id, 'approve', res)} 
+                                        disabled={processingRequestId === res.id} 
+                                        className="flex-1 bg-farm-600 hover:bg-farm-700 text-white py-2.5 rounded-xl text-xs font-semibold flex justify-center items-center gap-1.5 transition-all disabled:opacity-50"
+                                      >
+                                        Aprovar
+                                      </button>
+                                      <button 
+                                        onClick={() => handleActionGuestRequest(res.id, 'reject', res)} 
+                                        disabled={processingRequestId === res.id} 
+                                        className="flex-1 bg-white text-red-600 hover:bg-red-50 py-2.5 rounded-xl text-xs font-semibold flex justify-center items-center gap-1.5 transition-all border border-red-100 disabled:opacity-50"
+                                      >
+                                        Recusar
+                                      </button>
                                     </>
                                   ) : (
                                     canApprove ? (
                                       <>
-                                        <button onClick={() => { const rm = selectedRoomsForApproval[res.id]; if(!rm) return alert('Atribua local'); handleUpdateStatus(res.id, 'confirmed', rm); }} className="flex-1 bg-green-600 text-white py-3 rounded-lg text-sm font-bold flex justify-center items-center shadow-lg shadow-green-100 active:scale-95 transition-all">Aprovar</button>
-                                        <button onClick={() => handleUpdateStatus(res.id, 'rejected')} className="flex-1 bg-red-50 text-red-600 py-3 rounded-lg text-sm font-bold flex justify-center items-center active:scale-95 transition-all border border-red-100">Recusar</button>
+                                        <button 
+                                          onClick={() => { const rm = selectedRoomsForApproval[res.id]; if(!rm) return alert('Atribua local'); handleUpdateStatus(res.id, 'confirmed', rm); }} 
+                                          className="flex-1 bg-farm-600 hover:bg-farm-700 text-white py-2.5 rounded-xl text-xs font-semibold flex justify-center items-center gap-1.5 transition-all"
+                                        >
+                                          Aprovar
+                                        </button>
+                                        <button 
+                                          onClick={() => handleUpdateStatus(res.id, 'rejected')} 
+                                          className="flex-1 bg-white text-red-600 hover:bg-red-50 py-2.5 rounded-xl text-xs font-semibold flex justify-center items-center gap-1.5 transition-all border border-red-100"
+                                        >
+                                          Recusar
+                                        </button>
                                       </>
-                                    ) : <span className="text-sm text-amber-600 font-bold w-full text-center py-2">AGUARDANDO</span>
+                                    ) : <span className="text-[11px] text-amber-600 font-semibold bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100 italic w-full text-center">AGUARDANDO APROVAÇÃO</span>
                                   )}
                                 </div>
                               </div>
@@ -1321,23 +1467,35 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                             {!isGuestRequest && res.status !== 'pending' && (
                                <div className="flex flex-col gap-2">
                                  {(res.estadias?.[0]?.status === 'ativa' || res.estadias?.[0]?.status === 'finalizada') && (
-                                   <button onClick={() => handleViewProforma(res.estadias[0].id)} className={`w-full text-white font-bold py-3.5 rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all ${res.estadias[0].status === 'ativa' ? 'bg-blue-600 shadow-blue-100' : 'bg-farm-700 shadow-farm-100'}`}>
-                                     <IconFileText className="w-5 h-5" /> {res.estadias[0].status === 'ativa' ? 'Gestão Financeira / Comanda' : 'Ver Recibo Final'}
+                                   <button 
+                                     onClick={() => handleViewProforma(res.estadias[0].id)} 
+                                     className={`w-full text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${res.estadias[0].status === 'ativa' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-farm-700 hover:bg-farm-800'}`}
+                                   >
+                                     <IconFileText className="w-4 h-4" /> {res.estadias[0].status === 'ativa' ? 'Financeiro / Comanda' : 'Ver Recibo Final'}
                                    </button>
                                  )}
                                  {res.status === 'confirmed' && !res.estadias?.[0]?.status && (
-                                   <button onClick={() => handleStartCheckin(res)} className="w-full bg-farm-600 text-white font-bold py-3.5 rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-farm-100 active:scale-95 transition-all">
-                                     <IconZap className="w-5 h-5" /> Dar Check-in Rápido
+                                   <button 
+                                     onClick={() => handleStartCheckin(res)} 
+                                     className="w-full bg-farm-600 hover:bg-farm-700 text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                                   >
+                                     <IconZap className="w-4 h-4" /> Dar Check-in Rápido
                                    </button>
                                  )}
-                                 <button onClick={() => handleDeleteReservation(res.id)} className="w-full mt-3 text-red-400 font-bold py-3 text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 bg-red-50 rounded-xl active:bg-red-100 transition-colors">
+                                 <button 
+                                   onClick={() => handleDeleteReservation(res.id)} 
+                                   className="w-full text-gray-400 hover:text-red-600 py-2 text-[10px] font-semibold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors"
+                                 >
                                    <IconX className="w-4 h-4" /> Excluir Registro
                                  </button>
-                               </div>
+                                </div>
                             )}
 
                             {isGuestRequest && res.status === 'pending' && (
-                                <button onClick={() => handleActionGuestRequest(res.id, 'reject', res)} className="w-full mt-2 text-red-400 font-bold py-3 text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 bg-red-50 rounded-xl active:bg-red-100 transition-colors">
+                                <button 
+                                  onClick={() => handleActionGuestRequest(res.id, 'reject', res)} 
+                                  className="w-full text-gray-400 hover:text-red-600 py-2 text-[10px] font-semibold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors"
+                                >
                                    <IconX className="w-4 h-4" /> Excluir Pedido Permanentemente
                                 </button>
                             )}
@@ -2113,6 +2271,63 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
             </div>
           </div>
         )}
+        {/* Host Selection Modal */}
+        {showHostModal && selectedRequestForHost && (
+          <div className="fixed inset-0 z-[100] overflow-y-auto no-print">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={() => setShowHostModal(false)}></div>
+            <div className="flex min-h-full items-center justify-center p-4">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full relative z-10 border border-gray-100 overflow-hidden animate-fade-in">
+                <div className="h-2 bg-amber-500 w-full"></div>
+                <div className="p-8">
+                  <h3 className="text-2xl font-bold text-gray-800 font-serif mb-2">Validar Sócio Anfitrião</h3>
+                  <p className="text-gray-400 text-sm mb-6">
+                    Selecione o sócio cadastrado que será notificado por e-mail para confirmar a responsabilidade pelo convidado <strong>{selectedRequestForHost.full_name}</strong>.
+                  </p>
+                  
+                  <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 mb-6 text-sm">
+                    <p className="text-amber-800 font-bold mb-1">Nome indicado pelo convidado:</p>
+                    <p className="text-amber-900 font-mono italic">"{selectedRequestForHost.host_member_name}"</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Selecione o Sócio Oficial</label>
+                      <select
+                        value={selectedHostId}
+                        onChange={(e) => setSelectedHostId(e.target.value)}
+                        className="w-full text-sm p-3.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-farm-500/10 focus:bg-white focus:border-farm-500 transition-all font-bold text-gray-700"
+                      >
+                        <option value="">Selecione um Sócio...</option>
+                        {allMembers.map(member => (
+                          <option key={member.id} value={member.id}>
+                            {member.full_name} ({member.email || 'Sem e-mail'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex gap-4 pt-4">
+                      <button 
+                        onClick={() => setShowHostModal(false)}
+                        className="flex-1 py-4 bg-gray-100 text-gray-500 font-bold rounded-2xl hover:bg-gray-200 text-sm transition-all"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleSendHostVerification}
+                        disabled={!selectedHostId || processingRequestId === selectedRequestForHost.id}
+                        className="flex-1 bg-amber-500 text-white py-4 px-6 rounded-2xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-100/50 disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-2 text-sm transition-all"
+                      >
+                        {processingRequestId === selectedRequestForHost.id ? <IconLoader className="w-4 h-4 animate-spin" /> : <IconMail className="w-4 h-4" />} Enviar E-mail
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Details Modal */}
       {showDetailsModal && viewingResDetails && (
         <div className="fixed inset-0 z-[100] overflow-y-auto no-print">
@@ -2163,12 +2378,28 @@ const ReservationsPage: React.FC<{ isAdmin?: boolean; isVisitor?: boolean; onNav
                         </div>
 
                         {viewingResDetails.isGuestRequest && viewingResDetails.host_member_name && (
-                            <div className="p-6 bg-gradient-to-r from-amber-50 to-white border-2 border-amber-100 rounded-3xl shadow-xl shadow-amber-50/20 relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                    <IconUser className="w-16 h-16" />
+                            <div className="p-5 bg-amber-50/50 border border-amber-100 rounded-2xl flex items-center justify-between gap-4">
+                                <div>
+                                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1">Sócio Responsável</p>
+                                    <p className="text-lg font-semibold text-amber-900 tracking-tight">"{viewingResDetails.host_member_name}"</p>
+                                    {(() => {
+                                        const status = (viewingResDetails as any).host_confirmation_status;
+                                        if (status === 'confirmed') return <span className="inline-block mt-2 text-green-600 font-semibold bg-green-50 px-1.5 py-0.5 rounded text-[10px] border border-green-100">✓ Confirmou responsabilidade</span>;
+                                        if (status === 'rejected') return <span className="inline-block mt-2 text-red-600 font-semibold bg-red-50 px-1.5 py-0.5 rounded text-[10px] border border-red-100">✗ Recusou responsabilidade</span>;
+                                        if (status === 'requested') return <span className="inline-block mt-2 text-amber-600 font-semibold bg-amber-50 px-1.5 py-0.5 rounded text-[10px] border border-amber-200 animate-pulse">⏳ Aguardando confirmação</span>;
+                                        return <span className="inline-block mt-2 text-gray-500 font-semibold bg-gray-50 px-1.5 py-0.5 rounded text-[10px] border border-gray-200">🔍 Confirmação não solicitada</span>;
+                                    })()}
                                 </div>
-                                <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-2">Sócio Responsável</p>
-                                <p className="text-xl font-black text-amber-900 tracking-tight italic">"{viewingResDetails.host_member_name}"</p>
+                                {((viewingResDetails as any).host_confirmation_status === 'pending' || !(viewingResDetails as any).host_confirmation_status) && (
+                                    <button 
+                                      onClick={() => handleOpenHostModal(viewingResDetails)}
+                                      disabled={processingRequestId === viewingResDetails.id}
+                                      className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all self-center disabled:opacity-50 shrink-0"
+                                      title="Solicitar validação de responsabilidade ao sócio"
+                                    >
+                                      {processingRequestId === viewingResDetails.id ? <IconLoader className="w-3.5 h-3.5 animate-spin" /> : <IconMail className="w-4 h-4" />} Validar Sócio
+                                    </button>
+                                )}
                             </div>
                         )}
 
