@@ -248,14 +248,16 @@ export const AdminUsersPage: React.FC = () => {
             const { error } = await supabase.rpc('delete_user_account', { target_user_id: id });
 
             if (error) {
+                console.warn('RPC delete_user_account error, trying fallback:', error);
                 const fallbackResponse = await supabase.from('profiles').delete().eq('id', id);
                 if (fallbackResponse.error) throw fallbackResponse.error;
             }
 
-            setProfiles(profiles.filter(p => p.id !== id));
-        } catch (err) {
+            setProfiles(prev => prev.filter(p => p.id !== id));
+            alert(`Usuário "${name}" excluído com sucesso.`);
+        } catch (err: any) {
             console.error('Error deleting user:', err);
-            alert('Erro ao excluir usuário.');
+            alert(`Erro ao excluir usuário: ${err.message || 'Erro desconhecido.'}`);
         }
     };
 

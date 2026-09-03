@@ -540,7 +540,7 @@ const App: React.FC = () => {
           ? <MembersPage />
           : <HomePage isManagement={isManagement} canEditNews={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.CONTACT:
-        return <ContactPage userRole={userRole || 'member'} canViewMessages={isAdmin || isSiteAdmin || isFinance || isFinanceManager || isAccounting || isConsu || isManutencao} />;
+        return <ContactPage userRole={userRole || 'member'} userName={userName} canViewMessages={isAdmin || isSiteAdmin || isFinance || isFinanceManager || isAccounting || isConsu || isManutencao} />;
       case Page.ADMIN_USERS:
         return (isAdmin || isSiteAdmin) ? <AdminUsersPage /> : <HomePage isManagement={canEditContent} isVisitor={isVisitor} onNavigate={setCurrentPage} />;
       case Page.HISTORY:

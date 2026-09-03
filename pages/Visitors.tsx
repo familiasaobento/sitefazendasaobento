@@ -137,9 +137,9 @@ export const VisitorsPage: React.FC = () => {
             }
             setVisitors(visitors.filter(v => v.id !== id));
             alert('Cadastro de convidado excluído com sucesso.');
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error deleting visitor:', err);
-            alert('Erro ao excluir convidado.');
+            alert(`Erro ao excluir convidado: ${err.message || 'Erro desconhecido.'}`);
         }
     };
 
